@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { User } from './user.entity';
+import { UsersService } from '../services/users.service';
+import { User } from '../entities/user.entity';
 
 @ApiTags('users')
 @Controller('users')
@@ -16,7 +16,7 @@ export class UsersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
+  @ApiOperation({ summary: 'Get all users from table' })
   @ApiResponse({ status: 200, type: [User] })
   findAll() {
     return this.usersService.findAll();

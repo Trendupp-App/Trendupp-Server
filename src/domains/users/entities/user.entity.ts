@@ -1,5 +1,5 @@
 import { Table, Column, DataType } from 'sequelize-typescript';
-import { BaseEntity } from '../../core/base.entity';
+import { BaseEntity } from '../../../core/base.entity';
 
 @Table({ tableName: 'users' })
 export class User extends BaseEntity<User> {

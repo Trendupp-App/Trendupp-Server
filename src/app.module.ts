@@ -9,6 +9,7 @@ import { getLoggerConfig } from './shared/logger/logger.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './domains/users/users.module';
+import { AuthModule } from './domains/auth/auth.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { UsersModule } from './domains/users/users.module';
 
     // Domain Modules
     UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

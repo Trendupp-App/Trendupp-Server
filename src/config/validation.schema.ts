@@ -25,6 +25,10 @@ export const validationSchema = Joi.object({
   AWS_S3_ACCESS_KEY: Joi.string().optional(),
   AWS_S3_SECRET_KEY: Joi.string().optional(),
   AWS_S3_BUCKET: Joi.string().optional(),
+  AWS_SES_REGION: Joi.string().optional(),
+  AWS_SES_ACCESS_KEY: Joi.string().optional(),
+  AWS_SES_SECRET_KEY: Joi.string().optional(),
+  AWS_SES_FROM_EMAIL: Joi.string().email().optional(),
 
   // Security
   ALLOWED_ORIGINS: Joi.string().default('*'),
