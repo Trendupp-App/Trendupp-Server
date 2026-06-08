@@ -11,7 +11,9 @@ import {
   HttpStatus,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { OnboardingService } from '../services/onboarding.service';
 import { UsersService } from '../services/users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -35,6 +37,7 @@ export class OnboardingController {
   ) {}
 
   @Get('roles')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({ summary: 'Get all available roles for onboarding' })
   @ApiResponse({ status: 200, description: 'List of roles retrieved' })
   async getRoles(@Query('publicOnly') publicOnly?: string): Promise<Role[]> {
@@ -43,6 +46,7 @@ export class OnboardingController {
   }
 
   @Get('niches')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({ summary: 'Get all sorted niches for onboarding selection' })
   @ApiResponse({ status: 200, description: 'List of niches retrieved' })
   async getNiches() {
@@ -50,6 +54,7 @@ export class OnboardingController {
   }
 
   @Get('nationalities')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({ summary: 'Get all nationalities/countries' })
   @ApiResponse({ status: 200, description: 'List of nationalities retrieved' })
   async getNationalities() {
@@ -57,6 +62,7 @@ export class OnboardingController {
   }
 
   @Get('nationalities/:nationalityId/states')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({ summary: 'Get states belonging to a specific nationality' })
   @ApiResponse({ status: 200, description: 'List of states retrieved' })
   async getStates(@Param('nationalityId') nationalityId: string) {
@@ -64,6 +70,7 @@ export class OnboardingController {
   }
 
   @Patch('profile')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
@@ -99,6 +106,7 @@ export class OnboardingController {
   }
 
   @Post('niches')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
@@ -119,6 +127,7 @@ export class OnboardingController {
   }
 
   @Patch('socials')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
@@ -189,6 +198,7 @@ export class OnboardingController {
   }
 
   @Post('verify-identity')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)

@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { WinstonModule } from 'nest-winston';
 import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { getLoggerConfig } from './shared/logger/logger.config';
@@ -63,11 +65,25 @@ import { AuthModule } from './domains/auth/auth.module';
       }),
     }),
 
+    // Rate Limiting
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 60 seconds (in ms)
+        limit: 1000, // global fallback ceiling — per-route decorators override this
+      },
+    ]),
+
     // Domain Modules
     UsersModule,
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

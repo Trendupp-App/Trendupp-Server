@@ -1,4 +1,6 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { SendOtpDto } from '../dtos/send-otp.dto';
@@ -14,6 +16,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
+  @Throttle({ default: THROTTLE_LIMITS.SIGNUP })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({ status: 201, description: 'User registered successfully, verification OTP sent' })
@@ -24,6 +27,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful, returns JWT token + user details' })
@@ -36,6 +40,7 @@ export class AuthController {
   }
 
   @Post('otp/send')
+  @Throttle({ default: THROTTLE_LIMITS.OTP_SEND })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send an OTP code to an email address' })
   @ApiResponse({ status: 200, description: 'OTP sent successfully' })
@@ -46,6 +51,7 @@ export class AuthController {
   }
 
   @Post('otp/verify')
+  @Throttle({ default: THROTTLE_LIMITS.OTP_VERIFY })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify an OTP code' })
   @ApiResponse({ status: 200, description: 'OTP verified successfully' })
@@ -55,6 +61,7 @@ export class AuthController {
   }
 
   @Post('password/forgot')
+  @Throttle({ default: THROTTLE_LIMITS.FORGOT_PASSWORD })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Initiate forgot password process by sending an OTP reset code' })
   @ApiResponse({ status: 200, description: 'Password reset code triggered successfully' })
@@ -63,6 +70,7 @@ export class AuthController {
   }
 
   @Post('password/reset')
+  @Throttle({ default: THROTTLE_LIMITS.RESET_PASSWORD })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset account password using verification OTP code' })
   @ApiResponse({ status: 200, description: 'Password reset successful' })
