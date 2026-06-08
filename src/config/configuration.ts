@@ -32,4 +32,11 @@ export default () => ({
   cors: {
     allowedOrigins: process.env.ALLOWED_ORIGINS || '*',
   },
+  jwt: {
+    secret: process.env.JWT_SECRET || 'trendupp-default-secret-key-for-development-and-testing',
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  },
+  onboardingApiKey:
+    process.env.ONBOARDING_API_KEY ||
+    'trendupp-default-onboarding-api-key-for-development-and-testing',
 });

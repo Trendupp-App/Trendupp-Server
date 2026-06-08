@@ -32,4 +32,9 @@ export const validationSchema = Joi.object({
 
   // Security
   ALLOWED_ORIGINS: Joi.string().default('*'),
+  JWT_SECRET: Joi.string().default('trendupp-default-secret-key-for-development-and-testing'),
+  JWT_EXPIRES_IN: Joi.string().default('24h'),
+  ONBOARDING_API_KEY: Joi.string().default(
+    'trendupp-default-onboarding-api-key-for-development-and-testing',
+  ),
 });

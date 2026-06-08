@@ -2,10 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { UserRepository } from '../repository/user.repository';
 import { User } from '../entities/user.entity';
+import { RoleRepository } from '../repository/role.repository';
+import { Role } from '../entities/role.entity';
 
 describe('UsersService', () => {
   let service: UsersService;
   let userRepositoryMock: jest.Mocked<UserRepository>;
+  let roleRepositoryMock: jest.Mocked<RoleRepository>;
 
   beforeEach(async () => {
     userRepositoryMock = {
@@ -16,8 +19,18 @@ describe('UsersService', () => {
       remove: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
 
+    roleRepositoryMock = {
+      findByName: jest.fn(),
+      findById: jest.fn(),
+      findAll: jest.fn(),
+    } as unknown as jest.Mocked<RoleRepository>;
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [UsersService, { provide: UserRepository, useValue: userRepositoryMock }],
+      providers: [
+        UsersService,
+        { provide: UserRepository, useValue: userRepositoryMock },
+        { provide: RoleRepository, useValue: roleRepositoryMock },
+      ],
     }).compile();
 
     service = module.get<UsersService>(UsersService);
@@ -105,6 +118,62 @@ describe('UsersService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(userRepositoryMock.remove).toHaveBeenCalledWith('u1');
       expect(result).toBe(1);
+    });
+  });
+
+  describe('findRoleByName', () => {
+    it('should delegate to roleRepository.findByName', async () => {
+      const mockRole = { id: 'r1', name: 'creator' } as unknown as Role;
+      roleRepositoryMock.findByName.mockResolvedValue(mockRole);
+
+      const result = await service.findRoleByName('creator');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('creator');
+      expect(result).toEqual(mockRole);
+    });
+  });
+
+  describe('findRoleById', () => {
+    it('should delegate to roleRepository.findById', async () => {
+      const mockRole = { id: 'r1', name: 'creator' } as unknown as Role;
+      roleRepositoryMock.findById.mockResolvedValue(mockRole);
+
+      const result = await service.findRoleById('r1');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findById).toHaveBeenCalledWith('r1');
+      expect(result).toEqual(mockRole);
+    });
+  });
+
+  describe('findAllRoles', () => {
+    it('should delegate to roleRepository.findAll with default publicOnly=false', async () => {
+      const mockRoles = [
+        { id: 'r1', name: 'creator' },
+        { id: 'r2', name: 'brand' },
+      ] as unknown as Role[];
+      roleRepositoryMock.findAll.mockResolvedValue(mockRoles);
+
+      const result = await service.findAllRoles();
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findAll).toHaveBeenCalledWith(false);
+      expect(result).toEqual(mockRoles);
+    });
+
+    it('should delegate to roleRepository.findAll with publicOnly=true', async () => {
+      const mockRoles = [
+        { id: 'r1', name: 'creator' },
+        { id: 'r2', name: 'brand' },
+      ] as unknown as Role[];
+      roleRepositoryMock.findAll.mockResolvedValue(mockRoles);
+
+      const result = await service.findAllRoles(true);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findAll).toHaveBeenCalledWith(true);
+      expect(result).toEqual(mockRoles);
     });
   });
 });

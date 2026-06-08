@@ -44,14 +44,25 @@ describe('UserRepository', () => {
   });
 
   describe('findById', () => {
-    it('should call userModel.findByPk with the given id', async () => {
+    it('should call userModel.findByPk with the given id and include role', async () => {
       const mockUser = { id: 'user-1', email: 'a@example.com' } as unknown as User;
       modelMock.findByPk.mockResolvedValue(mockUser);
 
       const result = await repository.findById('user-1');
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1');
+      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', { include: ['role'] });
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should call userModel.findByPk with the given id and include role and niches', async () => {
+      const mockUser = { id: 'user-1', email: 'a@example.com' } as unknown as User;
+      modelMock.findByPk.mockResolvedValue(mockUser);
+
+      const result = await repository.findById('user-1', true);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', { include: ['role', 'niches'] });
       expect(result).toEqual(mockUser);
     });
 
@@ -65,7 +76,7 @@ describe('UserRepository', () => {
   });
 
   describe('findByEmail', () => {
-    it('should call userModel.findOne with the given email', async () => {
+    it('should call userModel.findOne with the given email and include role', async () => {
       const mockUser = { id: 'user-1', email: 'test@example.com' } as unknown as User;
       modelMock.findOne.mockResolvedValue(mockUser);
 
@@ -74,6 +85,7 @@ describe('UserRepository', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(modelMock.findOne).toHaveBeenCalledWith({
         where: { email: 'test@example.com' },
+        include: ['role'],
       });
       expect(result).toEqual(mockUser);
     });
@@ -84,6 +96,46 @@ describe('UserRepository', () => {
       const result = await repository.findByEmail('unknown@example.com');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findByUsername', () => {
+    it('should call userModel.findOne with the given username and include role', async () => {
+      const mockUser = { id: 'user-1', username: 'testuser' } as unknown as User;
+      modelMock.findOne.mockResolvedValue(mockUser);
+
+      const result = await repository.findByUsername('testuser');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(modelMock.findOne).toHaveBeenCalledWith({
+        where: { username: 'testuser' },
+        include: ['role'],
+      });
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should return null when no user is found', async () => {
+      modelMock.findOne.mockResolvedValue(null);
+
+      const result = await repository.findByUsername('unknown-user');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('setUserNiches', () => {
+    it('should find user and call $set with niches', async () => {
+      const mockUser = {
+        id: 'user-1',
+        $set: jest.fn().mockResolvedValue(undefined),
+      };
+      modelMock.findByPk.mockResolvedValue(mockUser as unknown as User);
+
+      await repository.setUserNiches('user-1', ['niche-1', 'niche-2']);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1');
+      expect(mockUser.$set).toHaveBeenCalledWith('niches', ['niche-1', 'niche-2']);
     });
   });
 

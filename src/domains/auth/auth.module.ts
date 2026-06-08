@@ -6,9 +6,10 @@ import { OtpService } from './services/otp.service';
 import { AuthService } from './services/auth.service';
 import { AuthController } from './controllers/auth.controller';
 import { EmailService } from '../../integration/email/email.service';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [SequelizeModule.forFeature([Otp])],
+  imports: [SequelizeModule.forFeature([Otp]), UsersModule],
   providers: [OtpRepository, OtpService, AuthService, EmailService],
   controllers: [AuthController],
   exports: [AuthService],

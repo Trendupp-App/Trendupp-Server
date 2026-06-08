@@ -46,6 +46,7 @@ async function bootstrap() {
     .setDescription('The Trendupp Social Commerce Backend API description')
     .setVersion('1.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'onboarding-key')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

@@ -14,12 +14,28 @@ export class UserRepository {
     return this.userModel.findAll();
   }
 
-  findById(id: string): Promise<User | null> {
-    return this.userModel.findByPk(id);
+  findById(id: string, includeNiches = false): Promise<User | null> {
+    const includes = ['role'];
+    if (includeNiches) {
+      includes.push('niches');
+    }
+    return this.userModel.findByPk(id, { include: includes });
   }
 
   findByEmail(email: string): Promise<User | null> {
-    return this.userModel.findOne({ where: { email } });
+    return this.userModel.findOne({ where: { email }, include: ['role'] });
+  }
+
+  findByUsername(username: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { username }, include: ['role'] });
+  }
+
+  async setUserNiches(userId: string, nicheIds: string[]): Promise<void> {
+    const user = await this.userModel.findByPk(userId);
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      await (user as any).$set('niches', nicheIds);
+    }
   }
 
   create(data: Partial<Attributes<User>>): Promise<User> {
