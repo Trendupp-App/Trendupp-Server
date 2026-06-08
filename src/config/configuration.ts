@@ -39,4 +39,9 @@ export default () => ({
   onboardingApiKey:
     process.env.ONBOARDING_API_KEY ||
     'trendupp-default-onboarding-api-key-for-development-and-testing',
+  google: {
+    clientIdWeb: process.env.GOOGLE_CLIENT_ID_WEB,
+    clientIdIos: process.env.GOOGLE_CLIENT_ID_IOS,
+    clientIdAndroid: process.env.GOOGLE_CLIENT_ID_ANDROID,
+  },
 });

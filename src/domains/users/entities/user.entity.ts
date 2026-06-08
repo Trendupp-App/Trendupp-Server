@@ -41,6 +41,14 @@ export class User extends BaseEntity<User> {
   declare password?: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'google_id',
+    unique: true,
+  })
+  declare googleId?: string;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
     allowNull: false,

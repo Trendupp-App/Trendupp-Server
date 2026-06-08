@@ -41,6 +41,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "ejs": "^6.0.1",
+    "google-auth-library": "^10.7.0",
     "joi": "^18.2.1",
     "jsonwebtoken": "^9.0.3",
     "nest-winston": "^1.10.2",

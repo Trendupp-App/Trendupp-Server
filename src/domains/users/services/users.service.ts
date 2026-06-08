@@ -32,6 +32,10 @@ export class UsersService {
     return this.userRepository.findByUsername(username);
   }
 
+  findByGoogleId(googleId: string): Promise<User | null> {
+    return this.userRepository.findByGoogleId(googleId);
+  }
+
   setUserNiches(id: string, nicheIds: string[]): Promise<void> {
     return this.userRepository.setUserNiches(id, nicheIds);
   }

@@ -37,4 +37,9 @@ export const validationSchema = Joi.object({
   ONBOARDING_API_KEY: Joi.string().default(
     'trendupp-default-onboarding-api-key-for-development-and-testing',
   ),
+
+  // Google OAuth Client IDs
+  GOOGLE_CLIENT_ID_WEB: Joi.string().optional(),
+  GOOGLE_CLIENT_ID_IOS: Joi.string().optional(),
+  GOOGLE_CLIENT_ID_ANDROID: Joi.string().optional(),
 });
