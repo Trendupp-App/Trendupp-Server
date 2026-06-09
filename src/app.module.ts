@@ -35,23 +35,33 @@ import { AuthModule } from './domains/auth/auth.module';
     // Database
     SequelizeModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        dialect: 'postgres',
-        host: configService.get<string>('database.host'),
-        port: configService.get<number>('database.port'),
-        username: configService.get<string>('database.username'),
-        password: configService.get<string>('database.password'),
-        database: configService.get<string>('database.name'),
-        autoLoadModels: true,
-        synchronize: false,
-        logging: configService.get<string>('env') === 'development',
-        dialectOptions: {
-          ssl: {
-            require: true,
-            rejectUnauthorized: false, // For Render/Heroku/AWS self-signed certs
-          },
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        console.log('--- DB Config DEBUG ---');
+        console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
+        console.log("configService.get('env'):", configService.get('env'));
+        console.log('---');
+        return {
+          dialect: 'postgres',
+          host: configService.get<string>('database.host'),
+          port: configService.get<number>('database.port'),
+          username: configService.get<string>('database.username'),
+          password: configService.get<string>('database.password'),
+          database: configService.get<string>('database.name'),
+          autoLoadModels: true,
+          synchronize: false,
+          logging: configService.get<string>('env') === 'development',
+          dialectOptions:
+            configService.get<string>('env') === 'development' ||
+            configService.get<string>('env') === 'test'
+              ? {}
+              : {
+                  ssl: {
+                    require: true,
+                    rejectUnauthorized: false, // For Render/Heroku/AWS self-signed certs
+                  },
+                },
+        };
+      },
     }),
 
     // Task Queue (Redis - BullMQ)
