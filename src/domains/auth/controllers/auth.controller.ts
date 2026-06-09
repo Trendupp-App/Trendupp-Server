@@ -9,6 +9,7 @@ import { SignupDto } from '../dtos/signup.dto';
 import { LoginDto } from '../dtos/login.dto';
 import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
+import { GoogleLoginDto } from '../dtos/google-login.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,6 +38,19 @@ export class AuthController {
   })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('google')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login or signup with Google OAuth token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid Google token' })
+  async googleLogin(@Body() googleLoginDto: GoogleLoginDto) {
+    return this.authService.googleLogin(googleLoginDto);
   }
 
   @Post('otp/send')

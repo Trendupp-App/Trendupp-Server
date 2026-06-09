@@ -6,6 +6,7 @@ import { OtpService } from './otp.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { UsersService } from '../../users/services/users.service';
 import { ConfigService } from '@nestjs/config';
+import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
@@ -17,6 +18,7 @@ describe('AuthService', () => {
   let emailServiceMock: jest.Mocked<EmailService>;
   let usersServiceMock: jest.Mocked<UsersService>;
   let configServiceMock: jest.Mocked<ConfigService>;
+  let googleAuthServiceMock: jest.Mocked<GoogleAuthService>;
 
   beforeEach(async () => {
     otpServiceMock = {
@@ -36,6 +38,8 @@ describe('AuthService', () => {
       findByUsername: jest.fn(),
       findRoleByName: jest.fn(),
       findRoleById: jest.fn(),
+      findByGoogleId: jest.fn(),
+      findOne: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
     configServiceMock = {
@@ -46,6 +50,10 @@ describe('AuthService', () => {
       }),
     } as unknown as jest.Mocked<ConfigService>;
 
+    googleAuthServiceMock = {
+      verifyIdToken: jest.fn(),
+    } as unknown as jest.Mocked<GoogleAuthService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -53,6 +61,7 @@ describe('AuthService', () => {
         { provide: EmailService, useValue: emailServiceMock },
         { provide: UsersService, useValue: usersServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
+        { provide: GoogleAuthService, useValue: googleAuthServiceMock },
       ],
     }).compile();
 
@@ -333,6 +342,137 @@ describe('AuthService', () => {
 
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', { password: 'hashedNewPassword' });
       expect(result.message).toContain('successfully');
+    });
+  });
+
+  describe('googleLogin', () => {
+    it('should verify google token and link googleId to existing user if email matches', async () => {
+      const dto = { idToken: 'valid-google-token' };
+      const mockPayload = {
+        sub: 'google-sub-123',
+        email: 'existing@example.com',
+        given_name: 'John',
+        family_name: 'Doe',
+        name: 'John Doe',
+      };
+
+      googleAuthServiceMock.verifyIdToken.mockResolvedValue(mockPayload as any);
+      usersServiceMock.findByGoogleId.mockResolvedValue(null);
+      usersServiceMock.findByEmail.mockResolvedValue({
+        id: 'user-existing-id',
+        email: 'existing@example.com',
+        isEmailVerified: false,
+      } as any);
+
+      usersServiceMock.update.mockResolvedValue({} as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-existing-id',
+        email: 'existing@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-existing-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.googleLogin(dto);
+
+      expect(googleAuthServiceMock.verifyIdToken).toHaveBeenCalledWith('valid-google-token');
+      expect(usersServiceMock.findByGoogleId).toHaveBeenCalledWith('google-sub-123');
+      expect(usersServiceMock.findByEmail).toHaveBeenCalledWith('existing@example.com');
+      expect(usersServiceMock.update).toHaveBeenCalledWith('user-existing-id', {
+        googleId: 'google-sub-123',
+        isEmailVerified: true,
+      });
+      expect(result.accessToken).toBeDefined();
+      expect(result.user.email).toBe('existing@example.com');
+      expect(result.user.isEmailVerified).toBe(true);
+    });
+
+    it('should create a new user when neither googleId nor email exists in database', async () => {
+      const dto = { idToken: 'new-google-token', role: 'brand' };
+      const mockPayload = {
+        sub: 'google-sub-456',
+        email: 'new-user@example.com',
+        given_name: 'Jane',
+        family_name: 'Doe',
+        name: 'Jane Doe',
+      };
+
+      googleAuthServiceMock.verifyIdToken.mockResolvedValue(mockPayload as any);
+      usersServiceMock.findByGoogleId.mockResolvedValue(null);
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'new-user@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        googleId: 'google-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'new-user@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        googleId: 'google-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.googleLogin(dto);
+
+      expect(usersServiceMock.create).toHaveBeenCalledWith({
+        email: 'new-user@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        googleId: 'google-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+      });
+      expect(result.user.role).toBe('brand');
+    });
+
+    it('should login directly if user is already linked with googleId', async () => {
+      const dto = { idToken: 'linked-token' };
+      const mockPayload = {
+        sub: 'google-sub-789',
+        email: 'linked@example.com',
+        given_name: 'Bob',
+        family_name: 'Smith',
+      };
+
+      googleAuthServiceMock.verifyIdToken.mockResolvedValue(mockPayload as any);
+      usersServiceMock.findByGoogleId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'linked@example.com',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.googleLogin(dto);
+
+      expect(usersServiceMock.findByEmail).not.toHaveBeenCalled();
+      expect(result.user.id).toBe('user-linked-id');
+      expect(result.user.onboardingPercentage).toBe(40);
     });
   });
 });

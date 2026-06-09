@@ -17,6 +17,8 @@ import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { VerifyOtpDto } from '../dtos/verify-otp.dto';
 import { SendOtpDto } from '../dtos/send-otp.dto';
+import { GoogleLoginDto } from '../dtos/google-login.dto';
+import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 
@@ -56,6 +58,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
@@ -139,6 +142,85 @@ export class AuthService {
     }
 
     // Load full user details with associations for percentage calculation
+    const userWithNiches = await this.usersService.findOneWithNiches(user.id);
+    const token = this.generateToken(user);
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role?.name || 'creator',
+        isEmailVerified: user.isEmailVerified,
+        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        username: user.username,
+      },
+    };
+  }
+
+  async googleLogin(googleLoginDto: GoogleLoginDto): Promise<AuthResponse> {
+    const { idToken, role } = googleLoginDto;
+
+    const payload = await this.googleAuthService.verifyIdToken(idToken);
+    const googleId = payload.sub;
+    const email = payload.email!;
+
+    const firstName = payload.given_name || payload.name || 'Google';
+    const lastName = payload.family_name || '';
+
+    let user = await this.usersService.findByGoogleId(googleId);
+
+    if (!user) {
+      user = await this.usersService.findByEmail(email);
+
+      if (user) {
+        await this.usersService.update(user.id, {
+          googleId,
+          isEmailVerified: true,
+        });
+        user = await this.usersService.findOne(user.id);
+      } else {
+        let roleRecord: Role | null = null;
+        if (role) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            role,
+          );
+          if (isUuid) {
+            roleRecord = await this.usersService.findRoleById(role);
+          } else {
+            roleRecord = await this.usersService.findRoleByName(role);
+          }
+        } else {
+          roleRecord = await this.usersService.findRoleByName('creator');
+        }
+
+        if (!roleRecord) {
+          throw new NotFoundException('Account type does not exist');
+        }
+
+        user = await this.usersService.create({
+          email,
+          firstName,
+          lastName,
+          googleId,
+          roleId: roleRecord.id,
+          isEmailVerified: true,
+        });
+        user = await this.usersService.findOne(user.id);
+      }
+    } else {
+      if (!user.isEmailVerified) {
+        await this.usersService.update(user.id, { isEmailVerified: true });
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
 
