@@ -39,7 +39,7 @@ export const validationSchema = Joi.object({
   ),
 
   // Google OAuth Client IDs
-  GOOGLE_CLIENT_ID_WEB: Joi.string().optional(),
-  GOOGLE_CLIENT_ID_IOS: Joi.string().optional(),
-  GOOGLE_CLIENT_ID_ANDROID: Joi.string().optional(),
+  GOOGLE_CLIENT_ID_WEB: Joi.string().allow('').optional(),
+  GOOGLE_CLIENT_ID_IOS: Joi.string().allow('').optional(),
+  GOOGLE_CLIENT_ID_ANDROID: Joi.string().allow('').optional(),
 });
