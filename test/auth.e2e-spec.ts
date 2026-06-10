@@ -14,18 +14,18 @@ describe('AuthController (E2E)', () => {
     })
       .overrideProvider(GoogleAuthService)
       .useValue({
-        verifyIdToken: jest.fn().mockImplementation(async (idToken: string) => {
+        verifyIdToken: jest.fn().mockImplementation((idToken: string) => {
           if (idToken.startsWith('{')) {
-            return JSON.parse(idToken);
+            return Promise.resolve(JSON.parse(idToken) as Record<string, unknown>);
           }
-          return {
+          return Promise.resolve({
             sub: 'mock-google-id-123456789',
             email: 'mock-user@gmail.com',
             email_verified: true,
             name: 'Mock Google User',
             given_name: 'Mock',
             family_name: 'Google User',
-          };
+          });
         }),
       })
       .compile();
