@@ -10,6 +10,7 @@ import { LoginDto } from '../dtos/login.dto';
 import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
+import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -51,6 +52,22 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized - Invalid Google token' })
   async googleLogin(@Body() googleLoginDto: GoogleLoginDto) {
     return this.authService.googleLogin(googleLoginDto);
+  }
+
+  @Post('tiktok')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login or signup with TikTok authorization code' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid TikTok code or exchange failure',
+  })
+  async tiktokLogin(@Body() tiktokLoginDto: TiktokLoginDto) {
+    return this.authService.tiktokLogin(tiktokLoginDto);
   }
 
   @Post('otp/send')
