@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common
 import request, { Response } from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { GoogleAuthService } from './../src/integration/social-apis/google-auth.service';
 
 describe('AuthController (E2E)', () => {
   let app: INestApplication<App>;
@@ -10,7 +11,24 @@ describe('AuthController (E2E)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(GoogleAuthService)
+      .useValue({
+        verifyIdToken: jest.fn().mockImplementation((idToken: string) => {
+          if (idToken.startsWith('{')) {
+            return Promise.resolve(JSON.parse(idToken) as Record<string, unknown>);
+          }
+          return Promise.resolve({
+            sub: 'mock-google-id-123456789',
+            email: 'mock-user@gmail.com',
+            email_verified: true,
+            name: 'Mock Google User',
+            given_name: 'Mock',
+            family_name: 'Google User',
+          });
+        }),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
 
