@@ -34,6 +34,10 @@ export class UserRepository {
     return this.userModel.findOne({ where: { googleId }, include: ['role'] });
   }
 
+  findByTiktokOpenId(tiktokOpenId: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { tiktokOpenId }, include: ['role'] });
+  }
+
   async setUserNiches(userId: string, nicheIds: string[]): Promise<void> {
     const user = await this.userModel.findByPk(userId);
     if (user) {

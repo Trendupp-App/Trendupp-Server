@@ -42,4 +42,8 @@ export const validationSchema = Joi.object({
   GOOGLE_CLIENT_ID_WEB: Joi.string().allow('').optional(),
   GOOGLE_CLIENT_ID_IOS: Joi.string().allow('').optional(),
   GOOGLE_CLIENT_ID_ANDROID: Joi.string().allow('').optional(),
+
+  // TikTok OAuth
+  TIKTOK_CLIENT_KEY: Joi.string().allow('').optional(),
+  TIKTOK_CLIENT_SECRET: Joi.string().allow('').optional(),
 });

@@ -18,7 +18,9 @@ import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { VerifyOtpDto } from '../dtos/verify-otp.dto';
 import { SendOtpDto } from '../dtos/send-otp.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
+import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
+import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 
@@ -59,6 +61,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly tiktokAuthService: TiktokAuthService,
   ) {}
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
@@ -210,6 +213,76 @@ export class AuthService {
         });
         user = await this.usersService.findOne(user.id);
       }
+    } else {
+      if (!user.isEmailVerified) {
+        await this.usersService.update(user.id, { isEmailVerified: true });
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    const userWithNiches = await this.usersService.findOneWithNiches(user.id);
+    const token = this.generateToken(user);
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role?.name || 'creator',
+        isEmailVerified: user.isEmailVerified,
+        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        username: user.username,
+      },
+    };
+  }
+
+  async tiktokLogin(tiktokLoginDto: TiktokLoginDto): Promise<AuthResponse> {
+    const { code, redirectUri, role } = tiktokLoginDto;
+
+    const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(code, redirectUri);
+    const profile = await this.tiktokAuthService.getUserProfile(tokenResponse.accessToken);
+
+    const tiktokOpenId = profile.openId;
+    const email = `tiktok_${tiktokOpenId}@trendupp.tiktok`;
+
+    const nameParts = profile.displayName.trim().split(/\s+/);
+    const firstName = nameParts[0] || 'TikTok';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    let user = await this.usersService.findByTiktokOpenId(tiktokOpenId);
+
+    if (!user) {
+      let roleRecord: Role | null = null;
+      if (role) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+        if (isUuid) {
+          roleRecord = await this.usersService.findRoleById(role);
+        } else {
+          roleRecord = await this.usersService.findRoleByName(role);
+        }
+      } else {
+        roleRecord = await this.usersService.findRoleByName('creator');
+      }
+
+      if (!roleRecord) {
+        throw new NotFoundException('Account type does not exist');
+      }
+
+      user = await this.usersService.create({
+        email,
+        firstName,
+        lastName,
+        tiktokOpenId,
+        roleId: roleRecord.id,
+        isEmailVerified: true,
+      });
+      user = await this.usersService.findOne(user.id);
     } else {
       if (!user.isEmailVerified) {
         await this.usersService.update(user.id, { isEmailVerified: true });

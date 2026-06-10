@@ -36,6 +36,10 @@ export class UsersService {
     return this.userRepository.findByGoogleId(googleId);
   }
 
+  findByTiktokOpenId(tiktokOpenId: string): Promise<User | null> {
+    return this.userRepository.findByTiktokOpenId(tiktokOpenId);
+  }
+
   setUserNiches(id: string, nicheIds: string[]): Promise<void> {
     return this.userRepository.setUserNiches(id, nicheIds);
   }
