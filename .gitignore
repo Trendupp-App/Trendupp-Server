@@ -3,6 +3,8 @@
 /node_modules
 
 google-auth-test-client/
+tiktok-auth-test-client/
+ngrok.exe
 
 # Logs
 logs

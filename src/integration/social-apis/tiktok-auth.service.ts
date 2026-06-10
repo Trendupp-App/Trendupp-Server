@@ -34,7 +34,11 @@ export class TiktokAuthService {
     }
   }
 
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<TiktokTokenResponse> {
+  async exchangeCodeForToken(
+    code: string,
+    redirectUri: string,
+    codeVerifier?: string,
+  ): Promise<TiktokTokenResponse> {
     if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
       this.logger.warn(`MOCK mode: Simulating token exchange for code: ${code}`);
 
@@ -60,13 +64,19 @@ export class TiktokAuthService {
 
     try {
       const tokenUrl = 'https://open.tiktokapis.com/v2/oauth/token/';
-      const body = new URLSearchParams({
+      const params: Record<string, string> = {
         client_key: this.clientKey!,
         client_secret: this.clientSecret!,
         code,
         grant_type: 'authorization_code',
         redirect_uri: redirectUri,
-      });
+      };
+
+      if (codeVerifier) {
+        params.code_verifier = codeVerifier;
+      }
+
+      const body = new URLSearchParams(params);
 
       const response = await fetch(tokenUrl, {
         method: 'POST',
