@@ -536,6 +536,7 @@ describe('AuthService', () => {
       expect(tiktokAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
         'mock-code',
         'http://localhost:3000/callback',
+        undefined,
       );
       expect(tiktokAuthServiceMock.getUserProfile).toHaveBeenCalledWith('mock-token-123');
       expect(usersServiceMock.create).toHaveBeenCalledWith({
@@ -547,6 +548,60 @@ describe('AuthService', () => {
         isEmailVerified: true,
       });
       expect(result.user.role).toBe('brand');
+    });
+
+    it('should pass codeVerifier to exchangeCodeForToken if provided in DTO', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+        codeVerifier: 'mock-verifier-123',
+      };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        openId: 'tiktok-sub-456',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-456',
+        displayName: 'Jane Doe',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      await service.tiktokLogin(dto);
+
+      expect(tiktokAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
+        'mock-code',
+        'http://localhost:3000/callback',
+        'mock-verifier-123',
+      );
     });
 
     it('should login directly if user is already linked with tiktokOpenId', async () => {

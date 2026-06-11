@@ -243,9 +243,13 @@ export class AuthService {
   }
 
   async tiktokLogin(tiktokLoginDto: TiktokLoginDto): Promise<AuthResponse> {
-    const { code, redirectUri, role } = tiktokLoginDto;
+    const { code, redirectUri, role, codeVerifier } = tiktokLoginDto;
 
-    const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(code, redirectUri);
+    const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(
+      code,
+      redirectUri,
+      codeVerifier,
+    );
     const profile = await this.tiktokAuthService.getUserProfile(tokenResponse.accessToken);
 
     const tiktokOpenId = profile.openId;
