@@ -8,6 +8,7 @@ import { UsersService } from '../../users/services/users.service';
 import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
+import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
@@ -21,6 +22,7 @@ describe('AuthService', () => {
   let configServiceMock: jest.Mocked<ConfigService>;
   let googleAuthServiceMock: jest.Mocked<GoogleAuthService>;
   let tiktokAuthServiceMock: jest.Mocked<TiktokAuthService>;
+  let instagramAuthServiceMock: jest.Mocked<InstagramAuthService>;
 
   beforeEach(async () => {
     otpServiceMock = {
@@ -42,6 +44,7 @@ describe('AuthService', () => {
       findRoleById: jest.fn(),
       findByGoogleId: jest.fn(),
       findByTiktokOpenId: jest.fn(),
+      findByInstagramOpenId: jest.fn(),
       findOne: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -62,6 +65,11 @@ describe('AuthService', () => {
       getUserProfile: jest.fn(),
     } as unknown as jest.Mocked<TiktokAuthService>;
 
+    instagramAuthServiceMock = {
+      exchangeCodeForToken: jest.fn(),
+      getUserProfile: jest.fn(),
+    } as unknown as jest.Mocked<InstagramAuthService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -71,6 +79,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: configServiceMock },
         { provide: GoogleAuthService, useValue: googleAuthServiceMock },
         { provide: TiktokAuthService, useValue: tiktokAuthServiceMock },
+        { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
       ],
     }).compile();
 
@@ -629,6 +638,137 @@ describe('AuthService', () => {
 
       expect(result.user.id).toBe('user-linked-id');
       expect(result.user.onboardingPercentage).toBe(40);
+    });
+  });
+
+  describe('instagramLogin', () => {
+    it('should create a new user when instagramOpenId does not exist in database', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+      };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        userId: 'instagram-sub-456',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-456',
+        username: 'jane_insta',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(instagramAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
+        'mock-code',
+        'http://localhost:3000/callback',
+      );
+      expect(instagramAuthServiceMock.getUserProfile).toHaveBeenCalledWith('mock-token-123');
+      expect(usersServiceMock.create).toHaveBeenCalledWith({
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        instagramUsername: 'jane_insta',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+      });
+      expect(result.user.role).toBe('brand');
+    });
+
+    it('should login directly if user is already linked with instagramOpenId', async () => {
+      const dto = { code: 'linked-code', redirectUri: 'http://localhost:3000/callback' };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-789',
+        userId: 'instagram-sub-789',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-789',
+        username: 'bob_smith',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'bob_smith',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(result.user.id).toBe('user-linked-id');
+      expect(result.user.onboardingPercentage).toBe(40);
+    });
+
+    it('should update instagramUsername if the username has changed on Instagram', async () => {
+      const dto = { code: 'linked-code', redirectUri: 'http://localhost:3000/callback' };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-789',
+        userId: 'instagram-sub-789',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-789',
+        username: 'new_handle',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'old_handle',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.update.mockResolvedValue({} as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'new_handle',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('user-linked-id', {
+        instagramUsername: 'new_handle',
+      });
+      expect(result.user.id).toBe('user-linked-id');
     });
   });
 });
