@@ -11,6 +11,7 @@ import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
 import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
+import { InstagramLoginDto } from '../dtos/instagram-login.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -68,6 +69,22 @@ export class AuthController {
   })
   async tiktokLogin(@Body() tiktokLoginDto: TiktokLoginDto) {
     return this.authService.tiktokLogin(tiktokLoginDto);
+  }
+
+  @Post('instagram')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login or signup with Instagram authorization code' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid Instagram code or exchange failure',
+  })
+  async instagramLogin(@Body() instagramLoginDto: InstagramLoginDto) {
+    return this.authService.instagramLogin(instagramLoginDto);
   }
 
   @Post('otp/send')

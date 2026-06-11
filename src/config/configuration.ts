@@ -48,4 +48,8 @@ export default () => ({
     clientKey: process.env.TIKTOK_CLIENT_KEY,
     clientSecret: process.env.TIKTOK_CLIENT_SECRET,
   },
+  instagram: {
+    appId: process.env.INSTAGRAM_APP_ID,
+    appSecret: process.env.INSTAGRAM_APP_SECRET,
+  },
 });

@@ -57,6 +57,14 @@ export class User extends BaseEntity<User> {
   declare tiktokOpenId?: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'instagram_open_id',
+    unique: true,
+  })
+  declare instagramOpenId?: string;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
     allowNull: false,
