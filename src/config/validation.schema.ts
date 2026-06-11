@@ -10,7 +10,7 @@ export const validationSchema = Joi.object({
   DB_HOST: Joi.string().required(),
   DB_PORT: Joi.number().default(5432),
   DB_USERNAME: Joi.string().required(),
-  DB_PASSWORD: Joi.string().allow('').required(),
+  DB_PASSWORD: Joi.string().required(),
   DB_NAME: Joi.string().required(),
 
   // Redis
@@ -18,17 +18,17 @@ export const validationSchema = Joi.object({
   REDIS_PORT: Joi.number().default(6379),
 
   // BetterStack (Logtail)
-  BETTERSTACK_SOURCE_TOKEN: Joi.string().allow('').optional(),
+  BETTERSTACK_SOURCE_TOKEN: Joi.string().optional(),
 
   // S3
-  AWS_S3_REGION: Joi.string().allow('').optional(),
-  AWS_S3_ACCESS_KEY: Joi.string().allow('').optional(),
-  AWS_S3_SECRET_KEY: Joi.string().allow('').optional(),
-  AWS_S3_BUCKET: Joi.string().allow('').optional(),
-  AWS_SES_REGION: Joi.string().allow('').optional(),
-  AWS_SES_ACCESS_KEY: Joi.string().allow('').optional(),
-  AWS_SES_SECRET_KEY: Joi.string().allow('').optional(),
-  AWS_SES_FROM_EMAIL: Joi.string().allow('').email().optional(),
+  AWS_S3_REGION: Joi.string().optional(),
+  AWS_S3_ACCESS_KEY: Joi.string().optional(),
+  AWS_S3_SECRET_KEY: Joi.string().optional(),
+  AWS_S3_BUCKET: Joi.string().optional(),
+  AWS_SES_REGION: Joi.string().optional(),
+  AWS_SES_ACCESS_KEY: Joi.string().optional(),
+  AWS_SES_SECRET_KEY: Joi.string().optional(),
+  AWS_SES_FROM_EMAIL: Joi.string().email().optional(),
 
   // Security
   ALLOWED_ORIGINS: Joi.string().default('*'),
