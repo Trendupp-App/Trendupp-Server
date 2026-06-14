@@ -23,7 +23,7 @@ import { Role } from '../entities/role.entity';
 import { UpdateProfileDto } from '../dtos/update-profile.dto';
 import { SetNichesDto } from '../dtos/set-niches.dto';
 import { UpdateSocialsDto } from '../dtos/update-socials.dto';
-import { VerifyIdentityDto } from '../dtos/verify-identity.dto';
+import { UpdatePayoutDto } from '../dtos/update-payout.dto';
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard';
 
 @ApiTags('onboarding')
@@ -53,9 +53,11 @@ export class OnboardingController {
     return this.onboardingService.getAllNiches();
   }
 
+  // ─── Nationality Lookup (citizenship / passport) ───────────────────────────
+
   @Get('nationalities')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
-  @ApiOperation({ summary: 'Get all nationalities/countries' })
+  @ApiOperation({ summary: 'Get all nationalities (citizenship/passport options)' })
   @ApiResponse({ status: 200, description: 'List of nationalities retrieved' })
   async getNationalities() {
     return this.onboardingService.getAllNationalities();
@@ -65,16 +67,43 @@ export class OnboardingController {
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({ summary: 'Get states belonging to a specific nationality' })
   @ApiResponse({ status: 200, description: 'List of states retrieved' })
-  async getStates(@Param('nationalityId') nationalityId: string) {
+  async getStatesByNationality(@Param('nationalityId') nationalityId: string) {
     return this.onboardingService.getStatesByNationality(nationalityId);
   }
+
+  // ─── Country Lookup (operating country — same data as nationalities) ───────
+
+  @Get('countries')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({
+    summary: 'Get all countries (operating-country options — same dataset as nationalities)',
+  })
+  @ApiResponse({ status: 200, description: 'List of countries retrieved' })
+  async getCountries() {
+    // Reuses the nationalities table — same seeded data, different semantic context.
+    return this.onboardingService.getAllNationalities();
+  }
+
+  @Get('countries/:countryId/states')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get states belonging to a specific country' })
+  @ApiResponse({ status: 200, description: 'List of states retrieved' })
+  async getStatesByCountry(@Param('countryId') countryId: string) {
+    // Delegates to the same repository query as getStatesByNationality —
+    // country_id and nationality_id both reference the nationalities table.
+    return this.onboardingService.getStatesByNationality(countryId);
+  }
+
+  // ─── Onboarding Steps ──────────────────────────────────────────────────────
 
   @Patch('profile')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Step 1: Build user profile (username, nationality, state, bio)' })
+  @ApiOperation({
+    summary: 'Step 1: Build user profile (username, nationality, country, state, bio)',
+  })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Username already taken' })
@@ -87,20 +116,28 @@ export class OnboardingController {
     await this.usersService.update(user.id, {
       username: dto.username,
       nationalityId: dto.nationalityId,
+      countryId: dto.countryId,
       stateId: dto.stateId,
       bio: dto.bio,
     });
 
     const updated = await this.usersService.findOneWithNiches(user.id);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Profile details updated successfully',
       user: {
         id: updated?.id,
+        firstName: updated?.firstName,
+        lastName: updated?.lastName,
         username: updated?.username,
-        nationalityId: updated?.nationalityId,
-        stateId: updated?.stateId,
+        nationality: updated?.nationality
+          ? { id: updated.nationality.id, name: updated.nationality.name }
+          : null,
+        country: updated?.country ? { id: updated.country.id, name: updated.country.name } : null,
+        state: updated?.state ? { id: updated.state.id, name: updated.state.name } : null,
         bio: updated?.bio,
         onboardingPercentage: updated?.onboardingPercentage,
+        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
       },
     };
   }
@@ -116,11 +153,13 @@ export class OnboardingController {
     await this.usersService.setUserNiches(user.id, dto.nicheIds);
 
     const updated = await this.usersService.findOneWithNiches(user.id);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Niches associated successfully',
       user: {
         id: updated?.id,
         onboardingPercentage: updated?.onboardingPercentage,
+        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
         niches: updated?.niches,
       },
     };
@@ -179,6 +218,7 @@ export class OnboardingController {
     await this.usersService.update(user.id, updates);
 
     const updated = await this.usersService.findOneWithNiches(user.id);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Socials connected successfully',
       user: {
@@ -193,31 +233,39 @@ export class OnboardingController {
         twitterFollowers: updated?.twitterFollowers,
         assignedTier: updated?.assignedTier,
         onboardingPercentage: updated?.onboardingPercentage,
+        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
       },
     };
   }
 
-  @Post('verify-identity')
+  @Patch('payout')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Step 4: Upload selfie verification video for admin review' })
-  @ApiResponse({ status: 200, description: 'Verification video submitted successfully' })
-  async verifyIdentity(@CurrentUser() user: User, @Body() dto: VerifyIdentityDto) {
+  @ApiOperation({
+    summary: 'Step 4: Save payout details (bank account for campaign payment via escrow)',
+  })
+  @ApiResponse({ status: 200, description: 'Payout details saved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updatePayout(@CurrentUser() user: User, @Body() dto: UpdatePayoutDto) {
     await this.usersService.update(user.id, {
-      verificationVideoUrl: dto.verificationVideoUrl,
-      verificationStatus: 'pending',
+      bankName: dto.bankName,
+      bankAccountNumber: dto.bankAccountNumber,
+      bankAccountName: dto.bankAccountName,
     });
 
     const updated = await this.usersService.findOneWithNiches(user.id);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
-      message: 'Identity verification video submitted successfully. Profile is under review.',
+      message: 'Payout details saved successfully',
       user: {
         id: updated?.id,
-        verificationVideoUrl: updated?.verificationVideoUrl,
-        verificationStatus: updated?.verificationStatus,
+        bankName: updated?.bankName,
+        bankAccountNumber: updated?.bankAccountNumber,
+        bankAccountName: updated?.bankAccountName,
         onboardingPercentage: updated?.onboardingPercentage,
+        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
       },
     };
   }

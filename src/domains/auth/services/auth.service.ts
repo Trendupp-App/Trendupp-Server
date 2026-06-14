@@ -36,7 +36,14 @@ export interface AuthResponse {
     role: string;
     isEmailVerified: boolean;
     onboardingPercentage: number;
+    onboardingStepsCompleted: {
+      profile: boolean;
+      niches: boolean;
+      socials: boolean;
+      payout: boolean;
+    };
     username?: string;
+    niches: any[];
   };
 }
 
@@ -50,6 +57,13 @@ export interface SignupResponse {
     role: string;
     isEmailVerified: boolean;
     onboardingPercentage: number;
+    onboardingStepsCompleted: {
+      profile: boolean;
+      niches: boolean;
+      socials: boolean;
+      payout: boolean;
+    };
+    niches: any[];
   };
 }
 
@@ -68,7 +82,11 @@ export class AuthService {
   ) {}
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
-    const { email, password, firstName, lastName, phoneNumber, role } = signupDto;
+    const { password, firstName, lastName, phoneNumber, role } = signupDto;
+    // Normalise email: force lowercase and strip surrounding whitespace.
+    // Mobile keyboards often auto-capitalise the first character, which would
+    // cause lookups to fail if stored with mixed case.
+    const email = signupDto.email.toLowerCase().trim();
 
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
@@ -110,6 +128,8 @@ export class AuthService {
 
     // Retrieve fresh user details (with dynamic onboardingPercentage computed)
     const freshUser = await this.usersService.findOneWithNiches(user.id);
+    // Default steps object used as fallback if user record is unexpectedly null
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
     return {
       message: 'Signup successful. Please verify your email with the OTP sent.',
@@ -120,13 +140,17 @@ export class AuthService {
         lastName: user.lastName,
         role: roleRecord.name,
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: freshUser?.onboardingPercentage || 20,
+        onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+        niches: freshUser?.niches || [],
       },
     };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
-    const { email, password } = loginDto;
+    // Normalise email before lookup to handle mixed-case input from mobile keyboards.
+    const email = loginDto.email.toLowerCase().trim();
+    const { password } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user || !user.password) {
@@ -150,6 +174,7 @@ export class AuthService {
     // Load full user details with associations for percentage calculation
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
     return {
       accessToken: token,
@@ -160,8 +185,10 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
@@ -229,6 +256,7 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
     return {
       accessToken: token,
@@ -239,8 +267,10 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
@@ -303,6 +333,7 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
     return {
       accessToken: token,
@@ -313,8 +344,10 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
@@ -381,6 +414,7 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
     return {
       accessToken: token,
@@ -391,14 +425,17 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<void> {
-    const { email } = sendOtpDto;
+    // Normalise email before OTP generation and email dispatch.
+    const email = sendOtpDto.email.toLowerCase().trim();
 
     const otpRecord = await this.otpService.generateOtp(email, 'login');
 
@@ -408,7 +445,9 @@ export class AuthService {
   }
 
   async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<AuthResponse | { message: string }> {
-    const { email, code } = verifyOtpDto;
+    // Normalise email before OTP verification lookup.
+    const email = verifyOtpDto.email.toLowerCase().trim();
+    const { code } = verifyOtpDto;
 
     // Supports checking both 'registration' or general OTP codes
     let isValid = await this.otpService.verifyOtp(email, code);
@@ -435,6 +474,7 @@ export class AuthService {
 
       const freshUser = await this.usersService.findOneWithNiches(user.id);
       const token = this.generateToken(user);
+      const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
 
       return {
         accessToken: token,
@@ -445,8 +485,10 @@ export class AuthService {
           lastName: user.lastName,
           role: user.role?.name || 'creator',
           isEmailVerified: user.isEmailVerified,
-          onboardingPercentage: freshUser?.onboardingPercentage || 20,
+          onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+          onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
           username: user.username,
+          niches: freshUser?.niches || [],
         },
       };
     }
@@ -455,7 +497,8 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = forgotPasswordDto;
+    // Normalise email before lookup — prevents false negatives if user typed in mixed case.
+    const email = forgotPasswordDto.email.toLowerCase().trim();
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -471,7 +514,9 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { email, code, newPassword } = resetPasswordDto;
+    // Normalise email before lookup and OTP verification.
+    const email = resetPasswordDto.email.toLowerCase().trim();
+    const { code, newPassword } = resetPasswordDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {

@@ -38,31 +38,37 @@ describe('UserRepository', () => {
       const result = await repository.findAll();
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(modelMock.findAll).toHaveBeenCalled();
+      expect(modelMock.findAll).toHaveBeenCalledWith({
+        include: ['role', 'nationality', 'country', 'state', 'niches'],
+      });
       expect(result).toEqual(mockUsers);
     });
   });
 
   describe('findById', () => {
-    it('should call userModel.findByPk with the given id and include role', async () => {
+    it('should call userModel.findByPk with the given id and include role, nationality, country, state and niches by default', async () => {
       const mockUser = { id: 'user-1', email: 'a@example.com' } as unknown as User;
       modelMock.findByPk.mockResolvedValue(mockUser);
 
       const result = await repository.findById('user-1');
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', { include: ['role'] });
+      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', {
+        include: ['role', 'nationality', 'country', 'state', 'niches'],
+      });
       expect(result).toEqual(mockUser);
     });
 
-    it('should call userModel.findByPk with the given id and include role and niches', async () => {
+    it('should call userModel.findByPk with the given id and include role, nationality, country, and state when includeNiches is false', async () => {
       const mockUser = { id: 'user-1', email: 'a@example.com' } as unknown as User;
       modelMock.findByPk.mockResolvedValue(mockUser);
 
-      const result = await repository.findById('user-1', true);
+      const result = await repository.findById('user-1', false);
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', { include: ['role', 'niches'] });
+      expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', {
+        include: ['role', 'nationality', 'country', 'state'],
+      });
       expect(result).toEqual(mockUser);
     });
 

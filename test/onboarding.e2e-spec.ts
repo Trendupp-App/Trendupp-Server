@@ -178,6 +178,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       .send({
         username: testUsername,
         nationalityId,
+        countryId: nationalityId,
         stateId,
         bio: 'Automated E2E Bio description',
       })
@@ -186,6 +187,14 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         const body = res.body as Record<string, any>;
         expect(body.user.onboardingPercentage).toBe(40);
         expect(body.user.username).toBe(testUsername);
+        expect(body.user.firstName).toBe('End2End');
+        expect(body.user.lastName).toBe('Tester');
+        expect(body.user.nationality).toBeDefined();
+        expect(body.user.nationality.id).toBe(nationalityId);
+        expect(body.user.country).toBeDefined();
+        expect(body.user.country.id).toBe(nationalityId);
+        expect(body.user.state).toBeDefined();
+        expect(body.user.state.id).toBe(stateId);
       });
   });
 
@@ -221,19 +230,23 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       });
   });
 
-  it('/api/v1/users/onboarding/verify-identity (POST) - Step 4: Submit Video (100% complete)', () => {
+  it('/api/v1/users/onboarding/payout (PATCH) - Step 4: Submit Payout Details (100% complete)', () => {
     return request(app.getHttpServer())
-      .post('/api/v1/users/onboarding/verify-identity')
+      .patch('/api/v1/users/onboarding/payout')
       .set('Authorization', `Bearer ${token}`)
       .set('x-api-key', apiKey)
       .send({
-        verificationVideoUrl: 'https://trendupp-assets.s3.amazonaws.com/videos/test-selfie.mp4',
+        bankName: 'Guaranty Trust Bank',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'End2End Tester',
       })
       .expect(200)
       .expect((res: Response): void => {
         const body = res.body as Record<string, any>;
         expect(body.user.onboardingPercentage).toBe(100);
-        expect(body.user.verificationStatus).toBe('pending');
+        expect(body.user.bankName).toBe('Guaranty Trust Bank');
+        expect(body.user.bankAccountNumber).toBe('0123456789');
+        expect(body.user.bankAccountName).toBe('End2End Tester');
       });
   });
 });

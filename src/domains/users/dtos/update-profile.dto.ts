@@ -11,16 +11,26 @@ export class UpdateProfileDto {
   @Length(3, 30)
   username: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Nationality/citizenship ID from the nationalities lookup. Optional — represents passport/citizenship.',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsUUID()
+  @IsOptional()
+  nationalityId?: string;
+
   @ApiProperty({
-    description: 'Nationality ID from the nationalities lookup',
+    description:
+      'Country ID from the countries lookup (same data as nationalities). Required — represents the country the user currently lives/operates in. Drives the states dropdown.',
     example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
   })
   @IsUUID()
   @IsNotEmpty()
-  nationalityId: string;
+  countryId: string;
 
   @ApiProperty({
-    description: 'State ID from the states lookup',
+    description: 'State ID from the states lookup (filtered by countryId)',
     example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
   })
   @IsUUID()
