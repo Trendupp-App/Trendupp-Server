@@ -82,6 +82,15 @@ export class User extends BaseEntity<User> {
   @BelongsTo(() => Nationality)
   declare nationality?: Nationality;
 
+  // Separate from nationality — represents the country the user currently lives/operates in.
+  // Both nationality_id and country_id reference the same nationalities table data.
+  @ForeignKey(() => Nationality)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'country_id' })
+  declare countryId?: string;
+
+  @BelongsTo(() => Nationality, 'country_id')
+  declare country?: Nationality;
+
   @ForeignKey(() => State)
   @Column({ type: DataType.UUID, allowNull: true, field: 'state_id' })
   declare stateId?: string;
@@ -130,28 +139,40 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'assigned_tier' })
   declare assignedTier?: string;
 
+  // Step 4: Payout Details — stored after mobile-side bank account verification
+  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_name' })
+  declare bankName?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_account_number' })
+  declare bankAccountNumber?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_account_name' })
+  declare bankAccountName?: string;
+
   @BelongsToMany(() => Niche, () => UserNiche)
   declare niches?: Niche[];
 
   get onboardingPercentage(): number {
     let percentage = 0;
 
-    // 1. Basic Account & Email Verification: 20%
+    // Signup & Email Verification: 20%
     if (this.email && this.isEmailVerified) {
       percentage += 20;
     }
 
-    // 2. Step 1 (Build Profile) complete: 20%
-    if (this.username && this.nationalityId && this.stateId) {
+    // Step 1 (Build Profile) complete: 20%
+    // Requires username, country (operating country), and state.
+    // Nationality (citizenship) is optional and does not gate this step.
+    if (this.username && this.countryId && this.stateId) {
       percentage += 20;
     }
 
-    // 3. Step 2 (Niches selection) complete: 20%
+    // Step 2 (Niches selection) complete: 20%
     if (this.niches && this.niches.length > 0) {
       percentage += 20;
     }
 
-    // 4. Step 3 (Socials connection) complete: 20%
+    // Step 3 (Socials connection) complete: 20%
     if (
       this.instagramUsername ||
       this.tiktokUsername ||
@@ -161,11 +182,52 @@ export class User extends BaseEntity<User> {
       percentage += 20;
     }
 
-    // 5. Step 4 (Video Identity upload) complete: 20%
-    if (this.verificationVideoUrl) {
+    // Step 4 (Payout Details) complete: 20%
+    // Stored after the mobile app verifies the bank account and sends the result.
+    if (this.bankName && this.bankAccountNumber && this.bankAccountName) {
       percentage += 20;
     }
 
     return percentage;
+  }
+
+  /**
+   * Returns the completion status of each individual onboarding step.
+   * The mobile app uses this to know exactly which screens the user still
+   * needs to visit, regardless of the order they were filled in.
+   *
+   * NOTE: Requires niches to be eagerly loaded (findOneWithNiches) for
+   * the `niches` field to be accurate.
+   */
+  get onboardingStepsCompleted(): {
+    profile: boolean;
+    niches: boolean;
+    socials: boolean;
+    payout: boolean;
+  } {
+    return {
+      // Step 1: username + country + state all set
+      profile: !!(this.username && this.countryId && this.stateId),
+
+      // Step 2: at least one niche selected
+      niches: !!(this.niches && this.niches.length > 0),
+
+      // Step 3: at least one social account connected
+      socials: !!(
+        this.instagramUsername ||
+        this.tiktokUsername ||
+        this.youtubeUsername ||
+        this.twitterUsername
+      ),
+
+      // Step 4: bank account details saved after mobile-side verification
+      payout: !!(this.bankName && this.bankAccountNumber && this.bankAccountName),
+    };
+  }
+
+  override toJSON(): any {
+    const values = { ...this.get() };
+    delete values.password;
+    return values;
   }
 }
