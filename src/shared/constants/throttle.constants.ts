@@ -27,4 +27,8 @@ export const THROTTLE_LIMITS = {
   LOOKUP: { ttl: 60000, limit: 30 },
 
   ONBOARDING_STEP: { ttl: 60000, limit: 10 },
+
+  // Campaigns
+
+  CAMPAIGN_CREATE: { ttl: 60000, limit: 5 },
 } as const;

@@ -13,6 +13,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './domains/users/users.module';
 import { AuthModule } from './domains/auth/auth.module';
+import { CampaignsModule } from './domains/campaigns/campaigns.module';
+import { AdminModule } from './domains/admin/admin.module';
 
 @Module({
   imports: [
@@ -77,6 +79,8 @@ import { AuthModule } from './domains/auth/auth.module';
     // Domain Modules
     UsersModule,
     AuthModule,
+    CampaignsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [
