@@ -26,6 +26,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1068.0",
     "@aws-sdk/client-ses": "^3.1063.0",
     "@logtail/winston": "^0.5.8",
     "@nestjs/bullmq": "^11.0.4",
@@ -66,6 +67,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
     "dotenv": "^17.4.2",

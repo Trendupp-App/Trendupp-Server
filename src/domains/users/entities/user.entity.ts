@@ -5,6 +5,7 @@ import {
   ForeignKey,
   BelongsTo,
   BelongsToMany,
+  HasMany,
 } from 'sequelize-typescript';
 import { BaseEntity } from '../../../core/base.entity';
 import { Nationality } from './nationality.entity';
@@ -12,6 +13,7 @@ import { Role } from './role.entity';
 import { State } from './state.entity';
 import { Niche } from './niche.entity';
 import { UserNiche } from './user-niche.entity';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
 
 @Table({ tableName: 'users' })
 export class User extends BaseEntity<User> {
@@ -151,6 +153,9 @@ export class User extends BaseEntity<User> {
 
   @BelongsToMany(() => Niche, () => UserNiche)
   declare niches?: Niche[];
+
+  @HasMany(() => Campaign)
+  declare campaigns?: Campaign[];
 
   get onboardingPercentage(): number {
     let percentage = 0;
