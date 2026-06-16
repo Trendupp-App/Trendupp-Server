@@ -242,14 +242,16 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       .get('/api/v1/users/onboarding/banks?region=africa')
       .set('x-api-key', apiKey)
       .expect(200);
-    const regions = resAfrica.body.map((b: any) => b.region.toLowerCase());
+    const regions = (resAfrica.body as { region: string }[]).map((b) => b.region.toLowerCase());
     expect(regions.every((r: string) => r.includes('africa'))).toBe(true);
 
     const resNigeria = await request(app.getHttpServer())
       .get('/api/v1/users/onboarding/banks?country=nigeria')
       .set('x-api-key', apiKey)
       .expect(200);
-    const countries = resNigeria.body.map((b: any) => b.country.toLowerCase());
+    const countries = (resNigeria.body as { country: string }[]).map((b) =>
+      b.country.toLowerCase(),
+    );
     expect(countries.every((c: string) => c.includes('nigeria'))).toBe(true);
   });
 
