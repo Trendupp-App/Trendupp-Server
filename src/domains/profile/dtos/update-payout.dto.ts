@@ -20,7 +20,7 @@ export class UpdatePayoutDto {
   bankAccountNumber: string;
 
   @ApiProperty({
-    description: 'Verified bank account holder name (returned from mobile-side bank lookup)',
+    description: 'Verified bank account holder name',
     example: 'Alex Okafor',
   })
   @IsString()

@@ -39,7 +39,7 @@ describe('UserRepository', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(modelMock.findAll).toHaveBeenCalledWith({
-        include: ['role', 'nationality', 'country', 'state', 'niches'],
+        include: ['role', 'nationality', 'country', 'state', 'niches', 'bank'],
       });
       expect(result).toEqual(mockUsers);
     });
@@ -54,7 +54,7 @@ describe('UserRepository', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', {
-        include: ['role', 'nationality', 'country', 'state', 'niches'],
+        include: ['role', 'nationality', 'country', 'state', 'bank', 'niches'],
       });
       expect(result).toEqual(mockUser);
     });
@@ -67,7 +67,7 @@ describe('UserRepository', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(modelMock.findByPk).toHaveBeenCalledWith('user-1', {
-        include: ['role', 'nationality', 'country', 'state'],
+        include: ['role', 'nationality', 'country', 'state', 'bank'],
       });
       expect(result).toEqual(mockUser);
     });

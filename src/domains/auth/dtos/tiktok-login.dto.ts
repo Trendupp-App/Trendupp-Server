@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
 
 export class TiktokLoginDto {
   @ApiProperty({
@@ -34,4 +34,12 @@ export class TiktokLoginDto {
   @IsString()
   @IsOptional()
   codeVerifier?: string;
+
+  @ApiPropertyOptional({
+    description: 'Acceptance of terms and conditions',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  acceptedTerms?: boolean;
 }

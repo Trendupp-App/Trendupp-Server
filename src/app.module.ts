@@ -15,6 +15,7 @@ import { UsersModule } from './domains/users/users.module';
 import { AuthModule } from './domains/auth/auth.module';
 import { CampaignsModule } from './domains/campaigns/campaigns.module';
 import { AdminModule } from './domains/admin/admin.module';
+import { ProfileModule } from './domains/profile/profile.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { AdminModule } from './domains/admin/admin.module';
     AuthModule,
     CampaignsModule,
     AdminModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [

@@ -110,6 +110,7 @@ describe('AuthController (E2E)', () => {
         .post('/api/v1/auth/google')
         .send({
           idToken: JSON.stringify(mockPayload),
+          acceptedTerms: true,
         })
         .expect(200);
 
@@ -144,6 +145,7 @@ describe('AuthController (E2E)', () => {
         .send({
           idToken: JSON.stringify(mockPayload),
           role: 'brand',
+          acceptedTerms: true,
         })
         .expect(200);
 
@@ -172,6 +174,7 @@ describe('AuthController (E2E)', () => {
         .send({
           code: 'e2e-creator-code',
           redirectUri: 'http://localhost:3000/auth/tiktok/callback',
+          acceptedTerms: true,
         })
         .expect(200);
 
@@ -199,6 +202,7 @@ describe('AuthController (E2E)', () => {
           code: 'e2e-brand-code',
           redirectUri: 'http://localhost:3000/auth/tiktok/callback',
           role: 'brand',
+          acceptedTerms: true,
         })
         .expect(200);
 

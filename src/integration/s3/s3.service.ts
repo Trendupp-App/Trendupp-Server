@@ -33,8 +33,8 @@ export class S3Service {
     }
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<string> {
-    const key = `campaign-covers/${Date.now()}-${file.originalname}`;
+  async uploadFile(file: Express.Multer.File, folder = 'campaign-covers'): Promise<string> {
+    const key = `${folder}/${Date.now()}-${file.originalname}`;
 
     if (this.s3Client) {
       try {

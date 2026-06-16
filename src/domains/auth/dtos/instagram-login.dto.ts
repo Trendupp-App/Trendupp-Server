@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
 
 export class InstagramLoginDto {
   @ApiProperty({
@@ -26,4 +26,12 @@ export class InstagramLoginDto {
   @IsString()
   @IsOptional()
   role?: string;
+
+  @ApiPropertyOptional({
+    description: 'Acceptance of terms and conditions',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  acceptedTerms?: boolean;
 }

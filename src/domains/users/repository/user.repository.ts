@@ -12,12 +12,12 @@ export class UserRepository {
 
   findAll(): Promise<User[]> {
     return this.userModel.findAll({
-      include: ['role', 'nationality', 'country', 'state', 'niches'],
+      include: ['role', 'nationality', 'country', 'state', 'niches', 'bank'],
     });
   }
 
   findById(id: string, includeNiches = true): Promise<User | null> {
-    const includes = ['role', 'nationality', 'country', 'state'];
+    const includes = ['role', 'nationality', 'country', 'state', 'bank'];
     if (includeNiches) {
       includes.push('niches');
     }

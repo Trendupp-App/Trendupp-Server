@@ -12,18 +12,26 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiSecurity,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { OnboardingService } from '../services/onboarding.service';
-import { UsersService } from '../services/users.service';
+import { ProfileService } from '../services/profile.service';
+import { UsersService } from '../../users/services/users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
-import { User } from '../entities/user.entity';
-import { Role } from '../entities/role.entity';
-import { UpdateProfileDto } from '../dtos/update-profile.dto';
-import { SetNichesDto } from '../dtos/set-niches.dto';
-import { UpdateSocialsDto } from '../dtos/update-socials.dto';
-import { UpdatePayoutDto } from '../dtos/update-payout.dto';
+import { User } from '../../users/entities/user.entity';
+import { Role } from '../../users/entities/role.entity';
+import { UpdateProfileDto } from '../../users/dtos/update-profile.dto';
+import { SetNichesDto } from '../../users/dtos/set-niches.dto';
+import { UpdateSocialsDto } from '../../users/dtos/update-socials.dto';
+import { UpdatePayoutDto } from '../../users/dtos/update-payout.dto';
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard';
 
 @ApiTags('onboarding')
@@ -34,6 +42,7 @@ export class OnboardingController {
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly usersService: UsersService,
+    private readonly profileService: ProfileService,
   ) {}
 
   @Get('roles')
@@ -80,7 +89,6 @@ export class OnboardingController {
   })
   @ApiResponse({ status: 200, description: 'List of countries retrieved' })
   async getCountries() {
-    // Reuses the nationalities table — same seeded data, different semantic context.
     return this.onboardingService.getAllNationalities();
   }
 
@@ -89,9 +97,34 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Get states belonging to a specific country' })
   @ApiResponse({ status: 200, description: 'List of states retrieved' })
   async getStatesByCountry(@Param('countryId') countryId: string) {
-    // Delegates to the same repository query as getStatesByNationality —
-    // country_id and nationality_id both reference the nationalities table.
     return this.onboardingService.getStatesByNationality(countryId);
+  }
+
+  @Get('banks')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({
+    summary: 'Get all banks, optionally filtered by region, country, or search term',
+  })
+  @ApiQuery({
+    name: 'region',
+    required: false,
+    type: String,
+    description: 'Filter banks by continent/region (e.g. Africa)',
+  })
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    type: String,
+    description: 'Filter banks by country name (e.g. Nigeria)',
+  })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search banks by name' })
+  @ApiResponse({ status: 200, description: 'List of banks retrieved' })
+  async getBanks(
+    @Query('region') region?: string,
+    @Query('country') country?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.onboardingService.getBanks({ region, country, search });
   }
 
   // ─── Onboarding Steps ──────────────────────────────────────────────────────
@@ -122,23 +155,9 @@ export class OnboardingController {
     });
 
     const updated = await this.usersService.findOneWithNiches(user.id);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Profile details updated successfully',
-      user: {
-        id: updated?.id,
-        firstName: updated?.firstName,
-        lastName: updated?.lastName,
-        username: updated?.username,
-        nationality: updated?.nationality
-          ? { id: updated.nationality.id, name: updated.nationality.name }
-          : null,
-        country: updated?.country ? { id: updated.country.id, name: updated.country.name } : null,
-        state: updated?.state ? { id: updated.state.id, name: updated.state.name } : null,
-        bio: updated?.bio,
-        onboardingPercentage: updated?.onboardingPercentage,
-        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
-      },
+      user: updated,
     };
   }
 
@@ -153,15 +172,9 @@ export class OnboardingController {
     await this.usersService.setUserNiches(user.id, dto.nicheIds);
 
     const updated = await this.usersService.findOneWithNiches(user.id);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Niches associated successfully',
-      user: {
-        id: updated?.id,
-        onboardingPercentage: updated?.onboardingPercentage,
-        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
-        niches: updated?.niches,
-      },
+      user: updated,
     };
   }
 
@@ -218,23 +231,9 @@ export class OnboardingController {
     await this.usersService.update(user.id, updates);
 
     const updated = await this.usersService.findOneWithNiches(user.id);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
     return {
       message: 'Socials connected successfully',
-      user: {
-        id: updated?.id,
-        instagramUsername: updated?.instagramUsername,
-        instagramFollowers: updated?.instagramFollowers,
-        tiktokUsername: updated?.tiktokUsername,
-        tiktokFollowers: updated?.tiktokFollowers,
-        youtubeUsername: updated?.youtubeUsername,
-        youtubeFollowers: updated?.youtubeFollowers,
-        twitterUsername: updated?.twitterUsername,
-        twitterFollowers: updated?.twitterFollowers,
-        assignedTier: updated?.assignedTier,
-        onboardingPercentage: updated?.onboardingPercentage,
-        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
-      },
+      user: updated,
     };
   }
 
@@ -249,24 +248,10 @@ export class OnboardingController {
   @ApiResponse({ status: 200, description: 'Payout details saved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updatePayout(@CurrentUser() user: User, @Body() dto: UpdatePayoutDto) {
-    await this.usersService.update(user.id, {
-      bankName: dto.bankName,
-      bankAccountNumber: dto.bankAccountNumber,
-      bankAccountName: dto.bankAccountName,
-    });
-
-    const updated = await this.usersService.findOneWithNiches(user.id);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const updated = await this.profileService.updatePayout(user.id, dto);
     return {
       message: 'Payout details saved successfully',
-      user: {
-        id: updated?.id,
-        bankName: updated?.bankName,
-        bankAccountNumber: updated?.bankAccountNumber,
-        bankAccountName: updated?.bankAccountName,
-        onboardingPercentage: updated?.onboardingPercentage,
-        onboardingStepsCompleted: updated?.onboardingStepsCompleted ?? defaultSteps,
-      },
+      user: updated,
     };
   }
 }
