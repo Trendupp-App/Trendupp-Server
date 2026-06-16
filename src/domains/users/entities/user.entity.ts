@@ -14,6 +14,7 @@ import { State } from './state.entity';
 import { Niche } from './niche.entity';
 import { UserNiche } from './user-niche.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { Bank } from './bank.entity';
 
 @Table({ tableName: 'users' })
 export class User extends BaseEntity<User> {
@@ -74,6 +75,14 @@ export class User extends BaseEntity<User> {
   })
   declare isEmailVerified: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    field: 'accepted_terms',
+  })
+  declare acceptedTerms: boolean;
+
   @Column({ type: DataType.STRING, allowNull: true })
   declare username?: string;
 
@@ -132,6 +141,9 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.INTEGER, defaultValue: 0, allowNull: false, field: 'twitter_followers' })
   declare twitterFollowers: number;
 
+  @Column({ type: DataType.STRING, allowNull: true, field: 'avatar_url' })
+  declare avatarUrl?: string;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'verification_video_url' })
   declare verificationVideoUrl?: string;
 
@@ -142,14 +154,67 @@ export class User extends BaseEntity<User> {
   declare assignedTier?: string;
 
   // Step 4: Payout Details — stored after mobile-side bank account verification
-  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_name' })
-  declare bankName?: string;
+  @ForeignKey(() => Bank)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'bank_id' })
+  declare bankId?: string;
+
+  @BelongsTo(() => Bank)
+  declare bank?: Bank;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'bank_account_number' })
   declare bankAccountNumber?: string;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'bank_account_name' })
   declare bankAccountName?: string;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: {
+      newCampaigns: true,
+      applicationUpdates: true,
+      paymentAlerts: true,
+      brandMessages: true,
+      pushNotifications: true,
+      emailNotifications: true,
+      weeklySummary: false,
+      marketingOffers: false,
+    },
+    field: 'notification_settings',
+  })
+  declare notificationSettings: {
+    newCampaigns: boolean;
+    applicationUpdates: boolean;
+    paymentAlerts: boolean;
+    brandMessages: boolean;
+    pushNotifications: boolean;
+    emailNotifications: boolean;
+    weeklySummary: boolean;
+    marketingOffers: boolean;
+  };
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: {
+      twoFactorEnabled: false,
+      biometricLoginEnabled: true,
+      loginAlertsEnabled: true,
+    },
+    field: 'security_settings',
+  })
+  declare securitySettings: {
+    twoFactorEnabled: boolean;
+    biometricLoginEnabled: boolean;
+    loginAlertsEnabled: boolean;
+  };
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'deactivated_at',
+  })
+  declare deactivatedAt?: Date | null;
 
   @BelongsToMany(() => Niche, () => UserNiche)
   declare niches?: Niche[];
@@ -189,11 +254,25 @@ export class User extends BaseEntity<User> {
 
     // Step 4 (Payout Details) complete: 20%
     // Stored after the mobile app verifies the bank account and sends the result.
-    if (this.bankName && this.bankAccountNumber && this.bankAccountName) {
+    if (this.bankId && this.bankAccountNumber && this.bankAccountName) {
       percentage += 20;
     }
 
     return percentage;
+  }
+
+  get socialsConnected(): {
+    instagram: boolean;
+    tiktok: boolean;
+    youtube: boolean;
+    twitter: boolean;
+  } {
+    return {
+      instagram: !!this.instagramUsername,
+      tiktok: !!this.tiktokUsername,
+      youtube: !!this.youtubeUsername,
+      twitter: !!this.twitterUsername,
+    };
   }
 
   /**
@@ -218,21 +297,52 @@ export class User extends BaseEntity<User> {
       niches: !!(this.niches && this.niches.length > 0),
 
       // Step 3: at least one social account connected
-      socials: !!(
-        this.instagramUsername ||
-        this.tiktokUsername ||
-        this.youtubeUsername ||
-        this.twitterUsername
-      ),
+      socials: Object.values(this.socialsConnected).some((connected) => connected),
 
       // Step 4: bank account details saved after mobile-side verification
-      payout: !!(this.bankName && this.bankAccountNumber && this.bankAccountName),
+      payout: !!(this.bankId && this.bankAccountNumber && this.bankAccountName),
     };
   }
 
-  override toJSON(): any {
-    const values = { ...this.get() };
-    delete values.password;
+  override toJSON(): Record<string, unknown> {
+    const raw = this.get() as Record<string, unknown>;
+    const values: Record<string, unknown> = { ...raw };
+    delete values['password'];
+
+    // Format role object to its name or serialize it cleanly
+    if (this.role) {
+      values['role'] = this.role.name;
+    } else {
+      // Keep string if it was set directly (e.g. from migrations / database seeders)
+      values['role'] = values['role'] || 'creator';
+    }
+
+    // Format nationality, country, state to return nested objects with id & name
+    values['nationality'] = this.nationality
+      ? { id: this.nationality.id, name: this.nationality.name }
+      : null;
+
+    values['country'] = this.country ? { id: this.country.id, name: this.country.name } : null;
+
+    values['state'] = this.state ? { id: this.state.id, name: this.state.name } : null;
+
+    values['bank'] = this.bank
+      ? {
+          id: this.bank.id,
+          name: this.bank.name,
+          code: this.bank.code,
+          country: this.bank.country,
+          region: this.bank.region,
+        }
+      : null;
+
+    values['bankName'] = this.bank ? this.bank.name : null;
+
+    values['onboardingPercentage'] = this.onboardingPercentage;
+    values['onboardingStepsCompleted'] = this.onboardingStepsCompleted;
+    values['socialsConnected'] = this.socialsConnected;
+    values['niches'] = this.niches || [];
+
     return values;
   }
 }

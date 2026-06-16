@@ -95,6 +95,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         firstName: 'End2End',
         lastName: 'Tester',
         role: creatorRoleId,
+        acceptedTerms: true,
       })
       .expect(201)
       .expect((res: Response): void => {
@@ -230,23 +231,52 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       });
   });
 
-  it('/api/v1/users/onboarding/payout (PATCH) - Step 4: Submit Payout Details (100% complete)', () => {
-    return request(app.getHttpServer())
+  it('/api/v1/users/onboarding/banks (GET) - Retrieve and filter banks by region/country', async () => {
+    const resAll = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    expect(resAll.body.length).toBeGreaterThan(0);
+
+    const resAfrica = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks?region=africa')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const regions = resAfrica.body.map((b: any) => b.region.toLowerCase());
+    expect(regions.every((r: string) => r.includes('africa'))).toBe(true);
+
+    const resNigeria = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks?country=nigeria')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const countries = resNigeria.body.map((b: any) => b.country.toLowerCase());
+    expect(countries.every((c: string) => c.includes('nigeria'))).toBe(true);
+  });
+
+  it('/api/v1/users/onboarding/payout (PATCH) - Step 4: Submit Payout Details (100% complete)', async () => {
+    const bankRes = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const banks = bankRes.body as any[];
+    expect(banks.length).toBeGreaterThan(0);
+    const targetBank = banks[0];
+
+    const res = await request(app.getHttpServer())
       .patch('/api/v1/users/onboarding/payout')
       .set('Authorization', `Bearer ${token}`)
       .set('x-api-key', apiKey)
       .send({
-        bankName: 'Guaranty Trust Bank',
+        bankId: targetBank.id,
         bankAccountNumber: '0123456789',
         bankAccountName: 'End2End Tester',
       })
-      .expect(200)
-      .expect((res: Response): void => {
-        const body = res.body as Record<string, any>;
-        expect(body.user.onboardingPercentage).toBe(100);
-        expect(body.user.bankName).toBe('Guaranty Trust Bank');
-        expect(body.user.bankAccountNumber).toBe('0123456789');
-        expect(body.user.bankAccountName).toBe('End2End Tester');
-      });
+      .expect(200);
+
+    const body = res.body as Record<string, any>;
+    expect(body.user.onboardingPercentage).toBe(100);
+    expect(body.user.bankName).toBe(targetBank.name);
+    expect(body.user.bankAccountNumber).toBe('0123456789');
+    expect(body.user.bankAccountName).toBe('End2End Tester');
   });
 });

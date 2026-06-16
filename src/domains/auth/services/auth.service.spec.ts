@@ -9,7 +9,12 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
-import { UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
 jest.mock('bcryptjs');
@@ -105,6 +110,7 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1' } as any);
 
@@ -118,6 +124,7 @@ describe('AuthService', () => {
         firstName: 'Test',
         lastName: 'User',
         role: 'invalid-role',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -132,6 +139,7 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -163,6 +171,7 @@ describe('AuthService', () => {
         phoneNumber: undefined,
         roleId: 'role-uuid',
         isEmailVerified: false,
+        acceptedTerms: true,
       });
       expect(otpServiceMock.generateOtp).toHaveBeenCalledWith(dto.email, 'registration');
       expect(emailServiceMock.sendOtpEmail).toHaveBeenCalledWith(dto.email, '654321');
@@ -177,6 +186,7 @@ describe('AuthService', () => {
         firstName: 'UUID',
         lastName: 'Tester',
         role: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -211,6 +221,7 @@ describe('AuthService', () => {
         phoneNumber: undefined,
         roleId: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         isEmailVerified: false,
+        acceptedTerms: true,
       });
       expect(result.user.role).toBe('creator');
     });
@@ -274,6 +285,61 @@ describe('AuthService', () => {
 
       expect(result.accessToken).toBeDefined();
       expect(result.user.id).toBe('u1');
+    });
+
+    it('should reactivate account if deactivated within 30 days', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 5); // 5 days ago
+
+      const mockUser = {
+        id: 'u1',
+        email: 'deactivated@example.com',
+        password: 'hashedPassword',
+        isActive: false,
+        deactivatedAt: recentDate,
+        isEmailVerified: true,
+        firstName: 'Deactivated',
+        lastName: 'User',
+      };
+
+      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'u1',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.login({
+        email: 'deactivated@example.com',
+        password: 'password',
+      });
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
+        isActive: true,
+        deactivatedAt: null,
+      });
+      expect(result.accessToken).toBeDefined();
+    });
+
+    it('should throw UnauthorizedException if deactivated more than 30 days ago', async () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 35); // 35 days ago
+
+      const mockUser = {
+        id: 'u1',
+        email: 'deactivated@example.com',
+        password: 'hashedPassword',
+        isActive: false,
+        deactivatedAt: oldDate,
+        isEmailVerified: true,
+      };
+
+      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ email: 'deactivated@example.com', password: 'password' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -411,7 +477,7 @@ describe('AuthService', () => {
     });
 
     it('should create a new user when neither googleId nor email exists in database', async () => {
-      const dto = { idToken: 'new-google-token', role: 'brand' };
+      const dto = { idToken: 'new-google-token', role: 'brand', acceptedTerms: true };
       const mockPayload = {
         sub: 'google-sub-456',
         email: 'new-user@example.com',
@@ -461,8 +527,26 @@ describe('AuthService', () => {
         googleId: 'google-sub-456',
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
+        acceptedTerms: true,
       });
       expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = { idToken: 'new-google-token', role: 'brand' };
+      const mockPayload = {
+        sub: 'google-sub-456',
+        email: 'new-user@example.com',
+        given_name: 'Jane',
+        family_name: 'Doe',
+        name: 'Jane Doe',
+      };
+
+      googleAuthServiceMock.verifyIdToken.mockResolvedValue(mockPayload as any);
+      usersServiceMock.findByGoogleId.mockResolvedValue(null);
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+
+      await expect(service.googleLogin(dto)).rejects.toThrow(BadRequestException);
     });
 
     it('should login directly if user is already linked with googleId', async () => {
@@ -500,6 +584,7 @@ describe('AuthService', () => {
         code: 'mock-code',
         redirectUri: 'http://localhost:3000/callback',
         role: 'brand',
+        acceptedTerms: true,
       };
       tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
         accessToken: 'mock-token-123',
@@ -555,8 +640,29 @@ describe('AuthService', () => {
         tiktokOpenId: 'tiktok-sub-456',
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
+        acceptedTerms: true,
       });
       expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+      };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        openId: 'tiktok-sub-456',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-456',
+        displayName: 'Jane Doe',
+        avatarUrl: 'http://avatar.url',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue(null);
+
+      await expect(service.tiktokLogin(dto)).rejects.toThrow(BadRequestException);
     });
 
     it('should pass codeVerifier to exchangeCodeForToken if provided in DTO', async () => {
@@ -565,6 +671,7 @@ describe('AuthService', () => {
         redirectUri: 'http://localhost:3000/callback',
         role: 'brand',
         codeVerifier: 'mock-verifier-123',
+        acceptedTerms: true,
       };
       tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
         accessToken: 'mock-token-123',
@@ -647,6 +754,7 @@ describe('AuthService', () => {
         code: 'mock-code',
         redirectUri: 'http://localhost:3000/callback',
         role: 'brand',
+        acceptedTerms: true,
       };
       instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
         accessToken: 'mock-token-123',
@@ -701,8 +809,28 @@ describe('AuthService', () => {
         instagramUsername: 'jane_insta',
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
+        acceptedTerms: true,
       });
       expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+      };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        userId: 'instagram-sub-456',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-456',
+        username: 'jane_insta',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue(null);
+
+      await expect(service.instagramLogin(dto)).rejects.toThrow(BadRequestException);
     });
 
     it('should login directly if user is already linked with instagramOpenId', async () => {

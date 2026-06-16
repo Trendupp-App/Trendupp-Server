@@ -4,6 +4,7 @@ import {
   ConflictException,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -42,6 +43,12 @@ export interface AuthResponse {
       socials: boolean;
       payout: boolean;
     };
+    socialsConnected: {
+      instagram: boolean;
+      tiktok: boolean;
+      youtube: boolean;
+      twitter: boolean;
+    };
     username?: string;
     niches: any[];
   };
@@ -62,6 +69,12 @@ export interface SignupResponse {
       niches: boolean;
       socials: boolean;
       payout: boolean;
+    };
+    socialsConnected: {
+      instagram: boolean;
+      tiktok: boolean;
+      youtube: boolean;
+      twitter: boolean;
     };
     niches: any[];
   };
@@ -118,6 +131,7 @@ export class AuthService {
       phoneNumber,
       roleId: roleRecord.id,
       isEmailVerified: false,
+      acceptedTerms: true,
     });
 
     // Send OTP of type 'registration'
@@ -130,9 +144,10 @@ export class AuthService {
     const freshUser = await this.usersService.findOneWithNiches(user.id);
     // Default steps object used as fallback if user record is unexpectedly null
     const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
-      message: 'Signup successful. Please verify your email with the OTP sent.',
+      message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
       user: {
         id: user.id,
         email: user.email,
@@ -142,6 +157,7 @@ export class AuthService {
         isEmailVerified: user.isEmailVerified,
         onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
         niches: freshUser?.niches || [],
       },
     };
@@ -162,6 +178,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    await this.checkAndReactivateUser(user);
+
     if (!user.isEmailVerified) {
       // Trigger a new registration OTP if they try to log in but haven't verified yet
       const otpRecord = await this.otpService.generateOtp(email, 'registration');
@@ -175,6 +193,7 @@ export class AuthService {
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -187,6 +206,7 @@ export class AuthService {
         isEmailVerified: user.isEmailVerified,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
         niches: userWithNiches?.niches || [],
       },
@@ -215,6 +235,10 @@ export class AuthService {
         });
         user = await this.usersService.findOne(user.id);
       } else {
+        if (googleLoginDto.acceptedTerms !== true) {
+          throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        }
+
         let roleRecord: Role | null = null;
         if (role) {
           const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -240,6 +264,7 @@ export class AuthService {
           googleId,
           roleId: roleRecord.id,
           isEmailVerified: true,
+          acceptedTerms: true,
         });
         user = await this.usersService.findOne(user.id);
       }
@@ -254,9 +279,12 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    await this.checkAndReactivateUser(user);
+
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -269,6 +297,7 @@ export class AuthService {
         isEmailVerified: user.isEmailVerified,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
         niches: userWithNiches?.niches || [],
       },
@@ -295,6 +324,10 @@ export class AuthService {
     let user = await this.usersService.findByTiktokOpenId(tiktokOpenId);
 
     if (!user) {
+      if (tiktokLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
       let roleRecord: Role | null = null;
       if (role) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
@@ -318,6 +351,7 @@ export class AuthService {
         tiktokOpenId,
         roleId: roleRecord.id,
         isEmailVerified: true,
+        acceptedTerms: true,
       });
       user = await this.usersService.findOne(user.id);
     } else {
@@ -331,9 +365,12 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    await this.checkAndReactivateUser(user);
+
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -346,6 +383,7 @@ export class AuthService {
         isEmailVerified: user.isEmailVerified,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
         niches: userWithNiches?.niches || [],
       },
@@ -368,6 +406,10 @@ export class AuthService {
     let user = await this.usersService.findByInstagramOpenId(instagramOpenId);
 
     if (!user) {
+      if (instagramLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
       let roleRecord: Role | null = null;
       if (role) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
@@ -392,6 +434,7 @@ export class AuthService {
         instagramUsername: username,
         roleId: roleRecord.id,
         isEmailVerified: true,
+        acceptedTerms: true,
       });
       user = await this.usersService.findOne(user.id);
     } else {
@@ -412,9 +455,12 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    await this.checkAndReactivateUser(user);
+
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -427,6 +473,7 @@ export class AuthService {
         isEmailVerified: user.isEmailVerified,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
         niches: userWithNiches?.niches || [],
       },
@@ -467,6 +514,8 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
     if (user) {
+      await this.checkAndReactivateUser(user);
+
       if (!user.isEmailVerified) {
         await this.usersService.update(user.id, { isEmailVerified: true });
         user.isEmailVerified = true;
@@ -475,6 +524,7 @@ export class AuthService {
       const freshUser = await this.usersService.findOneWithNiches(user.id);
       const token = this.generateToken(user);
       const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
       return {
         accessToken: token,
@@ -487,6 +537,7 @@ export class AuthService {
           isEmailVerified: user.isEmailVerified,
           onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
           onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+          socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
           username: user.username,
           niches: freshUser?.niches || [],
         },
@@ -546,5 +597,28 @@ export class AuthService {
     return jwt.sign({ id: user.id, email: user.email }, secret, {
       expiresIn: expiresIn as jwt.SignOptions['expiresIn'],
     });
+  }
+
+  private async checkAndReactivateUser(user: User): Promise<void> {
+    if (user.isActive === false) {
+      if (user.deactivatedAt) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (user.deactivatedAt >= thirtyDaysAgo) {
+          await this.usersService.update(user.id, {
+            isActive: true,
+            deactivatedAt: null,
+          });
+          user.isActive = true;
+          user.deactivatedAt = null;
+        } else {
+          throw new UnauthorizedException(
+            'Account has been deactivated and is past the 30-day restoration period.',
+          );
+        }
+      } else {
+        throw new UnauthorizedException('Account is inactive.');
+      }
+    }
   }
 }

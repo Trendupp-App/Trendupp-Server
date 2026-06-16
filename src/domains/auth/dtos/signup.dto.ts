@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, Equals } from 'class-validator';
 
 export class SignupDto {
   @ApiProperty({
@@ -50,4 +50,12 @@ export class SignupDto {
   })
   @IsOptional()
   role?: string;
+
+  @ApiProperty({
+    description: 'Acceptance of terms and conditions',
+    example: true,
+  })
+  @Equals(true, { message: 'Terms and conditions must be accepted' })
+  @IsNotEmpty()
+  acceptedTerms: boolean;
 }
