@@ -305,7 +305,7 @@ export class User extends BaseEntity<User> {
   }
 
   override toJSON(): Record<string, unknown> {
-    const raw = this.get() as Record<string, unknown>;
+    const raw = this.get() as unknown as Record<string, unknown>;
     const values: Record<string, unknown> = { ...raw };
     delete values['password'];
 
