@@ -561,7 +561,10 @@ export class AuthService {
     const otpRecord = await this.otpService.generateOtp(email, 'password-reset');
     await this.emailService.sendOtpEmail(email, otpRecord.code);
 
-    return { message: 'If the email exists, a password reset OTP code has been sent.' };
+    return {
+      message:
+        'If the email exists, a password reset OTP code has been sent. code:' + otpRecord.code,
+    };
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
