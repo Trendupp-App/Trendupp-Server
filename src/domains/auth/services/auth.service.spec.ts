@@ -112,7 +112,7 @@ describe('AuthService', () => {
         lastName: 'User',
         acceptedTerms: true,
       };
-      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1' } as any);
+      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1', isEmailVerified: true } as any);
 
       await expect(service.signup(dto)).rejects.toThrow(ConflictException);
     });
@@ -172,6 +172,7 @@ describe('AuthService', () => {
         roleId: 'role-uuid',
         isEmailVerified: false,
         acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(otpServiceMock.generateOtp).toHaveBeenCalledWith(dto.email, 'registration');
       expect(emailServiceMock.sendOtpEmail).toHaveBeenCalledWith(dto.email, '654321');
@@ -222,6 +223,7 @@ describe('AuthService', () => {
         roleId: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         isEmailVerified: false,
         acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('creator');
     });
@@ -528,6 +530,7 @@ describe('AuthService', () => {
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
         acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('brand');
     });
@@ -641,6 +644,7 @@ describe('AuthService', () => {
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
         acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('brand');
     });
@@ -810,6 +814,7 @@ describe('AuthService', () => {
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
         acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('brand');
     });

@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, Equals } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  IsOptional,
+  Equals,
+  IsBoolean,
+  Length,
+} from 'class-validator';
 
 export class SignupDto {
   @ApiProperty({
@@ -20,21 +29,30 @@ export class SignupDto {
   @IsNotEmpty()
   password: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'First name of the user',
     example: 'Ojima',
   })
   @IsString()
-  @IsNotEmpty()
-  firstName: string;
+  @IsOptional()
+  firstName?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Last name of the user',
     example: 'Attah',
   })
   @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  @IsOptional()
+  lastName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand name (required if signing up as a Brand)',
+    example: 'Trendupp Inc.',
+  })
+  @IsString()
+  @IsOptional()
+  @Length(2, 50)
+  brandName?: string;
 
   @ApiPropertyOptional({
     description: 'Phone number of the user',
@@ -58,4 +76,41 @@ export class SignupDto {
   @Equals(true, { message: 'Terms and conditions must be accepted' })
   @IsNotEmpty()
   acceptedTerms: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Acceptance of promotional emails',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  acceptedPromotions?: boolean;
+}
+
+export class CreatorSignupDto extends SignupDto {
+  @ApiProperty({
+    description: 'First name of the user',
+    example: 'Ojima',
+  })
+  @IsString()
+  @IsNotEmpty()
+  declare firstName?: string;
+
+  @ApiProperty({
+    description: 'Last name of the user',
+    example: 'Attah',
+  })
+  @IsString()
+  @IsNotEmpty()
+  declare lastName?: string;
+}
+
+export class BrandSignupDto extends SignupDto {
+  @ApiProperty({
+    description: 'Brand name (required if signing up as a Brand)',
+    example: 'Trendupp Inc.',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @Length(2, 50)
+  declare brandName?: string;
 }

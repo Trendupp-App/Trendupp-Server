@@ -11,6 +11,10 @@ export class CampaignRepository {
   constructor(
     @InjectModel(Campaign)
     private readonly campaignModel: typeof Campaign,
+    @InjectModel(CreatorCategory)
+    private readonly creatorCategoryModel: typeof CreatorCategory,
+    @InjectModel(Platform)
+    private readonly platformModel: typeof Platform,
   ) {}
 
   private readonly fullIncludes = [
@@ -107,5 +111,19 @@ export class CampaignRepository {
 
     await campaign.update(updates);
     return this.findById(id);
+  }
+
+  // ─── Lookup tables ──────────────────────────────────────────────────────────
+
+  findAllCategories(): Promise<CreatorCategory[]> {
+    return this.creatorCategoryModel.findAll({
+      order: [['minFollowers', 'ASC']],
+    });
+  }
+
+  findAllPlatforms(): Promise<Platform[]> {
+    return this.platformModel.findAll({
+      order: [['name', 'ASC']],
+    });
   }
 }

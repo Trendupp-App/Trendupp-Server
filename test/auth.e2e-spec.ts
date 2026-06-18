@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { GoogleAuthService } from './../src/integration/social-apis/google-auth.service';
 import { TiktokAuthService } from './../src/integration/social-apis/tiktok-auth.service';
+import { UserRepository } from './../src/domains/users/repository/user.repository';
 
 describe('AuthController (E2E)', () => {
   let app: INestApplication<App>;
@@ -60,6 +61,40 @@ describe('AuthController (E2E)', () => {
     app.useGlobalPipes(new ValidationPipe());
 
     await app.init();
+
+    // Clean up test users that might exist from previous E2E test runs (including soft-deleted ones)
+    const userRepo = app.get(UserRepository);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const userModel = (userRepo as any).userModel;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await userModel.destroy({
+      where: {
+        email: [
+          'google-e2e-user@trendupp.com',
+          'google-brand-user@trendupp.com',
+          'tiktok_mock-tiktok-open-id-e2e-creator-code@trendupp.tiktok',
+          'tiktok_mock-tiktok-open-id-e2e-brand-code@trendupp.tiktok',
+        ],
+      },
+      force: true,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await userModel.destroy({
+      where: {
+        googleId: ['google-e2e-sub-123', 'google-e2e-sub-brand'],
+      },
+      force: true,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await userModel.destroy({
+      where: {
+        tiktokOpenId: [
+          'mock-tiktok-open-id-e2e-creator-code',
+          'mock-tiktok-open-id-e2e-brand-code',
+        ],
+      },
+      force: true,
+    });
   }, 30000);
 
   afterAll(async () => {
@@ -111,6 +146,7 @@ describe('AuthController (E2E)', () => {
         .send({
           idToken: JSON.stringify(mockPayload),
           acceptedTerms: true,
+          acceptedPromotions: true,
         })
         .expect(200);
 
@@ -122,10 +158,12 @@ describe('AuthController (E2E)', () => {
           lastName: string;
           role: string;
           isEmailVerified: boolean;
+          acceptedPromotions: boolean;
         };
       };
       expect(body.accessToken).toBeDefined();
       expect(body.user.email).toBe('google-e2e-user@trendupp.com');
+      expect(body.user.acceptedPromotions).toBe(true);
       expect(body.user.firstName).toBe('GoogleE2E');
       expect(body.user.lastName).toBe('User');
       expect(body.user.role).toBe('creator'); // Default role
@@ -153,10 +191,12 @@ describe('AuthController (E2E)', () => {
         user: {
           email: string;
           role: string;
+          acceptedPromotions: boolean;
         };
       };
       expect(body.user.email).toBe('google-brand-user@trendupp.com');
       expect(body.user.role).toBe('brand');
+      expect(body.user.acceptedPromotions).toBe(false);
     });
 
     it('should reject requests with missing idToken (400 Bad Request)', async () => {

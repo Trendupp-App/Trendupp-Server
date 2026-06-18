@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Campaign } from '../entities/campaign.entity';
+import { CreatorCategory } from '../entities/creator-category.entity';
+import { Platform } from '../entities/platform.entity';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { S3Service } from '../../../integration/s3/s3.service';
 
@@ -71,6 +73,16 @@ export class CampaignsService {
 
   findPast(): Promise<Campaign[]> {
     return this.campaignRepository.findPastCampaigns();
+  }
+
+  // ─── Lookup endpoints ─────────────────────────────────────────────────────
+
+  getCreatorCategories(): Promise<CreatorCategory[]> {
+    return this.campaignRepository.findAllCategories();
+  }
+
+  getPlatforms(): Promise<Platform[]> {
+    return this.campaignRepository.findAllPlatforms();
   }
 
   /**

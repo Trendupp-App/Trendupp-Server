@@ -13,6 +13,8 @@ import { Role } from './role.entity';
 import { State } from './state.entity';
 import { Niche } from './niche.entity';
 import { UserNiche } from './user-niche.entity';
+import { Industry } from './industry.entity';
+import { UserIndustry } from './user-industry.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { Bank } from './bank.entity';
 
@@ -82,6 +84,14 @@ export class User extends BaseEntity<User> {
     field: 'accepted_terms',
   })
   declare acceptedTerms: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    field: 'accepted_promotions',
+  })
+  declare acceptedPromotions: boolean;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare username?: string;
@@ -216,6 +226,30 @@ export class User extends BaseEntity<User> {
   })
   declare deactivatedAt?: Date | null;
 
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare city?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'website_url' })
+  declare websiteUrl?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'monthly_budget' })
+  declare monthlyBudget?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'rep_first_name' })
+  declare repFirstName?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'rep_last_name' })
+  declare repLastName?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'rep_email' })
+  declare repEmail?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'rep_phone' })
+  declare repPhone?: string;
+
+  @BelongsToMany(() => Industry, () => UserIndustry)
+  declare industries?: Industry[];
+
   @BelongsToMany(() => Niche, () => UserNiche)
   declare niches?: Niche[];
 
@@ -232,30 +266,49 @@ export class User extends BaseEntity<User> {
 
     // Step 1 (Build Profile) complete: 20%
     // Requires username, country (operating country), and state.
-    // Nationality (citizenship) is optional and does not gate this step.
     if (this.username && this.countryId && this.stateId) {
       percentage += 20;
     }
 
-    // Step 2 (Niches selection) complete: 20%
-    if (this.niches && this.niches.length > 0) {
-      percentage += 20;
-    }
+    const roleName = this.role?.name || (typeof this.role === 'string' ? this.role : 'creator');
+    const isBrand = roleName.toLowerCase() === 'brand';
 
-    // Step 3 (Socials connection) complete: 20%
-    if (
-      this.instagramUsername ||
-      this.tiktokUsername ||
-      this.youtubeUsername ||
-      this.twitterUsername
-    ) {
-      percentage += 20;
-    }
-
-    // Step 4 (Payout Details) complete: 20%
-    // Stored after the mobile app verifies the bank account and sends the result.
-    if (this.bankId && this.bankAccountNumber && this.bankAccountName) {
-      percentage += 20;
+    if (isBrand) {
+      // Brand Step 2: Industries selection (20%)
+      if (this.industries && this.industries.length > 0) {
+        percentage += 20;
+      }
+      // Brand Step 3: Representative details (20%)
+      if (this.repFirstName && this.repLastName && this.repEmail && this.repPhone) {
+        percentage += 20;
+      }
+      // Brand Step 4: Socials connection (20%)
+      if (
+        this.instagramUsername ||
+        this.tiktokUsername ||
+        this.youtubeUsername ||
+        this.twitterUsername
+      ) {
+        percentage += 20;
+      }
+    } else {
+      // Creator Step 2: Niches selection (20%)
+      if (this.niches && this.niches.length > 0) {
+        percentage += 20;
+      }
+      // Creator Step 3: Socials connection (20%)
+      if (
+        this.instagramUsername ||
+        this.tiktokUsername ||
+        this.youtubeUsername ||
+        this.twitterUsername
+      ) {
+        percentage += 20;
+      }
+      // Creator Step 4: Payout Details (20%)
+      if (this.bankId && this.bankAccountNumber && this.bankAccountName) {
+        percentage += 20;
+      }
     }
 
     return percentage;
@@ -279,27 +332,39 @@ export class User extends BaseEntity<User> {
    * Returns the completion status of each individual onboarding step.
    * The mobile app uses this to know exactly which screens the user still
    * needs to visit, regardless of the order they were filled in.
-   *
-   * NOTE: Requires niches to be eagerly loaded (findOneWithNiches) for
-   * the `niches` field to be accurate.
    */
   get onboardingStepsCompleted(): {
     profile: boolean;
-    niches: boolean;
+    niches?: boolean;
     socials: boolean;
-    payout: boolean;
+    payout?: boolean;
+    industries?: boolean;
+    representative?: boolean;
   } {
+    const roleName = this.role?.name || (typeof this.role === 'string' ? this.role : 'creator');
+    const isBrand = roleName.toLowerCase() === 'brand';
+
+    if (isBrand) {
+      return {
+        // Step 1: username + country + state all set
+        profile: !!(this.username && this.countryId && this.stateId),
+        // Step 2: industries
+        industries: !!(this.industries && this.industries.length > 0),
+        // Step 3: representative
+        representative: !!(this.repFirstName && this.repLastName && this.repEmail && this.repPhone),
+        // Step 4: socials
+        socials: Object.values(this.socialsConnected).some((connected) => connected),
+      };
+    }
+
     return {
       // Step 1: username + country + state all set
       profile: !!(this.username && this.countryId && this.stateId),
-
-      // Step 2: at least one niche selected
+      // Step 2: niches
       niches: !!(this.niches && this.niches.length > 0),
-
-      // Step 3: at least one social account connected
+      // Step 3: socials
       socials: Object.values(this.socialsConnected).some((connected) => connected),
-
-      // Step 4: bank account details saved after mobile-side verification
+      // Step 4: payout
       payout: !!(this.bankId && this.bankAccountNumber && this.bankAccountName),
     };
   }
@@ -342,6 +407,13 @@ export class User extends BaseEntity<User> {
     values['onboardingStepsCompleted'] = this.onboardingStepsCompleted;
     values['socialsConnected'] = this.socialsConnected;
     values['niches'] = this.niches || [];
+    values['industries'] = this.industries || [];
+    values['brandRepresentative'] = {
+      firstName: this.repFirstName || null,
+      lastName: this.repLastName || null,
+      email: this.repEmail || null,
+      phone: this.repPhone || null,
+    };
 
     return values;
   }

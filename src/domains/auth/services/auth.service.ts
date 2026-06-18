@@ -39,9 +39,11 @@ export interface AuthResponse {
     onboardingPercentage: number;
     onboardingStepsCompleted: {
       profile: boolean;
-      niches: boolean;
+      niches?: boolean;
       socials: boolean;
-      payout: boolean;
+      payout?: boolean;
+      industries?: boolean;
+      representative?: boolean;
     };
     socialsConnected: {
       instagram: boolean;
@@ -51,6 +53,7 @@ export interface AuthResponse {
     };
     username?: string;
     niches: any[];
+    acceptedPromotions: boolean;
   };
 }
 
@@ -66,9 +69,11 @@ export interface SignupResponse {
     onboardingPercentage: number;
     onboardingStepsCompleted: {
       profile: boolean;
-      niches: boolean;
+      niches?: boolean;
       socials: boolean;
-      payout: boolean;
+      payout?: boolean;
+      industries?: boolean;
+      representative?: boolean;
     };
     socialsConnected: {
       instagram: boolean;
@@ -77,6 +82,7 @@ export interface SignupResponse {
       twitter: boolean;
     };
     niches: any[];
+    acceptedPromotions: boolean;
   };
 }
 
@@ -102,7 +108,7 @@ export class AuthService {
     const email = signupDto.email.toLowerCase().trim();
 
     const existingUser = await this.usersService.findByEmail(email);
-    if (existingUser) {
+    if (existingUser && existingUser.isEmailVerified) {
       throw new ConflictException('A user with this account already exists');
     }
 
@@ -123,15 +129,76 @@ export class AuthService {
       throw new NotFoundException('Account type does not exist');
     }
 
+    let finalFirstName = firstName || '';
+    let finalLastName = lastName || '';
+
+    if (roleRecord.name === 'brand') {
+      if (!signupDto.brandName) {
+        throw new BadRequestException('brandName is required for brand signup');
+      }
+      finalFirstName = signupDto.brandName;
+      finalLastName = '';
+    } else {
+      if (!firstName || !lastName) {
+        throw new BadRequestException('firstName and lastName are required for creator signup');
+      }
+    }
+
+    if (existingUser) {
+      // If email is not verified, update details, generate a new OTP, and resend
+      await existingUser.update({
+        password: hashedPassword,
+        firstName: finalFirstName,
+        lastName: finalLastName,
+        phoneNumber,
+        roleId: roleRecord.id,
+        acceptedPromotions: signupDto.acceptedPromotions || false,
+      });
+
+      const otpRecord = await this.otpService.generateOtp(email, 'registration');
+      await this.emailService.sendOtpEmail(email, otpRecord.code);
+
+      this.logger.log(`User registration resent successfully and OTP sent to ${email}`);
+
+      const freshUser = await this.usersService.findOneWithNiches(existingUser.id);
+      const defaultSteps = {
+        profile: false,
+        niches: false,
+        socials: false,
+        payout: false,
+        industries: false,
+        representative: false,
+      };
+      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+
+      return {
+        message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          role: roleRecord.name,
+          isEmailVerified: existingUser.isEmailVerified,
+          acceptedPromotions: existingUser.acceptedPromotions,
+          onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+          onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+          socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
+          niches: freshUser?.niches || [],
+        },
+      };
+    }
+
     const user = await this.usersService.create({
       email,
       password: hashedPassword,
-      firstName,
-      lastName,
+      firstName: finalFirstName,
+      lastName: finalLastName,
       phoneNumber,
       roleId: roleRecord.id,
       isEmailVerified: false,
       acceptedTerms: true,
+      acceptedPromotions: signupDto.acceptedPromotions || false,
     });
 
     // Send OTP of type 'registration'
@@ -143,7 +210,14 @@ export class AuthService {
     // Retrieve fresh user details (with dynamic onboardingPercentage computed)
     const freshUser = await this.usersService.findOneWithNiches(user.id);
     // Default steps object used as fallback if user record is unexpectedly null
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
     const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
@@ -155,6 +229,7 @@ export class AuthService {
         lastName: user.lastName,
         role: roleRecord.name,
         isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
         onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
         socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
@@ -192,7 +267,14 @@ export class AuthService {
     // Load full user details with associations for percentage calculation
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
     const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
@@ -204,6 +286,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
@@ -265,6 +348,7 @@ export class AuthService {
           roleId: roleRecord.id,
           isEmailVerified: true,
           acceptedTerms: true,
+          acceptedPromotions: googleLoginDto.acceptedPromotions || false,
         });
         user = await this.usersService.findOne(user.id);
       }
@@ -283,7 +367,14 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
     const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
@@ -295,6 +386,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
@@ -352,6 +444,7 @@ export class AuthService {
         roleId: roleRecord.id,
         isEmailVerified: true,
         acceptedTerms: true,
+        acceptedPromotions: tiktokLoginDto.acceptedPromotions || false,
       });
       user = await this.usersService.findOne(user.id);
     } else {
@@ -369,7 +462,14 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
     const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
@@ -381,6 +481,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
@@ -435,6 +536,7 @@ export class AuthService {
         roleId: roleRecord.id,
         isEmailVerified: true,
         acceptedTerms: true,
+        acceptedPromotions: instagramLoginDto.acceptedPromotions || false,
       });
       user = await this.usersService.findOne(user.id);
     } else {
@@ -459,7 +561,14 @@ export class AuthService {
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
-    const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
     const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
@@ -471,6 +580,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
         onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
         onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
         socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
@@ -523,7 +633,14 @@ export class AuthService {
 
       const freshUser = await this.usersService.findOneWithNiches(user.id);
       const token = this.generateToken(user);
-      const defaultSteps = { profile: false, niches: false, socials: false, payout: false };
+      const defaultSteps = {
+        profile: false,
+        niches: false,
+        socials: false,
+        payout: false,
+        industries: false,
+        representative: false,
+      };
       const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
       return {
@@ -535,6 +652,7 @@ export class AuthService {
           lastName: user.lastName,
           role: user.role?.name || 'creator',
           isEmailVerified: user.isEmailVerified,
+          acceptedPromotions: user.acceptedPromotions,
           onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
           onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
           socialsConnected: freshUser?.socialsConnected ?? defaultSocials,

@@ -96,12 +96,14 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         lastName: 'Tester',
         role: creatorRoleId,
         acceptedTerms: true,
+        acceptedPromotions: true,
       })
       .expect(201)
       .expect((res: Response): void => {
         const body = res.body as Record<string, any>;
         expect(body.message).toContain('Signup successful');
         expect(body.user.email).toBe(testEmail);
+        expect(body.user.acceptedPromotions).toBe(true);
       });
   });
 
