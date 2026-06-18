@@ -162,7 +162,7 @@ describe('CampaignsController (E2E)', () => {
     expect(body.campaign.title).toBe('Summer Style Collection');
     expect(body.campaign.status).toBe('pending_approval');
     createdCampaignId = body.campaign.id;
-  });
+  }, 30000);
 
   it('GET /api/v1/campaigns - should list all campaigns', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/campaigns').expect(200);

@@ -19,6 +19,9 @@ import {
   ApiBearerAuth,
   ApiSecurity,
   ApiQuery,
+  ApiExtraModels,
+  getSchemaPath,
+  ApiBody,
 } from '@nestjs/swagger';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { OnboardingService } from '../services/onboarding.service';
@@ -28,8 +31,14 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
-import { UpdateProfileDto } from '../../users/dtos/update-profile.dto';
+import {
+  UpdateProfileDto,
+  CreatorProfileDto,
+  BrandProfileDto,
+} from '../../users/dtos/update-profile.dto';
 import { SetNichesDto } from '../../users/dtos/set-niches.dto';
+import { SetIndustriesDto } from '../../users/dtos/set-industries.dto';
+import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
 import { UpdateSocialsDto } from '../../users/dtos/update-socials.dto';
 import { UpdatePayoutDto } from '../../users/dtos/update-payout.dto';
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard';
@@ -100,6 +109,28 @@ export class OnboardingController {
     return this.onboardingService.getStatesByNationality(countryId);
   }
 
+  @Get('countries/:countryId/states/:stateId/cities')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get cities belonging to a specific country and state' })
+  @ApiResponse({ status: 200, description: 'List of cities retrieved' })
+  async getCitiesByCountryAndState(
+    @Param('countryId') countryId: string,
+    @Param('stateId') stateId: string,
+  ) {
+    return this.onboardingService.getCitiesByCountryAndState(countryId, stateId);
+  }
+
+  @Get('nationalities/:nationalityId/states/:stateId/cities')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get cities belonging to a specific nationality and state' })
+  @ApiResponse({ status: 200, description: 'List of cities retrieved' })
+  async getCitiesByNationalityAndState(
+    @Param('nationalityId') nationalityId: string,
+    @Param('stateId') stateId: string,
+  ) {
+    return this.onboardingService.getCitiesByCountryAndState(nationalityId, stateId);
+  }
+
   @Get('banks')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({
@@ -135,28 +166,81 @@ export class OnboardingController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Step 1: Build user profile (username, nationality, country, state, bio)',
+    summary: 'Step 1: Build user profile (Creators and Brands)',
+  })
+  @ApiExtraModels(CreatorProfileDto, BrandProfileDto)
+  @ApiBody({
+    schema: {
+      oneOf: [{ $ref: getSchemaPath(CreatorProfileDto) }, { $ref: getSchemaPath(BrandProfileDto) }],
+    },
   })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Username already taken' })
   async updateProfile(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
-    const existing = await this.usersService.findByUsername(dto.username);
-    if (existing && existing.id !== user.id) {
-      throw new ConflictException('Username is already taken');
+    if (dto.username) {
+      const existing = await this.usersService.findByUsername(dto.username);
+      if (existing && existing.id !== user.id) {
+        throw new ConflictException('Username is already taken');
+      }
     }
 
-    await this.usersService.update(user.id, {
-      username: dto.username,
-      nationalityId: dto.nationalityId,
+    const updates: Partial<User> = {
       countryId: dto.countryId,
       stateId: dto.stateId,
-      bio: dto.bio,
-    });
+    };
+
+    if (dto.bio !== undefined) updates.bio = dto.bio;
+    if (dto.username !== undefined) updates.username = dto.username;
+    if (dto.brandName !== undefined) updates.firstName = dto.brandName; // Map brandName to firstName
+    if (dto.nationalityId !== undefined) updates.nationalityId = dto.nationalityId;
+    if (dto.city !== undefined) updates.city = dto.city;
+    if (dto.websiteUrl !== undefined) updates.websiteUrl = dto.websiteUrl;
+    if (dto.monthlyBudget !== undefined) updates.monthlyBudget = dto.monthlyBudget;
+
+    await this.usersService.update(user.id, updates);
 
     const updated = await this.usersService.findOneWithNiches(user.id);
     return {
       message: 'Profile details updated successfully',
+      user: updated,
+    };
+  }
+
+  @Get('industries')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get all sorted industries for onboarding selection (Brands)' })
+  @ApiResponse({ status: 200, description: 'List of industries retrieved' })
+  async getIndustries() {
+    return this.onboardingService.getAllIndustries();
+  }
+
+  @Post('industries')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Step 2: Save selected industries (Brands)' })
+  @ApiResponse({ status: 200, description: 'Brand industries saved successfully' })
+  async setIndustries(@CurrentUser() user: User, @Body() dto: SetIndustriesDto) {
+    const updated = await this.onboardingService.setUserIndustries(user.id, dto.industryIds);
+    return {
+      message: 'Industries associated successfully',
+      user: updated,
+    };
+  }
+
+  @Patch('representative')
+  @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Step 3: Save representative details (Brands)' })
+  @ApiResponse({ status: 200, description: 'Brand representative saved successfully' })
+  async updateRepresentative(@CurrentUser() user: User, @Body() dto: UpdateBrandRepresentativeDto) {
+    const updated = await this.onboardingService.setUserRepresentative(user.id, dto);
+    return {
+      message: 'Representative details updated successfully',
       user: updated,
     };
   }
@@ -166,7 +250,7 @@ export class OnboardingController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Step 2: Save selected niches' })
+  @ApiOperation({ summary: 'Step 2: Save selected niches (Creators)' })
   @ApiResponse({ status: 200, description: 'User niches saved successfully' })
   async setNiches(@CurrentUser() user: User, @Body() dto: SetNichesDto) {
     await this.usersService.setUserNiches(user.id, dto.nicheIds);
@@ -183,7 +267,7 @@ export class OnboardingController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Step 3: Connect social profiles' })
+  @ApiOperation({ summary: 'Step 3: Connect social profiles (Creators and Brands)' })
   @ApiResponse({
     status: 200,
     description: 'Social accounts connected successfully and tier assigned',
@@ -243,7 +327,7 @@ export class OnboardingController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Step 4: Save payout details (bank account for campaign payment via escrow)',
+    summary: 'Step 4: Save payout details (Creators)',
   })
   @ApiResponse({ status: 200, description: 'Payout details saved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

@@ -34,7 +34,14 @@ export class S3Service {
   }
 
   async uploadFile(file: Express.Multer.File, folder = 'campaign-covers'): Promise<string> {
-    const key = `${folder}/${Date.now()}-${file.originalname}`;
+    const ext = file.originalname.split('.').pop() ?? 'bin';
+    const safeName = file.originalname
+      .replace(/\.[^.]+$/, '') // strip extension
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-') // replace spaces / special chars with dash
+      .replace(/^-+|-+$/g, '') // trim leading/trailing dashes
+      .slice(0, 60); // cap length
+    const key = `${folder}/${Date.now()}-${safeName}.${ext}`;
 
     if (this.s3Client) {
       try {

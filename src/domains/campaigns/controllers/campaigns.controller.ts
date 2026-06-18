@@ -102,6 +102,22 @@ export class CampaignsController {
     return this.campaignsService.findAll();
   }
 
+  @Get('creator-categories')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get all creator categories (Nano, Micro, Mid-tier, Macro)' })
+  @ApiResponse({ status: 200, description: 'List of creator categories' })
+  getCreatorCategories() {
+    return this.campaignsService.getCreatorCategories();
+  }
+
+  @Get('platforms')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get all supported platforms (Instagram, TikTok, YouTube, Twitter)' })
+  @ApiResponse({ status: 200, description: 'List of platforms' })
+  getPlatforms() {
+    return this.campaignsService.getPlatforms();
+  }
+
   @Get('my')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @UseGuards(JwtAuthGuard)

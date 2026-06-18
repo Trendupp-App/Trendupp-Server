@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import * as ejs from 'ejs';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 @Injectable()
 export class EmailService {
@@ -17,8 +18,19 @@ export class EmailService {
     const secretKey = this.configService.get<string>('aws.ses.secretKey');
     this.fromEmail = this.configService.get<string>('aws.ses.fromEmail', 'noreply@trendupp.com');
 
-    // Set the template directory
-    this.templateDir = join(__dirname, 'templates');
+    // Set the template directory with fallback for dev/compilation environments
+    const possiblePaths = [
+      join(__dirname, 'templates'),
+      join(process.cwd(), 'src', 'integration', 'email', 'templates'),
+    ];
+    let resolvedPath = possiblePaths[0];
+    for (const p of possiblePaths) {
+      if (existsSync(p)) {
+        resolvedPath = p;
+        break;
+      }
+    }
+    this.templateDir = resolvedPath;
 
     if (region && accessKey && secretKey) {
       this.sesClient = new SESClient({

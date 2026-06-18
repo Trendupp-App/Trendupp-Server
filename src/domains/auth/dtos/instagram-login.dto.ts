@@ -34,4 +34,12 @@ export class InstagramLoginDto {
   @IsBoolean()
   @IsOptional()
   acceptedTerms?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Acceptance of promotional emails',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  acceptedPromotions?: boolean;
 }

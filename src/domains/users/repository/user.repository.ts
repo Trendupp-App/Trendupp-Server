@@ -12,12 +12,12 @@ export class UserRepository {
 
   findAll(): Promise<User[]> {
     return this.userModel.findAll({
-      include: ['role', 'nationality', 'country', 'state', 'niches', 'bank'],
+      include: ['role', 'nationality', 'country', 'state', 'niches', 'industries', 'bank'],
     });
   }
 
   findById(id: string, includeNiches = true): Promise<User | null> {
-    const includes = ['role', 'nationality', 'country', 'state', 'bank'];
+    const includes = ['role', 'nationality', 'country', 'state', 'bank', 'industries'];
     if (includeNiches) {
       includes.push('niches');
     }
@@ -49,6 +49,14 @@ export class UserRepository {
     if (user) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await (user as any).$set('niches', nicheIds);
+    }
+  }
+
+  async setUserIndustries(userId: string, industryIds: string[]): Promise<void> {
+    const user = await this.userModel.findByPk(userId);
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      await (user as any).$set('industries', industryIds);
     }
   }
 

@@ -62,18 +62,28 @@ export class CreateCampaignDto {
   })
   @Transform(({ value }: { value: unknown }): string[] => {
     if (Array.isArray(value)) {
-      return value.map((v: unknown) => String(v));
+      return value.map((v: unknown) => String(v).trim());
     }
     if (typeof value === 'string') {
+      const trimmed = value.trim();
+      // 1. Try JSON-encoded array  e.g. '["uuid1","uuid2"]'
       try {
-        const parsed = JSON.parse(value) as unknown;
+        const parsed = JSON.parse(trimmed) as unknown;
         if (Array.isArray(parsed)) {
-          return parsed.map((v: unknown) => String(v));
+          return parsed.map((v: unknown) => String(v).trim());
         }
       } catch {
-        // Ignore JSON parsing errors and treat as single string
+        // not JSON — continue
       }
-      return [value];
+      // 2. Try comma-separated  e.g. 'uuid1,uuid2'
+      if (trimmed.includes(',')) {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      // 3. Single UUID string
+      return [trimmed];
     }
     return [];
   })
