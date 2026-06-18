@@ -112,7 +112,7 @@ describe('AuthService', () => {
         lastName: 'User',
         acceptedTerms: true,
       };
-      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1' } as any);
+      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1', isEmailVerified: true } as any);
 
       await expect(service.signup(dto)).rejects.toThrow(ConflictException);
     });
