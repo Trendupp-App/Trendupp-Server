@@ -1,0 +1,60 @@
+name: Deploy Trendupp-Server to AL2023
+
+on:
+  push:
+    branches:
+      - main # Triggers the deployment when you push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # Port is optional, default is 22. Uncomment line below if using a custom port
+          # port: ${{ secrets.EC2_PORT }}
+          script: |
+            # 1. Navigate to the project folder or clone it if it's the first deployment
+            if [ ! -d "/home/ec2-user/trendupp-server" ]; then
+              echo "Repository not found on server. Cloning..."
+              git clone https://github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
+              cd /home/ec2-user/trendupp-server
+            else
+              cd /home/ec2-user/trendupp-server
+              echo "Repository found. Pulling latest changes..."
+              git pull origin main
+            fi
+
+            # 2. Install all dependencies (including devDependencies required for compiling NestJS)
+            npm ci
+
+            # 3. Build the NestJS project (compiles TS files to dist/)
+            npm run build
+
+            # 4. Prune devDependencies to keep the production footprint small
+            npm prune --omit=dev
+
+            # 5. Run migrations (Optional - uncomment the line below if you want automatic migrations)
+            # npm run migration:run
+
+            # 6. Gracefully restart the NestJS API process with PM2 for zero downtime
+            pm2 describe trendupp-api > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+              echo "Trendupp-Server is running. Reloading gracefully..."
+              pm2 reload trendupp-api
+            --
+            else
+              echo "Trendupp-Server is offline. Starting new PM2 instance..."
+              pm2 start dist/main.js --name "trendupp-api"
+            fi
+            
+            # 7. Save the PM2 process list so it survives a server reboot
+            pm2 save

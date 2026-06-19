@@ -110,6 +110,7 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        role: 'creator',
         acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1', isEmailVerified: true } as any);
@@ -133,12 +134,28 @@ describe('AuthService', () => {
       await expect(service.signup(dto)).rejects.toThrow(NotFoundException);
     });
 
+    it('should throw BadRequestException if role is not provided', async () => {
+      const dto = {
+        email: 'no-role@example.com',
+        password: 'password',
+        firstName: 'No',
+        lastName: 'Role',
+        acceptedTerms: true,
+        // role intentionally omitted
+      };
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+
+      await expect(service.signup(dto as any)).rejects.toThrow(BadRequestException);
+    });
+
     it('should hash password and create user', async () => {
       const dto = {
         email: 'test@example.com',
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        role: 'creator',
         acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);

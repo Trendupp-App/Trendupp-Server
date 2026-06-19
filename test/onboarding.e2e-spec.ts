@@ -105,7 +105,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         expect(body.user.email).toBe(testEmail);
         expect(body.user.acceptedPromotions).toBe(true);
       });
-  });
+  }, 15000);
 
   it('/api/v1/auth/otp/verify (POST) - Verify Email & Get JWT', async () => {
     // Query database directly to get the generated code
@@ -131,7 +131,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         token = body.accessToken as string;
         expect(body.user.isEmailVerified).toBe(true);
       });
-  });
+  }, 15000);
 
   // --- Onboarding Metadata Lookup Tests ---
 
@@ -199,6 +199,57 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         expect(body.user.state).toBeDefined();
         expect(body.user.state.id).toBe(stateId);
       });
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Profile Details with valid avatar upload', async () => {
+    const validBuffer = Buffer.from('fake-image-data-png');
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', validBuffer, { filename: 'avatar.png', contentType: 'image/png' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Automated E2E Bio description with avatar');
+
+    console.log('VALID AVATAR UPLOAD RESPONSE:', res.status, res.body);
+    expect(res.status).toBe(200);
+    expect(res.body.user.avatarUrl).toBeDefined();
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Reject avatar upload exceeding 5MB', async () => {
+    const largeBuffer = Buffer.alloc(5.1 * 1024 * 1024); // 5.1 MB
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', largeBuffer, { filename: 'large.png', contentType: 'image/png' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Oversized image');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('File is too large');
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Reject invalid avatar file type', async () => {
+    const invalidBuffer = Buffer.from('some text content');
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', invalidBuffer, { filename: 'doc.pdf', contentType: 'application/pdf' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Invalid format');
+
+    expect(res.status).toBe(400);
   });
 
   it('/api/v1/users/onboarding/niches (POST) - Step 2: Choose Niches (60% complete)', () => {

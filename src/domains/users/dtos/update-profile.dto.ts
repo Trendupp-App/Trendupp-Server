@@ -71,6 +71,13 @@ export class CreatorProfileDto {
     example: 'Exploring lifestyle and fashion trends in Lagos.',
   })
   bio?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description: 'Profile picture / avatar (JPEG, PNG, WebP up to 5MB)',
+  })
+  avatar?: any;
 }
 
 export class BrandProfileDto {
@@ -115,4 +122,11 @@ export class BrandProfileDto {
     example: '$10,000 - $25,000',
   })
   monthlyBudget?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description: 'Profile picture / avatar (JPEG, PNG, WebP up to 5MB)',
+  })
+  avatar?: any;
 }
