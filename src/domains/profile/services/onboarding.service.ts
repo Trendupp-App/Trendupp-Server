@@ -12,7 +12,6 @@ import { Bank } from '../../users/entities/bank.entity';
 import { Industry } from '../../users/entities/industry.entity';
 import { User } from '../../users/entities/user.entity';
 import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
-import { State as CscState, City as CscCity } from 'country-state-city';
 import { Op, WhereOptions } from 'sequelize';
 
 @Injectable()
@@ -99,6 +98,12 @@ export class OnboardingService {
     if (!state || state.nationalityId !== countryId) {
       throw new NotFoundException('State not found or does not belong to the country');
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { State: CscState, City: CscCity } = require('country-state-city') as {
+      State: typeof import('country-state-city').State;
+      City: typeof import('country-state-city').City;
+    };
 
     const cscStates = CscState.getStatesOfCountry(country.code);
     const cscState = cscStates.find((s) => s.name.toLowerCase() === state.name.toLowerCase());
