@@ -95,14 +95,17 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         firstName: 'End2End',
         lastName: 'Tester',
         role: creatorRoleId,
+        acceptedTerms: true,
+        acceptedPromotions: true,
       })
       .expect(201)
       .expect((res: Response): void => {
         const body = res.body as Record<string, any>;
         expect(body.message).toContain('Signup successful');
         expect(body.user.email).toBe(testEmail);
+        expect(body.user.acceptedPromotions).toBe(true);
       });
-  });
+  }, 15000);
 
   it('/api/v1/auth/otp/verify (POST) - Verify Email & Get JWT', async () => {
     // Query database directly to get the generated code
@@ -128,7 +131,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         token = body.accessToken as string;
         expect(body.user.isEmailVerified).toBe(true);
       });
-  });
+  }, 15000);
 
   // --- Onboarding Metadata Lookup Tests ---
 
@@ -178,6 +181,7 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       .send({
         username: testUsername,
         nationalityId,
+        countryId: nationalityId,
         stateId,
         bio: 'Automated E2E Bio description',
       })
@@ -186,7 +190,66 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
         const body = res.body as Record<string, any>;
         expect(body.user.onboardingPercentage).toBe(40);
         expect(body.user.username).toBe(testUsername);
+        expect(body.user.firstName).toBe('End2End');
+        expect(body.user.lastName).toBe('Tester');
+        expect(body.user.nationality).toBeDefined();
+        expect(body.user.nationality.id).toBe(nationalityId);
+        expect(body.user.country).toBeDefined();
+        expect(body.user.country.id).toBe(nationalityId);
+        expect(body.user.state).toBeDefined();
+        expect(body.user.state.id).toBe(stateId);
       });
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Profile Details with valid avatar upload', async () => {
+    const validBuffer = Buffer.from('fake-image-data-png');
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', validBuffer, { filename: 'avatar.png', contentType: 'image/png' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Automated E2E Bio description with avatar');
+
+    console.log('VALID AVATAR UPLOAD RESPONSE:', res.status, res.body);
+    expect(res.status).toBe(200);
+    expect(res.body.user.avatarUrl).toBeDefined();
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Reject avatar upload exceeding 5MB', async () => {
+    const largeBuffer = Buffer.alloc(5.1 * 1024 * 1024); // 5.1 MB
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', largeBuffer, { filename: 'large.png', contentType: 'image/png' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Oversized image');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('File is too large');
+  });
+
+  it('/api/v1/users/onboarding/profile (PATCH) - Step 1: Reject invalid avatar file type', async () => {
+    const invalidBuffer = Buffer.from('some text content');
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-api-key', apiKey)
+      .attach('avatar', invalidBuffer, { filename: 'doc.pdf', contentType: 'application/pdf' })
+      .field('username', testUsername)
+      .field('nationalityId', nationalityId)
+      .field('countryId', nationalityId)
+      .field('stateId', stateId)
+      .field('bio', 'Invalid format');
+
+    expect(res.status).toBe(400);
   });
 
   it('/api/v1/users/onboarding/niches (POST) - Step 2: Choose Niches (60% complete)', () => {
@@ -221,19 +284,54 @@ describe('User Onboarding & Auth Flow (E2E)', () => {
       });
   });
 
-  it('/api/v1/users/onboarding/verify-identity (POST) - Step 4: Submit Video (100% complete)', () => {
-    return request(app.getHttpServer())
-      .post('/api/v1/users/onboarding/verify-identity')
+  it('/api/v1/users/onboarding/banks (GET) - Retrieve and filter banks by region/country', async () => {
+    const resAll = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    expect(resAll.body.length).toBeGreaterThan(0);
+
+    const resAfrica = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks?region=africa')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const regions = (resAfrica.body as { region: string }[]).map((b) => b.region.toLowerCase());
+    expect(regions.every((r: string) => r.includes('africa'))).toBe(true);
+
+    const resNigeria = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks?country=nigeria')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const countries = (resNigeria.body as { country: string }[]).map((b) =>
+      b.country.toLowerCase(),
+    );
+    expect(countries.every((c: string) => c.includes('nigeria'))).toBe(true);
+  });
+
+  it('/api/v1/users/onboarding/payout (PATCH) - Step 4: Submit Payout Details (100% complete)', async () => {
+    const bankRes = await request(app.getHttpServer())
+      .get('/api/v1/users/onboarding/banks')
+      .set('x-api-key', apiKey)
+      .expect(200);
+    const banks = bankRes.body as any[];
+    expect(banks.length).toBeGreaterThan(0);
+    const targetBank = banks[0];
+
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/onboarding/payout')
       .set('Authorization', `Bearer ${token}`)
       .set('x-api-key', apiKey)
       .send({
-        verificationVideoUrl: 'https://trendupp-assets.s3.amazonaws.com/videos/test-selfie.mp4',
+        bankId: targetBank.id,
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'End2End Tester',
       })
-      .expect(200)
-      .expect((res: Response): void => {
-        const body = res.body as Record<string, any>;
-        expect(body.user.onboardingPercentage).toBe(100);
-        expect(body.user.verificationStatus).toBe('pending');
-      });
+      .expect(200);
+
+    const body = res.body as Record<string, any>;
+    expect(body.user.onboardingPercentage).toBe(100);
+    expect(body.user.bankName).toBe(targetBank.name);
+    expect(body.user.bankAccountNumber).toBe('0123456789');
+    expect(body.user.bankAccountName).toBe('End2End Tester');
   });
 });

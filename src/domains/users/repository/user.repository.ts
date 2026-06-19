@@ -11,11 +11,13 @@ export class UserRepository {
   ) {}
 
   findAll(): Promise<User[]> {
-    return this.userModel.findAll();
+    return this.userModel.findAll({
+      include: ['role', 'nationality', 'country', 'state', 'niches', 'industries', 'bank'],
+    });
   }
 
-  findById(id: string, includeNiches = false): Promise<User | null> {
-    const includes = ['role'];
+  findById(id: string, includeNiches = true): Promise<User | null> {
+    const includes = ['role', 'nationality', 'country', 'state', 'bank', 'industries'];
     if (includeNiches) {
       includes.push('niches');
     }
@@ -34,11 +36,27 @@ export class UserRepository {
     return this.userModel.findOne({ where: { googleId }, include: ['role'] });
   }
 
+  findByTiktokOpenId(tiktokOpenId: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { tiktokOpenId }, include: ['role'] });
+  }
+
+  findByInstagramOpenId(instagramOpenId: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { instagramOpenId }, include: ['role'] });
+  }
+
   async setUserNiches(userId: string, nicheIds: string[]): Promise<void> {
     const user = await this.userModel.findByPk(userId);
     if (user) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await (user as any).$set('niches', nicheIds);
+    }
+  }
+
+  async setUserIndustries(userId: string, industryIds: string[]): Promise<void> {
+    const user = await this.userModel.findByPk(userId);
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      await (user as any).$set('industries', industryIds);
     }
   }
 

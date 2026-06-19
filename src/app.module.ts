@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { WinstonModule } from 'nest-winston';
+import { HttpLoggerMiddleware } from './shared/logger/http-logger.middleware';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -12,6 +13,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './domains/users/users.module';
 import { AuthModule } from './domains/auth/auth.module';
+import { CampaignsModule } from './domains/campaigns/campaigns.module';
+import { AdminModule } from './domains/admin/admin.module';
+import { ProfileModule } from './domains/profile/profile.module';
 
 @Module({
   imports: [
@@ -76,6 +80,9 @@ import { AuthModule } from './domains/auth/auth.module';
     // Domain Modules
     UsersModule,
     AuthModule,
+    CampaignsModule,
+    AdminModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [
@@ -86,4 +93,8 @@ import { AuthModule } from './domains/auth/auth.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+  }
+}
