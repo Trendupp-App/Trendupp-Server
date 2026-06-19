@@ -13,9 +13,17 @@ import { Industry } from '../../users/entities/industry.entity';
 import { User } from '../../users/entities/user.entity';
 import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
 import { Op, WhereOptions } from 'sequelize';
-import { createRequire } from 'module';
 
-const nodeRequire = createRequire(__filename);
+let countryStateCityModule: typeof import('country-state-city') | null = null;
+const getCountryStateCityModule = (): typeof import('country-state-city') => {
+  if (countryStateCityModule) {
+    return countryStateCityModule;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  countryStateCityModule = require('country-state-city') as typeof import('country-state-city');
+  return countryStateCityModule;
+};
 
 @Injectable()
 export class OnboardingService {
@@ -102,9 +110,7 @@ export class OnboardingService {
       throw new NotFoundException('State not found or does not belong to the country');
     }
 
-    const { State: CscState, City: CscCity } = nodeRequire(
-      'country-state-city',
-    ) as typeof import('country-state-city');
+    const { State: CscState, City: CscCity } = getCountryStateCityModule();
     const cscStates = CscState.getStatesOfCountry(country.code);
     const cscState = cscStates.find((s) => s.name.toLowerCase() === state.name.toLowerCase());
 
