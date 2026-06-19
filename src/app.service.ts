@@ -5,10 +5,10 @@ export class AppService {
   getHomeInfo() {
     return {
       name: 'Trendupp API',
-      description: 'The Trendupp Social Commerce Backend API description',
-      version: '1.0',
+      description: 'The Trendupp Social Commerce Backend API v1.0',
       docs: '/docs',
       status: 'healthy',
+      author: 'prodCycle',
     };
   }
 
