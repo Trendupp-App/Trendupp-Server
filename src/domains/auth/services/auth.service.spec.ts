@@ -7,7 +7,14 @@ import { EmailService } from '../../../integration/email/email.service';
 import { UsersService } from '../../users/services/users.service';
 import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
-import { UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
+import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
+import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
+import {
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
 jest.mock('bcryptjs');
@@ -19,6 +26,8 @@ describe('AuthService', () => {
   let usersServiceMock: jest.Mocked<UsersService>;
   let configServiceMock: jest.Mocked<ConfigService>;
   let googleAuthServiceMock: jest.Mocked<GoogleAuthService>;
+  let tiktokAuthServiceMock: jest.Mocked<TiktokAuthService>;
+  let instagramAuthServiceMock: jest.Mocked<InstagramAuthService>;
 
   beforeEach(async () => {
     otpServiceMock = {
@@ -39,6 +48,8 @@ describe('AuthService', () => {
       findRoleByName: jest.fn(),
       findRoleById: jest.fn(),
       findByGoogleId: jest.fn(),
+      findByTiktokOpenId: jest.fn(),
+      findByInstagramOpenId: jest.fn(),
       findOne: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -54,6 +65,16 @@ describe('AuthService', () => {
       verifyIdToken: jest.fn(),
     } as unknown as jest.Mocked<GoogleAuthService>;
 
+    tiktokAuthServiceMock = {
+      exchangeCodeForToken: jest.fn(),
+      getUserProfile: jest.fn(),
+    } as unknown as jest.Mocked<TiktokAuthService>;
+
+    instagramAuthServiceMock = {
+      exchangeCodeForToken: jest.fn(),
+      getUserProfile: jest.fn(),
+    } as unknown as jest.Mocked<InstagramAuthService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -62,6 +83,8 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: usersServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
         { provide: GoogleAuthService, useValue: googleAuthServiceMock },
+        { provide: TiktokAuthService, useValue: tiktokAuthServiceMock },
+        { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
       ],
     }).compile();
 
@@ -87,8 +110,10 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        role: 'creator',
+        acceptedTerms: true,
       };
-      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1' } as any);
+      usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1', isEmailVerified: true } as any);
 
       await expect(service.signup(dto)).rejects.toThrow(ConflictException);
     });
@@ -100,6 +125,7 @@ describe('AuthService', () => {
         firstName: 'Test',
         lastName: 'User',
         role: 'invalid-role',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -108,12 +134,29 @@ describe('AuthService', () => {
       await expect(service.signup(dto)).rejects.toThrow(NotFoundException);
     });
 
+    it('should throw BadRequestException if role is not provided', async () => {
+      const dto = {
+        email: 'no-role@example.com',
+        password: 'password',
+        firstName: 'No',
+        lastName: 'Role',
+        acceptedTerms: true,
+        // role intentionally omitted
+      };
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+
+      await expect(service.signup(dto as any)).rejects.toThrow(BadRequestException);
+    });
+
     it('should hash password and create user', async () => {
       const dto = {
         email: 'test@example.com',
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
+        role: 'creator',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -145,6 +188,8 @@ describe('AuthService', () => {
         phoneNumber: undefined,
         roleId: 'role-uuid',
         isEmailVerified: false,
+        acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(otpServiceMock.generateOtp).toHaveBeenCalledWith(dto.email, 'registration');
       expect(emailServiceMock.sendOtpEmail).toHaveBeenCalledWith(dto.email, '654321');
@@ -159,6 +204,7 @@ describe('AuthService', () => {
         firstName: 'UUID',
         lastName: 'Tester',
         role: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
+        acceptedTerms: true,
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -193,6 +239,8 @@ describe('AuthService', () => {
         phoneNumber: undefined,
         roleId: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         isEmailVerified: false,
+        acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('creator');
     });
@@ -256,6 +304,61 @@ describe('AuthService', () => {
 
       expect(result.accessToken).toBeDefined();
       expect(result.user.id).toBe('u1');
+    });
+
+    it('should reactivate account if deactivated within 30 days', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 5); // 5 days ago
+
+      const mockUser = {
+        id: 'u1',
+        email: 'deactivated@example.com',
+        password: 'hashedPassword',
+        isActive: false,
+        deactivatedAt: recentDate,
+        isEmailVerified: true,
+        firstName: 'Deactivated',
+        lastName: 'User',
+      };
+
+      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'u1',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.login({
+        email: 'deactivated@example.com',
+        password: 'password',
+      });
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
+        isActive: true,
+        deactivatedAt: null,
+      });
+      expect(result.accessToken).toBeDefined();
+    });
+
+    it('should throw UnauthorizedException if deactivated more than 30 days ago', async () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 35); // 35 days ago
+
+      const mockUser = {
+        id: 'u1',
+        email: 'deactivated@example.com',
+        password: 'hashedPassword',
+        isActive: false,
+        deactivatedAt: oldDate,
+        isEmailVerified: true,
+      };
+
+      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ email: 'deactivated@example.com', password: 'password' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -393,7 +496,7 @@ describe('AuthService', () => {
     });
 
     it('should create a new user when neither googleId nor email exists in database', async () => {
-      const dto = { idToken: 'new-google-token', role: 'brand' };
+      const dto = { idToken: 'new-google-token', role: 'brand', acceptedTerms: true };
       const mockPayload = {
         sub: 'google-sub-456',
         email: 'new-user@example.com',
@@ -443,8 +546,27 @@ describe('AuthService', () => {
         googleId: 'google-sub-456',
         roleId: 'brand-role-uuid',
         isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: false,
       });
       expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = { idToken: 'new-google-token', role: 'brand' };
+      const mockPayload = {
+        sub: 'google-sub-456',
+        email: 'new-user@example.com',
+        given_name: 'Jane',
+        family_name: 'Doe',
+        name: 'Jane Doe',
+      };
+
+      googleAuthServiceMock.verifyIdToken.mockResolvedValue(mockPayload as any);
+      usersServiceMock.findByGoogleId.mockResolvedValue(null);
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+
+      await expect(service.googleLogin(dto)).rejects.toThrow(BadRequestException);
     });
 
     it('should login directly if user is already linked with googleId', async () => {
@@ -473,6 +595,330 @@ describe('AuthService', () => {
       expect(usersServiceMock.findByEmail).not.toHaveBeenCalled();
       expect(result.user.id).toBe('user-linked-id');
       expect(result.user.onboardingPercentage).toBe(40);
+    });
+  });
+
+  describe('tiktokLogin', () => {
+    it('should create a new user when tiktokOpenId does not exist in database', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+        acceptedTerms: true,
+      };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        openId: 'tiktok-sub-456',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-456',
+        displayName: 'Jane Doe',
+        avatarUrl: 'http://avatar.url',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.tiktokLogin(dto);
+
+      expect(tiktokAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
+        'mock-code',
+        'http://localhost:3000/callback',
+        undefined,
+      );
+      expect(tiktokAuthServiceMock.getUserProfile).toHaveBeenCalledWith('mock-token-123');
+      expect(usersServiceMock.create).toHaveBeenCalledWith({
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: false,
+      });
+      expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+      };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        openId: 'tiktok-sub-456',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-456',
+        displayName: 'Jane Doe',
+        avatarUrl: 'http://avatar.url',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue(null);
+
+      await expect(service.tiktokLogin(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should pass codeVerifier to exchangeCodeForToken if provided in DTO', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+        codeVerifier: 'mock-verifier-123',
+        acceptedTerms: true,
+      };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        openId: 'tiktok-sub-456',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-456',
+        displayName: 'Jane Doe',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'tiktok_tiktok-sub-456@trendupp.tiktok',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        tiktokOpenId: 'tiktok-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      await service.tiktokLogin(dto);
+
+      expect(tiktokAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
+        'mock-code',
+        'http://localhost:3000/callback',
+        'mock-verifier-123',
+      );
+    });
+
+    it('should login directly if user is already linked with tiktokOpenId', async () => {
+      const dto = { code: 'linked-code', redirectUri: 'http://localhost:3000/callback' };
+      tiktokAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-789',
+        openId: 'tiktok-sub-789',
+      });
+      tiktokAuthServiceMock.getUserProfile.mockResolvedValue({
+        openId: 'tiktok-sub-789',
+        displayName: 'Bob Smith',
+      });
+      usersServiceMock.findByTiktokOpenId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'tiktok_tiktok-sub-789@trendupp.tiktok',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.tiktokLogin(dto);
+
+      expect(result.user.id).toBe('user-linked-id');
+      expect(result.user.onboardingPercentage).toBe(40);
+    });
+  });
+
+  describe('instagramLogin', () => {
+    it('should create a new user when instagramOpenId does not exist in database', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+        acceptedTerms: true,
+      };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        userId: 'instagram-sub-456',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-456',
+        username: 'jane_insta',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue(null);
+      usersServiceMock.findRoleByName.mockResolvedValue({
+        id: 'brand-role-uuid',
+        name: 'brand',
+      } as any);
+      usersServiceMock.create.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-new-id',
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        role: { name: 'brand' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-new-id',
+        onboardingPercentage: 20,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(instagramAuthServiceMock.exchangeCodeForToken).toHaveBeenCalledWith(
+        'mock-code',
+        'http://localhost:3000/callback',
+      );
+      expect(instagramAuthServiceMock.getUserProfile).toHaveBeenCalledWith('mock-token-123');
+      expect(usersServiceMock.create).toHaveBeenCalledWith({
+        email: 'instagram_instagram-sub-456@trendupp.instagram',
+        firstName: 'jane_insta',
+        lastName: '',
+        instagramOpenId: 'instagram-sub-456',
+        instagramUsername: 'jane_insta',
+        roleId: 'brand-role-uuid',
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: false,
+      });
+      expect(result.user.role).toBe('brand');
+    });
+
+    it('should throw BadRequestException if new user and acceptedTerms is not true', async () => {
+      const dto = {
+        code: 'mock-code',
+        redirectUri: 'http://localhost:3000/callback',
+        role: 'brand',
+      };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-123',
+        userId: 'instagram-sub-456',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-456',
+        username: 'jane_insta',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue(null);
+
+      await expect(service.instagramLogin(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should login directly if user is already linked with instagramOpenId', async () => {
+      const dto = { code: 'linked-code', redirectUri: 'http://localhost:3000/callback' };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-789',
+        userId: 'instagram-sub-789',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-789',
+        username: 'bob_smith',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'bob_smith',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(result.user.id).toBe('user-linked-id');
+      expect(result.user.onboardingPercentage).toBe(40);
+    });
+
+    it('should update instagramUsername if the username has changed on Instagram', async () => {
+      const dto = { code: 'linked-code', redirectUri: 'http://localhost:3000/callback' };
+      instagramAuthServiceMock.exchangeCodeForToken.mockResolvedValue({
+        accessToken: 'mock-token-789',
+        userId: 'instagram-sub-789',
+      });
+      instagramAuthServiceMock.getUserProfile.mockResolvedValue({
+        id: 'instagram-sub-789',
+        username: 'new_handle',
+      });
+      usersServiceMock.findByInstagramOpenId.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'old_handle',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.update.mockResolvedValue({} as any);
+      usersServiceMock.findOne.mockResolvedValue({
+        id: 'user-linked-id',
+        email: 'instagram_instagram-sub-789@trendupp.instagram',
+        instagramUsername: 'new_handle',
+        isEmailVerified: true,
+        role: { name: 'creator' },
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue({
+        id: 'user-linked-id',
+        onboardingPercentage: 40,
+      } as any);
+
+      const result = await service.instagramLogin(dto);
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('user-linked-id', {
+        instagramUsername: 'new_handle',
+      });
+      expect(result.user.id).toBe('user-linked-id');
     });
   });
 });

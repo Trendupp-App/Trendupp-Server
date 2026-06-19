@@ -1,15 +1,24 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiExtraModels,
+  ApiBody,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { SendOtpDto } from '../dtos/send-otp.dto';
 import { VerifyOtpDto } from '../dtos/verify-otp.dto';
-import { SignupDto } from '../dtos/signup.dto';
+import { SignupDto, CreatorSignupDto, BrandSignupDto } from '../dtos/signup.dto';
 import { LoginDto } from '../dtos/login.dto';
 import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
+import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
+import { InstagramLoginDto } from '../dtos/instagram-login.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -19,7 +28,15 @@ export class AuthController {
   @Post('signup')
   @Throttle({ default: THROTTLE_LIMITS.SIGNUP })
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new user account' })
+  @ApiOperation({ summary: 'Register a new user account (Creators and Brands)' })
+  @ApiExtraModels(CreatorSignupDto, BrandSignupDto)
+  @ApiBody({
+    description:
+      'Registration payload (Toggle between Creator and Brand schemas using the dropdown below)',
+    schema: {
+      oneOf: [{ $ref: getSchemaPath(CreatorSignupDto) }, { $ref: getSchemaPath(BrandSignupDto) }],
+    },
+  })
   @ApiResponse({ status: 201, description: 'User registered successfully, verification OTP sent' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiResponse({ status: 409, description: 'Conflict - Email already exists' })
@@ -30,7 +47,7 @@ export class AuthController {
   @Post('login')
   @Throttle({ default: THROTTLE_LIMITS.LOGIN })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({ summary: 'Login with email and password (Creators and Brands)' })
   @ApiResponse({ status: 200, description: 'Login successful, returns JWT token + user details' })
   @ApiResponse({
     status: 401,
@@ -43,7 +60,7 @@ export class AuthController {
   @Post('google')
   @Throttle({ default: THROTTLE_LIMITS.LOGIN })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login or signup with Google OAuth token' })
+  @ApiOperation({ summary: 'Login or signup with Google OAuth token (Creators and Brands)' })
   @ApiResponse({
     status: 200,
     description: 'Login/Signup successful, returns JWT token + user details',
@@ -51,6 +68,40 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized - Invalid Google token' })
   async googleLogin(@Body() googleLoginDto: GoogleLoginDto) {
     return this.authService.googleLogin(googleLoginDto);
+  }
+
+  @Post('tiktok')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login or signup with TikTok authorization code (Creators and Brands)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid TikTok code or exchange failure',
+  })
+  async tiktokLogin(@Body() tiktokLoginDto: TiktokLoginDto) {
+    return this.authService.tiktokLogin(tiktokLoginDto);
+  }
+
+  @Post('instagram')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Login or signup with Instagram authorization code (Creators and Brands)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid Instagram code or exchange failure',
+  })
+  async instagramLogin(@Body() instagramLoginDto: InstagramLoginDto) {
+    return this.authService.instagramLogin(instagramLoginDto);
   }
 
   @Post('otp/send')

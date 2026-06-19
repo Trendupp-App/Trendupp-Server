@@ -4,6 +4,7 @@ import {
   ConflictException,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -18,7 +19,11 @@ import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { VerifyOtpDto } from '../dtos/verify-otp.dto';
 import { SendOtpDto } from '../dtos/send-otp.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
+import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
+import { InstagramLoginDto } from '../dtos/instagram-login.dto';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
+import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
+import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 
@@ -32,7 +37,23 @@ export interface AuthResponse {
     role: string;
     isEmailVerified: boolean;
     onboardingPercentage: number;
+    onboardingStepsCompleted: {
+      profile: boolean;
+      niches?: boolean;
+      socials: boolean;
+      payout?: boolean;
+      industries?: boolean;
+      representative?: boolean;
+    };
+    socialsConnected: {
+      instagram: boolean;
+      tiktok: boolean;
+      youtube: boolean;
+      twitter: boolean;
+    };
     username?: string;
+    niches: any[];
+    acceptedPromotions: boolean;
   };
 }
 
@@ -46,6 +67,22 @@ export interface SignupResponse {
     role: string;
     isEmailVerified: boolean;
     onboardingPercentage: number;
+    onboardingStepsCompleted: {
+      profile: boolean;
+      niches?: boolean;
+      socials: boolean;
+      payout?: boolean;
+      industries?: boolean;
+      representative?: boolean;
+    };
+    socialsConnected: {
+      instagram: boolean;
+      tiktok: boolean;
+      youtube: boolean;
+      twitter: boolean;
+    };
+    niches: any[];
+    acceptedPromotions: boolean;
   };
 }
 
@@ -59,41 +96,109 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly tiktokAuthService: TiktokAuthService,
+    private readonly instagramAuthService: InstagramAuthService,
   ) {}
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
-    const { email, password, firstName, lastName, phoneNumber, role } = signupDto;
+    const { password, firstName, lastName, phoneNumber, role } = signupDto;
+    // Normalise email: force lowercase and strip surrounding whitespace.
+    // Mobile keyboards often auto-capitalise the first character, which would
+    // cause lookups to fail if stored with mixed case.
+    const email = signupDto.email.toLowerCase().trim();
 
     const existingUser = await this.usersService.findByEmail(email);
-    if (existingUser) {
+    if (existingUser && existingUser.isEmailVerified) {
       throw new ConflictException('A user with this account already exists');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    if (!role) {
+      throw new BadRequestException('role is required. Please specify either "creator" or "brand"');
+    }
+
     let roleRecord: Role | null = null;
-    if (role) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
-      if (isUuid) {
-        roleRecord = await this.usersService.findRoleById(role);
-      } else {
-        roleRecord = await this.usersService.findRoleByName(role);
-      }
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+    if (isUuid) {
+      roleRecord = await this.usersService.findRoleById(role);
     } else {
-      roleRecord = await this.usersService.findRoleByName('creator');
+      roleRecord = await this.usersService.findRoleByName(role);
     }
 
     if (!roleRecord) {
       throw new NotFoundException('Account type does not exist');
     }
 
+    let finalFirstName = firstName || '';
+    let finalLastName = lastName || '';
+
+    if (roleRecord.name === 'brand') {
+      if (!signupDto.brandName) {
+        throw new BadRequestException('brandName is required for brand signup');
+      }
+      finalFirstName = signupDto.brandName;
+      finalLastName = '';
+    } else {
+      if (!firstName || !lastName) {
+        throw new BadRequestException('firstName and lastName are required for creator signup');
+      }
+    }
+
+    if (existingUser) {
+      // If email is not verified, update details, generate a new OTP, and resend
+      await existingUser.update({
+        password: hashedPassword,
+        firstName: finalFirstName,
+        lastName: finalLastName,
+        phoneNumber,
+        roleId: roleRecord.id,
+        acceptedPromotions: signupDto.acceptedPromotions || false,
+      });
+
+      const otpRecord = await this.otpService.generateOtp(email, 'registration');
+      await this.emailService.sendOtpEmail(email, otpRecord.code);
+
+      this.logger.log(`User registration resent successfully and OTP sent to ${email}`);
+
+      const freshUser = await this.usersService.findOneWithNiches(existingUser.id);
+      const defaultSteps = {
+        profile: false,
+        niches: false,
+        socials: false,
+        payout: false,
+        industries: false,
+        representative: false,
+      };
+      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+
+      return {
+        message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          role: roleRecord.name,
+          isEmailVerified: existingUser.isEmailVerified,
+          acceptedPromotions: existingUser.acceptedPromotions,
+          onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+          onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+          socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
+          niches: freshUser?.niches || [],
+        },
+      };
+    }
+
     const user = await this.usersService.create({
       email,
       password: hashedPassword,
-      firstName,
-      lastName,
+      firstName: finalFirstName,
+      lastName: finalLastName,
       phoneNumber,
       roleId: roleRecord.id,
       isEmailVerified: false,
+      acceptedTerms: true,
+      acceptedPromotions: signupDto.acceptedPromotions || false,
     });
 
     // Send OTP of type 'registration'
@@ -104,9 +209,19 @@ export class AuthService {
 
     // Retrieve fresh user details (with dynamic onboardingPercentage computed)
     const freshUser = await this.usersService.findOneWithNiches(user.id);
+    // Default steps object used as fallback if user record is unexpectedly null
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
-      message: 'Signup successful. Please verify your email with the OTP sent.',
+      message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
       user: {
         id: user.id,
         email: user.email,
@@ -114,13 +229,19 @@ export class AuthService {
         lastName: user.lastName,
         role: roleRecord.name,
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: freshUser?.onboardingPercentage || 20,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
+        niches: freshUser?.niches || [],
       },
     };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
-    const { email, password } = loginDto;
+    // Normalise email before lookup to handle mixed-case input from mobile keyboards.
+    const email = loginDto.email.toLowerCase().trim();
+    const { password } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user || !user.password) {
@@ -131,6 +252,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    await this.checkAndReactivateUser(user);
 
     if (!user.isEmailVerified) {
       // Trigger a new registration OTP if they try to log in but haven't verified yet
@@ -144,6 +267,15 @@ export class AuthService {
     // Load full user details with associations for percentage calculation
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -154,8 +286,12 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
@@ -182,6 +318,10 @@ export class AuthService {
         });
         user = await this.usersService.findOne(user.id);
       } else {
+        if (googleLoginDto.acceptedTerms !== true) {
+          throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        }
+
         let roleRecord: Role | null = null;
         if (role) {
           const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -207,6 +347,8 @@ export class AuthService {
           googleId,
           roleId: roleRecord.id,
           isEmailVerified: true,
+          acceptedTerms: true,
+          acceptedPromotions: googleLoginDto.acceptedPromotions || false,
         });
         user = await this.usersService.findOne(user.id);
       }
@@ -221,8 +363,19 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    await this.checkAndReactivateUser(user);
+
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
     return {
       accessToken: token,
@@ -233,14 +386,213 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role?.name || 'creator',
         isEmailVerified: user.isEmailVerified,
-        onboardingPercentage: userWithNiches?.onboardingPercentage || 20,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
         username: user.username,
+        niches: userWithNiches?.niches || [],
+      },
+    };
+  }
+
+  async tiktokLogin(tiktokLoginDto: TiktokLoginDto): Promise<AuthResponse> {
+    const { code, redirectUri, role, codeVerifier } = tiktokLoginDto;
+
+    const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(
+      code,
+      redirectUri,
+      codeVerifier,
+    );
+    const profile = await this.tiktokAuthService.getUserProfile(tokenResponse.accessToken);
+
+    const tiktokOpenId = profile.openId;
+    const email = `tiktok_${tiktokOpenId}@trendupp.tiktok`;
+
+    const nameParts = profile.displayName.trim().split(/\s+/);
+    const firstName = nameParts[0] || 'TikTok';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    let user = await this.usersService.findByTiktokOpenId(tiktokOpenId);
+
+    if (!user) {
+      if (tiktokLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
+      let roleRecord: Role | null = null;
+      if (role) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+        if (isUuid) {
+          roleRecord = await this.usersService.findRoleById(role);
+        } else {
+          roleRecord = await this.usersService.findRoleByName(role);
+        }
+      } else {
+        roleRecord = await this.usersService.findRoleByName('creator');
+      }
+
+      if (!roleRecord) {
+        throw new NotFoundException('Account type does not exist');
+      }
+
+      user = await this.usersService.create({
+        email,
+        firstName,
+        lastName,
+        tiktokOpenId,
+        roleId: roleRecord.id,
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: tiktokLoginDto.acceptedPromotions || false,
+      });
+      user = await this.usersService.findOne(user.id);
+    } else {
+      if (!user.isEmailVerified) {
+        await this.usersService.update(user.id, { isEmailVerified: true });
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    await this.checkAndReactivateUser(user);
+
+    const userWithNiches = await this.usersService.findOneWithNiches(user.id);
+    const token = this.generateToken(user);
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role?.name || 'creator',
+        isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
+        username: user.username,
+        niches: userWithNiches?.niches || [],
+      },
+    };
+  }
+
+  async instagramLogin(instagramLoginDto: InstagramLoginDto): Promise<AuthResponse> {
+    const { code, redirectUri, role } = instagramLoginDto;
+
+    const tokenResponse = await this.instagramAuthService.exchangeCodeForToken(code, redirectUri);
+    const profile = await this.instagramAuthService.getUserProfile(tokenResponse.accessToken);
+
+    const instagramOpenId = profile.id;
+    const username = profile.username;
+    const email = `instagram_${instagramOpenId}@trendupp.instagram`;
+
+    const firstName = username || 'Instagram';
+    const lastName = '';
+
+    let user = await this.usersService.findByInstagramOpenId(instagramOpenId);
+
+    if (!user) {
+      if (instagramLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
+      let roleRecord: Role | null = null;
+      if (role) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+        if (isUuid) {
+          roleRecord = await this.usersService.findRoleById(role);
+        } else {
+          roleRecord = await this.usersService.findRoleByName(role);
+        }
+      } else {
+        roleRecord = await this.usersService.findRoleByName('creator');
+      }
+
+      if (!roleRecord) {
+        throw new NotFoundException('Account type does not exist');
+      }
+
+      user = await this.usersService.create({
+        email,
+        firstName,
+        lastName,
+        instagramOpenId,
+        instagramUsername: username,
+        roleId: roleRecord.id,
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: instagramLoginDto.acceptedPromotions || false,
+      });
+      user = await this.usersService.findOne(user.id);
+    } else {
+      const updates: Partial<User> = {};
+      if (!user.isEmailVerified) {
+        updates.isEmailVerified = true;
+      }
+      if (user.instagramUsername !== username) {
+        updates.instagramUsername = username;
+      }
+      if (Object.keys(updates).length > 0) {
+        await this.usersService.update(user.id, updates);
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    await this.checkAndReactivateUser(user);
+
+    const userWithNiches = await this.usersService.findOneWithNiches(user.id);
+    const token = this.generateToken(user);
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role?.name || 'creator',
+        isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
+        username: user.username,
+        niches: userWithNiches?.niches || [],
       },
     };
   }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<void> {
-    const { email } = sendOtpDto;
+    // Normalise email before OTP generation and email dispatch.
+    const email = sendOtpDto.email.toLowerCase().trim();
 
     const otpRecord = await this.otpService.generateOtp(email, 'login');
 
@@ -250,7 +602,9 @@ export class AuthService {
   }
 
   async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<AuthResponse | { message: string }> {
-    const { email, code } = verifyOtpDto;
+    // Normalise email before OTP verification lookup.
+    const email = verifyOtpDto.email.toLowerCase().trim();
+    const { code } = verifyOtpDto;
 
     // Supports checking both 'registration' or general OTP codes
     let isValid = await this.otpService.verifyOtp(email, code);
@@ -270,6 +624,8 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
     if (user) {
+      await this.checkAndReactivateUser(user);
+
       if (!user.isEmailVerified) {
         await this.usersService.update(user.id, { isEmailVerified: true });
         user.isEmailVerified = true;
@@ -277,6 +633,15 @@ export class AuthService {
 
       const freshUser = await this.usersService.findOneWithNiches(user.id);
       const token = this.generateToken(user);
+      const defaultSteps = {
+        profile: false,
+        niches: false,
+        socials: false,
+        payout: false,
+        industries: false,
+        representative: false,
+      };
+      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
 
       return {
         accessToken: token,
@@ -287,8 +652,12 @@ export class AuthService {
           lastName: user.lastName,
           role: user.role?.name || 'creator',
           isEmailVerified: user.isEmailVerified,
-          onboardingPercentage: freshUser?.onboardingPercentage || 20,
+          acceptedPromotions: user.acceptedPromotions,
+          onboardingPercentage: freshUser?.onboardingPercentage ?? 0,
+          onboardingStepsCompleted: freshUser?.onboardingStepsCompleted ?? defaultSteps,
+          socialsConnected: freshUser?.socialsConnected ?? defaultSocials,
           username: user.username,
+          niches: freshUser?.niches || [],
         },
       };
     }
@@ -297,7 +666,8 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = forgotPasswordDto;
+    // Normalise email before lookup — prevents false negatives if user typed in mixed case.
+    const email = forgotPasswordDto.email.toLowerCase().trim();
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -309,11 +679,16 @@ export class AuthService {
     const otpRecord = await this.otpService.generateOtp(email, 'password-reset');
     await this.emailService.sendOtpEmail(email, otpRecord.code);
 
-    return { message: 'If the email exists, a password reset OTP code has been sent.' };
+    return {
+      message:
+        'If the email exists, a password reset OTP code has been sent. code:' + otpRecord.code,
+    };
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { email, code, newPassword } = resetPasswordDto;
+    // Normalise email before lookup and OTP verification.
+    const email = resetPasswordDto.email.toLowerCase().trim();
+    const { code, newPassword } = resetPasswordDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -343,5 +718,28 @@ export class AuthService {
     return jwt.sign({ id: user.id, email: user.email }, secret, {
       expiresIn: expiresIn as jwt.SignOptions['expiresIn'],
     });
+  }
+
+  private async checkAndReactivateUser(user: User): Promise<void> {
+    if (user.isActive === false) {
+      if (user.deactivatedAt) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (user.deactivatedAt >= thirtyDaysAgo) {
+          await this.usersService.update(user.id, {
+            isActive: true,
+            deactivatedAt: null,
+          });
+          user.isActive = true;
+          user.deactivatedAt = null;
+        } else {
+          throw new UnauthorizedException(
+            'Account has been deactivated and is past the 30-day restoration period.',
+          );
+        }
+      } else {
+        throw new UnauthorizedException('Account is inactive.');
+      }
+    }
   }
 }
