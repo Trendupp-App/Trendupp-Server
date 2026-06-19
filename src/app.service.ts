@@ -8,7 +8,7 @@ export class AppService {
       description: 'The Trendupp Social Commerce Backend API v1.0',
       docs: '/docs',
       status: 'healthy',
-      author: 'prodCycle',
+      author: 'The prodCycle Engineering Team',
     };
   }
 
