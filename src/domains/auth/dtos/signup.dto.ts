@@ -62,12 +62,14 @@ export class SignupDto {
   @IsOptional()
   phoneNumber?: string;
 
-  @ApiPropertyOptional({
-    description: 'User role (creator or advertiser)',
-    default: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
+  @ApiProperty({
+    description: 'User account type — must be either "creator" or "brand"',
+    example: 'creator',
+    enum: ['creator', 'brand'],
   })
-  @IsOptional()
-  role?: string;
+  @IsString()
+  @IsNotEmpty()
+  role: string;
 
   @ApiProperty({
     description: 'Acceptance of terms and conditions',
@@ -86,31 +88,80 @@ export class SignupDto {
   acceptedPromotions?: boolean;
 }
 
-export class CreatorSignupDto extends SignupDto {
-  @ApiProperty({
-    description: 'First name of the user',
-    example: 'Ojima',
-  })
-  @IsString()
-  @IsNotEmpty()
-  declare firstName?: string;
+/**
+ * Swagger-only schema for Creator signup.
+ * Independent from SignupDto — only shows fields relevant to creators.
+ */
+export class CreatorSignupDto {
+  @ApiProperty({ description: 'Email address', example: 'creator@trendupp.com' })
+  email: string;
 
   @ApiProperty({
-    description: 'Last name of the user',
-    example: 'Attah',
+    description: 'Password (minimum 8 characters)',
+    example: 'P@ssword123',
+    minLength: 8,
   })
-  @IsString()
-  @IsNotEmpty()
-  declare lastName?: string;
+  password: string;
+
+  @ApiProperty({ description: 'First name of the creator', example: 'Ojima' })
+  firstName: string;
+
+  @ApiProperty({ description: 'Last name of the creator', example: 'Attah' })
+  lastName: string;
+
+  @ApiPropertyOptional({ description: 'Phone number', example: '+2348012345678' })
+  phoneNumber?: string;
+
+  @ApiProperty({
+    description: 'Account type — must be "creator"',
+    example: 'creator',
+    enum: ['creator'],
+  })
+  role: string;
+
+  @ApiProperty({ description: 'Must accept terms and conditions', example: true })
+  acceptedTerms: boolean;
+
+  @ApiPropertyOptional({ description: 'Opt in to promotional emails', example: false })
+  acceptedPromotions?: boolean;
 }
 
-export class BrandSignupDto extends SignupDto {
+/**
+ * Swagger-only schema for Brand signup.
+ * Independent from SignupDto — only shows fields relevant to brands.
+ */
+export class BrandSignupDto {
+  @ApiProperty({ description: 'Email address', example: 'brand@trendupp.com' })
+  email: string;
+
   @ApiProperty({
-    description: 'Brand name (required if signing up as a Brand)',
-    example: 'Trendupp Inc.',
+    description: 'Password (minimum 8 characters)',
+    example: 'P@ssword123',
+    minLength: 8,
   })
-  @IsString()
-  @IsNotEmpty()
-  @Length(2, 50)
-  declare brandName?: string;
+  password: string;
+
+  @ApiProperty({
+    description: 'Official brand / company name',
+    example: 'Trendupp Inc.',
+    minLength: 2,
+    maxLength: 50,
+  })
+  brandName: string;
+
+  @ApiPropertyOptional({ description: 'Phone number', example: '+2348012345678' })
+  phoneNumber?: string;
+
+  @ApiProperty({
+    description: 'Account type — must be "brand"',
+    example: 'brand',
+    enum: ['brand'],
+  })
+  role: string;
+
+  @ApiProperty({ description: 'Must accept terms and conditions', example: true })
+  acceptedTerms: boolean;
+
+  @ApiPropertyOptional({ description: 'Opt in to promotional emails', example: false })
+  acceptedPromotions?: boolean;
 }

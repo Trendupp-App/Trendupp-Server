@@ -113,16 +113,16 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    if (!role) {
+      throw new BadRequestException('role is required. Please specify either "creator" or "brand"');
+    }
+
     let roleRecord: Role | null = null;
-    if (role) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
-      if (isUuid) {
-        roleRecord = await this.usersService.findRoleById(role);
-      } else {
-        roleRecord = await this.usersService.findRoleByName(role);
-      }
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+    if (isUuid) {
+      roleRecord = await this.usersService.findRoleById(role);
     } else {
-      roleRecord = await this.usersService.findRoleByName('creator');
+      roleRecord = await this.usersService.findRoleByName(role);
     }
 
     if (!roleRecord) {

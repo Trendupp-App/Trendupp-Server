@@ -10,7 +10,13 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -22,7 +28,9 @@ import {
   ApiExtraModels,
   getSchemaPath,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { S3Service } from '../../../integration/s3/s3.service';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { OnboardingService } from '../services/onboarding.service';
 import { ProfileService } from '../services/profile.service';
@@ -52,6 +60,7 @@ export class OnboardingController {
     private readonly onboardingService: OnboardingService,
     private readonly usersService: UsersService,
     private readonly profileService: ProfileService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Get('roles')
@@ -161,6 +170,8 @@ export class OnboardingController {
   // ─── Onboarding Steps ──────────────────────────────────────────────────────
 
   @Patch('profile')
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiConsumes('multipart/form-data')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -177,7 +188,23 @@ export class OnboardingController {
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Username already taken' })
-  async updateProfile(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
+  async updateProfile(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateProfileDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 5 * 1024 * 1024,
+            message: 'File is too large. Max allowed size is 5MB.',
+          }),
+          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    avatar?: Express.Multer.File,
+  ) {
     if (dto.username) {
       const existing = await this.usersService.findByUsername(dto.username);
       if (existing && existing.id !== user.id) {
@@ -197,6 +224,11 @@ export class OnboardingController {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.websiteUrl !== undefined) updates.websiteUrl = dto.websiteUrl;
     if (dto.monthlyBudget !== undefined) updates.monthlyBudget = dto.monthlyBudget;
+
+    if (avatar) {
+      const avatarUrl = await this.s3Service.uploadFile(avatar, 'avatars');
+      updates.avatarUrl = avatarUrl;
+    }
 
     await this.usersService.update(user.id, updates);
 
