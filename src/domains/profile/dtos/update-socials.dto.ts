@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsInt, Min } from 'class-validator';
 
-export class UpdateSocialsDto {
+export class UpdateProfileSocialsDto {
   @ApiPropertyOptional({
     description: 'Instagram handle name',
     example: 'my_insta',
