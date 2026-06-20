@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Length, IsUUID } from 'class-validator';
 
-export class UpdatePayoutDto {
+export class UpdateProfilePayoutDto {
   @ApiProperty({
     description: 'ID of the bank (UUID)',
     example: 'a63b0a70-761e-42c2-8b5e-ca92c687e1a3',
