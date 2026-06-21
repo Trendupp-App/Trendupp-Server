@@ -7,13 +7,18 @@ import { UsersService } from '../../users/services/users.service';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { User } from '../../users/entities/user.entity';
 import { UpdatePersonalInfoDto } from '../dtos/update-personal-info.dto';
-import { UpdateSocialsDto } from '../dtos/update-socials.dto';
-import { UpdatePayoutDto } from '../dtos/update-payout.dto';
+import { UpdateProfileSocialsDto } from '../dtos/update-socials.dto';
+import { UpdateProfilePayoutDto } from '../dtos/update-payout.dto';
 import { UpdateNotificationSettingsDto } from '../dtos/update-notification-settings.dto';
 import { UpdateSecuritySettingsDto } from '../dtos/update-security-settings.dto';
 import { ChangePasswordDto } from '../dtos/change-password.dto';
 import { DeactivateAccountDto } from '../dtos/deactivate-account.dto';
 import { BankRepository } from '../../users/repository/bank.repository';
+import { SupportTicketRepository } from '../repository/support-ticket.repository';
+import { CreateSupportTicketDto } from '../dtos/create-support-ticket.dto';
+import { IssueCategoryRepository } from '../repository/issue-category.repository';
+import { SupportTicket } from '../entities/support-ticket.entity';
+import { IssueCategory } from '../entities/issue-category.entity';
 import * as bcrypt from 'bcryptjs';
 
 jest.mock('bcryptjs');
@@ -23,6 +28,8 @@ describe('ProfileService', () => {
   let usersServiceMock: jest.Mocked<UsersService>;
   let s3ServiceMock: jest.Mocked<S3Service>;
   let bankRepositoryMock: jest.Mocked<BankRepository>;
+  let supportTicketRepositoryMock: jest.Mocked<SupportTicketRepository>;
+  let issueCategoryRepositoryMock: jest.Mocked<IssueCategoryRepository>;
 
   beforeEach(async () => {
     usersServiceMock = {
@@ -43,12 +50,25 @@ describe('ProfileService', () => {
       findAll: jest.fn(),
     } as unknown as jest.Mocked<BankRepository>;
 
+    supportTicketRepositoryMock = {
+      create: jest.fn(),
+      findByUserId: jest.fn(),
+      findByIdAndUserId: jest.fn(),
+    } as unknown as jest.Mocked<SupportTicketRepository>;
+
+    issueCategoryRepositoryMock = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+    } as unknown as jest.Mocked<IssueCategoryRepository>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProfileService,
         { provide: UsersService, useValue: usersServiceMock },
         { provide: S3Service, useValue: s3ServiceMock },
         { provide: BankRepository, useValue: bankRepositoryMock },
+        { provide: SupportTicketRepository, useValue: supportTicketRepositoryMock },
+        { provide: IssueCategoryRepository, useValue: issueCategoryRepositoryMock },
       ],
     }).compile();
 
@@ -183,7 +203,7 @@ describe('ProfileService', () => {
       usersServiceMock.update.mockResolvedValue(mockUser);
       usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
 
-      const dto: UpdateSocialsDto = {
+      const dto: UpdateProfileSocialsDto = {
         instagramUsername: 'new_insta',
         instagramFollowers: 15000, // micro creator range
         tiktokUsername: 'new_tiktok',
@@ -218,7 +238,7 @@ describe('ProfileService', () => {
       usersServiceMock.update.mockResolvedValue(mockUser);
       usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
 
-      const dto: UpdateSocialsDto = {
+      const dto: UpdateProfileSocialsDto = {
         instagramUsername: null, // disconnect
       };
 
@@ -248,7 +268,7 @@ describe('ProfileService', () => {
       usersServiceMock.update.mockResolvedValue(mockUser);
       usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
 
-      const dto: UpdateSocialsDto = {
+      const dto: UpdateProfileSocialsDto = {
         instagramUsername: '   ', // empty string / whitespace
         tiktokUsername: '',
       };
@@ -321,7 +341,7 @@ describe('ProfileService', () => {
       usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
       bankRepositoryMock.findById.mockResolvedValue({ id: 'bank-uuid-123' } as unknown as Bank);
 
-      const dto: UpdatePayoutDto = {
+      const dto: UpdateProfilePayoutDto = {
         bankId: 'bank-uuid-123',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Test Account Name',
@@ -343,7 +363,7 @@ describe('ProfileService', () => {
       usersServiceMock.findOne.mockResolvedValue(mockUser);
       bankRepositoryMock.findById.mockResolvedValue(null);
 
-      const dto: UpdatePayoutDto = {
+      const dto: UpdateProfilePayoutDto = {
         bankId: 'invalid-bank-uuid',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Test Account Name',
@@ -552,6 +572,138 @@ describe('ProfileService', () => {
       };
 
       await expect(service.deactivateAccount('u1', dto)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('getTicketCategories', () => {
+    it('should return all ticket categories', async () => {
+      const mockCategories = [{ id: 'cat1', name: 'Payments' }];
+      issueCategoryRepositoryMock.findAll.mockResolvedValue(
+        mockCategories as unknown as IssueCategory[],
+      );
+
+      const result = await service.getTicketCategories();
+      expect(issueCategoryRepositoryMock.findAll).toHaveBeenCalled();
+      expect(result).toEqual(mockCategories);
+    });
+  });
+
+  describe('getSupportTickets', () => {
+    it('should return all support tickets of a user when no ID is provided', async () => {
+      const mockTickets = [{ id: 'ticket1', userId: 'u1', subject: 'Test' }];
+      supportTicketRepositoryMock.findByUserId.mockResolvedValue(
+        mockTickets as unknown as SupportTicket[],
+      );
+
+      const result = await service.getSupportTickets('u1');
+
+      expect(supportTicketRepositoryMock.findByUserId).toHaveBeenCalledWith('u1');
+      expect(result).toEqual(mockTickets);
+    });
+
+    it('should return a single support ticket when a valid ID is provided', async () => {
+      const mockTicket = { id: 'ticket1', userId: 'u1', subject: 'Test' };
+      supportTicketRepositoryMock.findByIdAndUserId.mockResolvedValue(
+        mockTicket as unknown as SupportTicket,
+      );
+
+      const result = await service.getSupportTickets('u1', 'ticket1');
+
+      expect(supportTicketRepositoryMock.findByIdAndUserId).toHaveBeenCalledWith('ticket1', 'u1');
+      expect(result).toEqual(mockTicket);
+    });
+
+    it('should throw NotFoundException if support ticket is not found by ID', async () => {
+      supportTicketRepositoryMock.findByIdAndUserId.mockResolvedValue(null);
+
+      await expect(service.getSupportTickets('u1', 'ticket-nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(supportTicketRepositoryMock.findByIdAndUserId).toHaveBeenCalledWith(
+        'ticket-nonexistent',
+        'u1',
+      );
+    });
+  });
+
+  describe('createSupportTicket', () => {
+    it('should throw NotFoundException if category does not exist', async () => {
+      const dto: CreateSupportTicketDto = {
+        issueCategoryId: 'cat-nonexistent',
+        subject: 'Payout issue',
+        description: 'I did not receive my payout.',
+      };
+      issueCategoryRepositoryMock.findById.mockResolvedValue(null);
+
+      await expect(service.createSupportTicket('u1', dto)).rejects.toThrow(NotFoundException);
+      expect(issueCategoryRepositoryMock.findById).toHaveBeenCalledWith('cat-nonexistent');
+    });
+
+    it('should create a support ticket without file attachment', async () => {
+      const dto: CreateSupportTicketDto = {
+        issueCategoryId: 'cat1',
+        subject: 'Payout issue',
+        description: 'I did not receive my payout.',
+      };
+
+      issueCategoryRepositoryMock.findById.mockResolvedValue({
+        id: 'cat1',
+        name: 'Payments',
+      } as unknown as IssueCategory);
+      supportTicketRepositoryMock.create.mockResolvedValue({
+        id: 'ticket1',
+        userId: 'u1',
+        ...dto,
+      } as unknown as SupportTicket);
+
+      const result = await service.createSupportTicket('u1', dto);
+
+      expect(supportTicketRepositoryMock.create).toHaveBeenCalledWith({
+        userId: 'u1',
+        issueCategoryId: dto.issueCategoryId,
+        subject: dto.subject,
+        description: dto.description,
+        attachmentUrl: undefined,
+      });
+      expect(result.id).toBe('ticket1');
+    });
+
+    it('should create a support ticket with a file attachment', async () => {
+      const dto: CreateSupportTicketDto = {
+        issueCategoryId: 'cat1',
+        subject: 'Bug in page',
+        description: 'Page is showing white screen.',
+      };
+      const mockFile = {
+        originalname: 'test.png',
+        buffer: Buffer.from('test'),
+      } as Express.Multer.File;
+
+      issueCategoryRepositoryMock.findById.mockResolvedValue({
+        id: 'cat1',
+        name: 'Payments',
+      } as unknown as IssueCategory);
+      s3ServiceMock.uploadFile.mockResolvedValue(
+        'https://s3.amazonaws.com/support-tickets/test.png',
+      );
+      supportTicketRepositoryMock.create.mockResolvedValue({
+        id: 'ticket2',
+        userId: 'u1',
+        attachmentUrl: 'https://s3.amazonaws.com/support-tickets/test.png',
+        ...dto,
+      } as unknown as SupportTicket);
+
+      const result = await service.createSupportTicket('u1', dto, mockFile);
+
+      expect(s3ServiceMock.uploadFile).toHaveBeenCalledWith(mockFile, 'support-tickets');
+      expect(supportTicketRepositoryMock.create).toHaveBeenCalledWith({
+        userId: 'u1',
+        issueCategoryId: dto.issueCategoryId,
+        subject: dto.subject,
+        description: dto.description,
+        attachmentUrl: 'https://s3.amazonaws.com/support-tickets/test.png',
+      });
+      expect(result.id).toBe('ticket2');
     });
   });
 });

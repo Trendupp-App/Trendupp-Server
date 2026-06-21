@@ -25,8 +25,6 @@ import {
   ApiBearerAuth,
   ApiSecurity,
   ApiQuery,
-  ApiExtraModels,
-  getSchemaPath,
   ApiBody,
   ApiConsumes,
 } from '@nestjs/swagger';
@@ -39,11 +37,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
-import {
-  UpdateProfileDto,
-  CreatorProfileDto,
-  BrandProfileDto,
-} from '../../users/dtos/update-profile.dto';
+import { UpdateProfileDto } from '../../users/dtos/update-profile.dto';
 import { SetNichesDto } from '../../users/dtos/set-niches.dto';
 import { SetIndustriesDto } from '../../users/dtos/set-industries.dto';
 import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
@@ -179,12 +173,7 @@ export class OnboardingController {
   @ApiOperation({
     summary: 'Step 1: Build user profile (Creators and Brands)',
   })
-  @ApiExtraModels(CreatorProfileDto, BrandProfileDto)
-  @ApiBody({
-    schema: {
-      oneOf: [{ $ref: getSchemaPath(CreatorProfileDto) }, { $ref: getSchemaPath(BrandProfileDto) }],
-    },
-  })
+  @ApiBody({ type: UpdateProfileDto })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Username already taken' })

@@ -3,13 +3,18 @@ import { UsersService } from '../../users/services/users.service';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { User } from '../../users/entities/user.entity';
 import { UpdatePersonalInfoDto } from '../dtos/update-personal-info.dto';
-import { UpdateSocialsDto } from '../dtos/update-socials.dto';
-import { UpdatePayoutDto } from '../dtos/update-payout.dto';
+import { UpdateProfileSocialsDto } from '../dtos/update-socials.dto';
+import { UpdateProfilePayoutDto } from '../dtos/update-payout.dto';
 import { UpdateNotificationSettingsDto } from '../dtos/update-notification-settings.dto';
 import { UpdateSecuritySettingsDto } from '../dtos/update-security-settings.dto';
 import { ChangePasswordDto } from '../dtos/change-password.dto';
 import { DeactivateAccountDto } from '../dtos/deactivate-account.dto';
 import { BankRepository } from '../../users/repository/bank.repository';
+import { CreateSupportTicketDto } from '../dtos/create-support-ticket.dto';
+import { SupportTicket } from '../entities/support-ticket.entity';
+import { SupportTicketRepository } from '../repository/support-ticket.repository';
+import { IssueCategory } from '../entities/issue-category.entity';
+import { IssueCategoryRepository } from '../repository/issue-category.repository';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -18,6 +23,8 @@ export class ProfileService {
     private readonly usersService: UsersService,
     private readonly s3Service: S3Service,
     private readonly bankRepository: BankRepository,
+    private readonly supportTicketRepository: SupportTicketRepository,
+    private readonly issueCategoryRepository: IssueCategoryRepository,
   ) {}
 
   async updatePersonalInfo(
@@ -123,7 +130,7 @@ export class ProfileService {
     return updated;
   }
 
-  async updateSocials(userId: string, dto: UpdateSocialsDto): Promise<User> {
+  async updateSocials(userId: string, dto: UpdateProfileSocialsDto): Promise<User> {
     const user = await this.usersService.findOne(userId);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -243,7 +250,7 @@ export class ProfileService {
     return updated;
   }
 
-  async updatePayout(userId: string, dto: UpdatePayoutDto): Promise<User> {
+  async updatePayout(userId: string, dto: UpdateProfilePayoutDto): Promise<User> {
     const user = await this.usersService.findOne(userId);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -394,6 +401,49 @@ export class ProfileService {
     await this.usersService.update(userId, {
       isActive: false,
       deactivatedAt: new Date(),
+    });
+  }
+
+  async getTicketCategories(): Promise<IssueCategory[]> {
+    return this.issueCategoryRepository.findAll();
+  }
+
+  async getSupportTickets(
+    userId: string,
+    ticketId?: string,
+  ): Promise<SupportTicket[] | SupportTicket> {
+    if (ticketId) {
+      const ticket = await this.supportTicketRepository.findByIdAndUserId(ticketId, userId);
+      if (!ticket) {
+        throw new NotFoundException('Support ticket not found');
+      }
+      return ticket;
+    }
+    return this.supportTicketRepository.findByUserId(userId);
+  }
+
+  async createSupportTicket(
+    userId: string,
+    dto: CreateSupportTicketDto,
+    file?: Express.Multer.File,
+  ): Promise<SupportTicket> {
+    const category = await this.issueCategoryRepository.findById(dto.issueCategoryId);
+    if (!category) {
+      throw new NotFoundException('Issue category not found');
+    }
+
+    let attachmentUrl: string | undefined;
+
+    if (file) {
+      attachmentUrl = await this.s3Service.uploadFile(file, 'support-tickets');
+    }
+
+    return this.supportTicketRepository.create({
+      userId,
+      issueCategoryId: dto.issueCategoryId,
+      subject: dto.subject,
+      description: dto.description,
+      attachmentUrl,
     });
   }
 }
