@@ -16,6 +16,7 @@ import { AuthModule } from './domains/auth/auth.module';
 import { CampaignsModule } from './domains/campaigns/campaigns.module';
 import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
+import { DisputesModule } from './domains/disputes/disputes.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { ProfileModule } from './domains/profile/profile.module';
     CampaignsModule,
     AdminModule,
     ProfileModule,
+    DisputesModule,
   ],
   controllers: [AppController],
   providers: [

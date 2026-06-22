@@ -12,7 +12,7 @@ export class OtpService {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     const otpExpiresAt = new Date();
-    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 10);
+    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 100); //update it later to 10mins
 
     return this.otpRepository.create({ email, code, type, otpExpiresAt });
   }

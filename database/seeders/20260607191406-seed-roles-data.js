@@ -8,7 +8,7 @@ module.exports = {
     const roles = [
       { name: 'creator', display_name: 'Creator' },
       { name: 'brand', display_name: 'Brand' },
-      { name: 'sub_admin', display_name: 'Sub Admin' },
+      { name: 'finance_admin', display_name: 'Finance Admin' },
       { name: 'admin', display_name: 'Admin' },
       { name: 'super_admin', display_name: 'Super Admin' },
     ].map((r) => ({

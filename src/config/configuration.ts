@@ -52,4 +52,8 @@ export default () => ({
     appId: process.env.INSTAGRAM_APP_ID,
     appSecret: process.env.INSTAGRAM_APP_SECRET,
   },
+  stream: {
+    apiKey: process.env.STREAM_API_KEY,
+    apiSecret: process.env.STREAM_API_SECRET,
+  },
 });
