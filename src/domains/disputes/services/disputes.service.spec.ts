@@ -57,7 +57,7 @@ describe('DisputesService', () => {
     it('should generate token using StreamService', async () => {
       streamServiceMock.generateUserToken.mockReturnValue('mock_token');
       streamServiceMock.getApiKey.mockReturnValue('mock_api_key');
-      streamServiceMock.upsertUser.mockResolvedValue(undefined);
+      streamServiceMock.upsertUser.mockResolvedValue(null);
 
       const result = await service.getStreamToken({
         id: 'user1',
