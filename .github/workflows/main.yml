@@ -20,19 +20,31 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Force non-interactive shell to load environment profile paths
+            # Force non-interactive shell to load environment profile paths and global directories
             export HOME="/home/ec2-user"
+            export NVM_DIR="$HOME/.nvm"
+            
             [ -s "$HOME/.bash_profile" ] && source "$HOME/.bash_profile"
             [ -s "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+            
+            # Explicit path expansion to locate system-wide and user-space binaries
+            export PATH=$PATH:/usr/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin
 
             # 1. Navigate to the project folder or clone it if it's the first deployment
             if [ ! -d "/home/ec2-user/trendupp-server" ]; then
               echo "Repository not found on server. Cloning..."
               git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
-              cd /home/ec2-user/trendupp-server
+              cd /home/ec2-user/trendupp-server || exit 1
             else
               cd /home/ec2-user/trendupp-server || exit 1
-              echo "Repository found. Pulling latest changes..."
+              echo "Repository found. Cleaning up unexpected local modifications..."
+              
+              # Aggressively clear untracked files and local code modifications
+              git reset --hard
+              git clean -fd
+              
+              echo "Pulling latest changes from GitHub..."
               git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git pull origin main
             fi
@@ -44,24 +56,29 @@ jobs:
             echo "${{ secrets.ENV_FILE }}" | sudo tee /home/ec2-user/trendupp-server/.env > /dev/null
             sudo chown ec2-user:ec2-user /home/ec2-user/trendupp-server/.env
 
-            # 3. Install all dependencies optimized for production speed
-            npm ci --no-audit --no-fund
+            # 3. Install dependencies: Attempt clean install, fallback to adaptive install if lockfile is out of sync
+            npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
-            # 4. Build the NestJS project (compiles TS files to dist/)
-            npm run build
+            # 4. Build the NestJS project using the local node_modules binary path safety reference
+            ./node_modules/.bin/nest build
 
             # 5. Prune devDependencies to keep the production footprint small
             npm prune --omit=dev
 
             # 6. Gracefully reload or start the NestJS API process using your ecosystem configuration
-            pm2 describe trendupp-api > /dev/null 2>&1
-            if [ $? -eq 0 ]; then
-              echo "Trendupp-Server is running. Reloading gracefully via ecosystem file..."
-              pm2 reload ecosystem.config.js --env production
+            if command -v pm2 &> /dev/null; then
+              pm2 describe trendupp-api > /dev/null 2>&1
+              if [ $? -eq 0 ]; then
+                echo "Trendupp-Server is running. Reloading gracefully via ecosystem file..."
+                pm2 reload ecosystem.config.js --env production
+              else
+                echo "Trendupp-Server is offline. Starting new PM2 instance via ecosystem file..."
+                pm2 start ecosystem.config.js --env production
+              fi
+              
+              # 7. Save the PM2 process list so it survives a server reboot
+              pm2 save
             else
-              echo "Trendupp-Server is offline. Starting new PM2 instance via ecosystem file..."
-              pm2 start ecosystem.config.js --env production
+              echo "Error: PM2 engine binary is not accessible in this shell execution scope."
+              exit 1
             fi
-            
-            # 7. Save the PM2 process list so it survives a server reboot
-            pm2 save
