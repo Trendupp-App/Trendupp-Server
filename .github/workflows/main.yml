@@ -76,6 +76,15 @@ jobs:
               PM2_BIN="pm2"
             fi
 
+            # Check for version mismatch between the client and in-memory daemon to prevent hangs
+            if [ -n "$PM2_BIN" ]; then
+              if $PM2_BIN -v 2>&1 | grep -q "In-memory PM2"; then
+                echo "PM2 version mismatch detected. Forcefully killing existing daemon to restart with client version..."
+                pkill -f pm2 || kill -9 $(pgrep -f pm2) || true
+                sleep 2
+              fi
+            fi
+
             # 6. Gracefully reload or start the NestJS API process using your ecosystem configuration
             if [ -n "$PM2_BIN" ]; then
               $PM2_BIN describe trendupp-api > /dev/null 2>&1
