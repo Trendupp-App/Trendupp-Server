@@ -50,4 +50,8 @@ export const validationSchema = Joi.object({
   // Instagram OAuth
   INSTAGRAM_APP_ID: Joi.string().allow('').optional(),
   INSTAGRAM_APP_SECRET: Joi.string().allow('').optional(),
+
+  // Stream Chat
+  STREAM_API_KEY: Joi.string().allow('').optional(),
+  STREAM_API_SECRET: Joi.string().allow('').optional(),
 });

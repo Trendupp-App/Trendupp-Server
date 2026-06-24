@@ -17,6 +17,6 @@ import { S3Service } from '../../integration/s3/s3.service';
   ],
   providers: [CampaignRepository, CampaignsService, S3Service],
   controllers: [CampaignsController],
-  exports: [CampaignsService, SequelizeModule],
+  exports: [CampaignsService, CampaignRepository, SequelizeModule],
 })
 export class CampaignsModule {}

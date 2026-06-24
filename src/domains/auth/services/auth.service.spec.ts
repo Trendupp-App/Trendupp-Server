@@ -112,6 +112,7 @@ describe('AuthService', () => {
         lastName: 'User',
         role: 'creator',
         acceptedTerms: true,
+        username: 'testuser',
       };
       usersServiceMock.findByEmail.mockResolvedValue({ id: 'u1', isEmailVerified: true } as any);
 
@@ -157,6 +158,7 @@ describe('AuthService', () => {
         lastName: 'User',
         role: 'creator',
         acceptedTerms: true,
+        username: 'testuser',
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -169,6 +171,7 @@ describe('AuthService', () => {
         email: dto.email,
         firstName: dto.firstName,
         lastName: dto.lastName,
+        username: dto.username,
         roleId: 'role-uuid',
         isEmailVerified: false,
       } as any);
@@ -185,6 +188,7 @@ describe('AuthService', () => {
         password: 'hashedPassword',
         firstName: dto.firstName,
         lastName: dto.lastName,
+        username: 'testuser',
         phoneNumber: undefined,
         roleId: 'role-uuid',
         isEmailVerified: false,
@@ -205,6 +209,7 @@ describe('AuthService', () => {
         lastName: 'Tester',
         role: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         acceptedTerms: true,
+        username: 'uuid-testuser',
       };
       usersServiceMock.findByEmail.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -217,6 +222,7 @@ describe('AuthService', () => {
         email: dto.email,
         firstName: dto.firstName,
         lastName: dto.lastName,
+        username: dto.username,
         roleId: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         isEmailVerified: false,
       } as any);
@@ -236,6 +242,7 @@ describe('AuthService', () => {
         password: 'hashedPassword',
         firstName: dto.firstName,
         lastName: dto.lastName,
+        username: 'uuid-testuser',
         phoneNumber: undefined,
         roleId: '4412ed7f-95db-4f31-ad90-df6e7d96dcd5',
         isEmailVerified: false,
