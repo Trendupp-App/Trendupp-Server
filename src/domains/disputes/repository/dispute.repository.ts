@@ -2,6 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Attributes } from 'sequelize';
 import { Dispute } from '../entities/dispute.entity';
+import { User } from '../../users/entities/user.entity';
+
+/**
+ * Lean user shape included in dispute GET responses — excludes sensitive fields
+ * (password, tokens, bank details) while giving the consumer enough context to
+ * display a name/avatar next to each audit action.
+ */
+const AUDIT_USER_ATTRS: (keyof User)[] = ['id', 'firstName', 'lastName', 'avatarUrl'];
+
+/** Associations loaded on every GET dispute query */
+const DISPUTE_INCLUDES = [
+  'campaign',
+  { association: 'activatedBy', attributes: AUDIT_USER_ATTRS },
+  { association: 'resolvedBy', attributes: AUDIT_USER_ATTRS },
+];
 
 @Injectable()
 export class DisputeRepository {
@@ -21,7 +36,7 @@ export class DisputeRepository {
 
   async findByIdWithCampaign(id: string): Promise<Dispute | null> {
     return this.disputeModel.findByPk(id, {
-      include: ['campaign'],
+      include: DISPUTE_INCLUDES,
     });
   }
 
@@ -42,7 +57,7 @@ export class DisputeRepository {
 
   async findAllWithCampaign(): Promise<Dispute[]> {
     return this.disputeModel.findAll({
-      include: ['campaign'],
+      include: DISPUTE_INCLUDES,
       order: [['createdAt', 'DESC']],
     });
   }
@@ -50,7 +65,7 @@ export class DisputeRepository {
   async findAllByCreator(creatorId: string): Promise<Dispute[]> {
     return this.disputeModel.findAll({
       where: { creatorId },
-      include: ['campaign'],
+      include: DISPUTE_INCLUDES,
       order: [['createdAt', 'DESC']],
     });
   }
@@ -58,7 +73,7 @@ export class DisputeRepository {
   async findAllByBrand(brandId: string): Promise<Dispute[]> {
     return this.disputeModel.findAll({
       where: { brandId },
-      include: ['campaign'],
+      include: DISPUTE_INCLUDES,
       order: [['createdAt', 'DESC']],
     });
   }

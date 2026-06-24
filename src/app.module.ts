@@ -71,12 +71,15 @@ import { DisputesModule } from './domains/disputes/disputes.module';
     }),
 
     // Rate Limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 60 seconds (in ms)
-        limit: 1000, // global fallback ceiling — per-route decorators override this
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      errorMessage: 'too many request try again later',
+      throttlers: [
+        {
+          ttl: 60000, // 60 seconds (in ms)
+          limit: 1000, // global fallback ceiling — per-route decorators override this
+        },
+      ],
+    }),
 
     // Domain Modules
     UsersModule,

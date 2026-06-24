@@ -1,9 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { StreamChat, ChannelData } from 'stream-chat';
+import { StreamChat, ChannelData, OwnUserResponse, UserResponse } from 'stream-chat';
+
+interface StreamError {
+  status?: number;
+  statusCode?: number;
+  response?: {
+    status?: number;
+  };
+  message?: string;
+}
 
 @Injectable()
-export class StreamService {
+export class StreamService implements OnModuleInit {
   private readonly logger = new Logger(StreamService.name);
   private readonly streamClient: StreamChat | null = null;
   private readonly apiKey: string | undefined;
@@ -30,8 +39,107 @@ export class StreamService {
     }
   }
 
+  async onModuleInit() {
+    if (this.isMockMode || !this.streamClient) {
+      return;
+    }
+    try {
+      await this.ensureChannelType('dispute');
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error('Failed to ensure Stream channel types during startup', stack);
+    }
+  }
+
+  private async ensureChannelType(typeName: string): Promise<void> {
+    if (!this.streamClient) return;
+    try {
+      await this.streamClient.getChannelType(typeName);
+      this.logger.log(`Stream channel type "${typeName}" already exists.`);
+    } catch (error) {
+      const err = error as StreamError;
+      const status = err.status || err.statusCode || err.response?.status;
+      this.logger.warn(
+        `getChannelType for "${typeName}" failed with status ${status}. Attempting to create it...`,
+      );
+      try {
+        await this.streamClient.createChannelType({
+          name: typeName,
+          typing_events: true,
+          read_events: true,
+          connect_events: true,
+          search: true,
+        });
+        this.logger.log(`Stream channel type "${typeName}" created successfully.`);
+      } catch (createError) {
+        const createErr = createError as StreamError;
+        const createStatus = createErr.status || createErr.statusCode || createErr.response?.status;
+        if (
+          createStatus === 400 &&
+          String(createErr.message).toLowerCase().includes('already exists')
+        ) {
+          this.logger.log(
+            `Stream channel type "${typeName}" already exists (verified on creation fallback).`,
+          );
+        } else {
+          throw createError;
+        }
+      }
+    }
+  }
+
   getApiKey(): string {
     return this.apiKey || 'mock_stream_api_key';
+  }
+
+  /**
+   * Upserts a single user to Stream with their full profile details.
+   * Called when the user fetches their stream token so their name/email
+   * is enriched in Stream before they connect via the SDK.
+   */
+  async upsertUser(user: {
+    id: string;
+    name?: string;
+    image?: string;
+  }): Promise<OwnUserResponse | UserResponse | null> {
+    if (this.isMockMode || !this.streamClient) {
+      this.logger.warn(`MOCK mode: Skipping upsert for user: ${user.id}`);
+      return null;
+    }
+    try {
+      const response = await this.streamClient.upsertUser({
+        id: user.id,
+        name: user.name || user.id,
+        image: user.image,
+      });
+      return response.users[user.id] ?? null;
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to upsert Stream user ${user.id}`, stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch-upserts multiple users by ID only before channel creation.
+   * Ensures all participants exist in Stream so GetOrCreateChannel succeeds.
+   * Uses minimal user objects — the full profile is enriched when users
+   * call getStreamToken() or connect via the SDK.
+   */
+  async upsertUsers(userIds: string[]): Promise<void> {
+    if (this.isMockMode || !this.streamClient) {
+      this.logger.warn(`MOCK mode: Skipping batch upsert for ${userIds.length} users`);
+      return;
+    }
+    try {
+      const users = userIds.map((id) => ({ id }));
+      await this.streamClient.upsertUsers(users);
+      this.logger.log(`Upserted ${users.length} users to Stream: [${userIds.join(', ')}]`);
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error('Failed to batch-upsert Stream users', stack);
+      throw error;
+    }
   }
 
   generateUserToken(userId: string): string {

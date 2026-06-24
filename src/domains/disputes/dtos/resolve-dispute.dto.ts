@@ -17,7 +17,7 @@ export class ResolveDisputeDto {
   })
   @IsString()
   @IsNotEmpty()
-  notes: string;
+  resolutionNotes: string;
 
   @ApiPropertyOptional({
     description: 'Amount allocated to creator if action is split',

@@ -32,7 +32,13 @@ export class DisputesController {
   @ApiOperation({ summary: 'Get Stream Chat user authentication token' })
   @ApiResponse({ status: 200, description: 'User token returned successfully' })
   getStreamToken(@CurrentUser() user: User) {
-    return this.disputesService.getStreamToken(user.id);
+    return this.disputesService.getStreamToken({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+    });
   }
 
   @Post()
@@ -83,15 +89,16 @@ export class DisputesController {
 
   @Post(':id/resolve')
   @UseGuards(RolesGuard)
-  @Roles('finance_admin', 'super_admin')
+  @Roles('admin', 'finance_admin', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Resolve a campaign dispute and lock the chat (Finance & Super Admins only)',
+    summary:
+      'Resolve a campaign dispute and lock the chat (Admin, Finance Admin & Super Admin only)',
   })
   @ApiResponse({ status: 200, description: 'Dispute resolved and chat channel frozen' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden — finance_admin or super_admin role required',
+    description: 'Forbidden — admin, finance_admin or super_admin role required',
   })
   @ApiResponse({ status: 404, description: 'Dispute not found' })
   async resolveDispute(
@@ -101,9 +108,10 @@ export class DisputesController {
   ) {
     // Standard role gate is handled by guard, but verify role just in case
     const roleName = user.role?.name || '';
-    if (roleName !== 'finance_admin' && roleName !== 'super_admin') {
-      throw new ForbiddenException('Only Finance Admin or Super Admin can resolve disputes');
+    const canResolve = ['admin', 'finance_admin', 'super_admin'].includes(roleName);
+    if (!canResolve) {
+      throw new ForbiddenException('Only Admin, Finance Admin or Super Admin can resolve disputes');
     }
-    return this.disputesService.resolveDispute(id, dto);
+    return this.disputesService.resolveDispute(id, user.id, dto);
   }
 }

@@ -14,7 +14,7 @@ export class UpdateProfileDto {
   username?: string;
 
   @ApiPropertyOptional({
-    description: 'Brand name (required for Brands)',
+    description: 'Brand name (required for Brands; maps to username)',
     example: 'Pepsi Company',
   })
   @IsString()
@@ -132,7 +132,7 @@ export class CreatorProfileDto {
 
 export class BrandProfileDto {
   @ApiProperty({
-    description: 'Brand name',
+    description: 'Brand name (maps to username)',
     example: 'Pepsi Company',
   })
   brandName: string;

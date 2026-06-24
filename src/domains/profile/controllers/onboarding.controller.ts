@@ -194,8 +194,9 @@ export class OnboardingController {
     )
     avatar?: Express.Multer.File,
   ) {
-    if (dto.username) {
-      const existing = await this.usersService.findByUsername(dto.username);
+    const checkUsername = dto.username || dto.brandName;
+    if (checkUsername) {
+      const existing = await this.usersService.findByUsername(checkUsername);
       if (existing && existing.id !== user.id) {
         throw new ConflictException('Username is already taken');
       }
@@ -208,7 +209,7 @@ export class OnboardingController {
 
     if (dto.bio !== undefined) updates.bio = dto.bio;
     if (dto.username !== undefined) updates.username = dto.username;
-    if (dto.brandName !== undefined) updates.firstName = dto.brandName; // Map brandName to firstName
+    if (dto.brandName !== undefined) updates.username = dto.brandName; // Map brandName to username
     if (dto.nationalityId !== undefined) updates.nationalityId = dto.nationalityId;
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.websiteUrl !== undefined) updates.websiteUrl = dto.websiteUrl;

@@ -48,4 +48,26 @@ export class Dispute extends BaseEntity<Dispute> {
 
   @Column({ type: DataType.DATE, allowNull: true, field: 'resolved_at' })
   declare resolvedAt?: Date;
+
+  // --- Audit / event-driven fields ---
+
+  @ForeignKey(() => User)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'activated_by_id' })
+  declare activatedById?: string;
+
+  @BelongsTo(() => User, 'activated_by_id')
+  declare activatedBy?: User;
+
+  @Column({ type: DataType.DATE, allowNull: true, field: 'activated_at' })
+  declare activatedAt?: Date;
+
+  @ForeignKey(() => User)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'resolved_by_id' })
+  declare resolvedById?: string;
+
+  @BelongsTo(() => User, 'resolved_by_id')
+  declare resolvedBy?: User;
+
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'resolution_notes' })
+  declare resolutionNotes?: string;
 }
