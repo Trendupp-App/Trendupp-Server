@@ -32,7 +32,11 @@ jobs:
             # Explicit path expansion to locate system-wide and user-space binaries
             export PATH=$PATH:/usr/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin
 
+            # Enable command execution tracing (set -x)
+            set -x
+
             # 1. Navigate to the project folder or clone it if it's the first deployment
+            echo "--- STEP 1: Repository checkout/pull ---"
             if [ ! -d "/home/ec2-user/trendupp-server" ]; then
               echo "Repository not found on server. Cloning branch ${{ github.ref_name }}..."
               git clone --branch ${{ github.ref_name }} https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
@@ -56,19 +60,24 @@ jobs:
             sudo chown -R ec2-user:ec2-user /home/ec2-user/trendupp-server
 
             # 2. Inject environment variables securely using an absolute path and sudo tee
+            echo "--- STEP 2: Injecting environment variables ---"
             echo "${{ secrets.ENV_FILE }}" | sudo tee /home/ec2-user/trendupp-server/.env > /dev/null
             sudo chown ec2-user:ec2-user /home/ec2-user/trendupp-server/.env
 
             # 3. Install dependencies: Attempt clean install, fallback to adaptive install if lockfile is out of sync
+            echo "--- STEP 3: Installing dependencies ---"
             npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
             # 4. Build the NestJS project using the local node_modules binary path safety reference
+            echo "--- STEP 4: Building the NestJS project ---"
             ./node_modules/.bin/nest build
 
             # 5. Prune devDependencies to keep the production footprint small
+            echo "--- STEP 5: Pruning dev dependencies ---"
             npm prune --omit=dev
 
             # Resolve the correct PM2 binary path (prefer local, fallback to global)
+            echo "--- STEP 6: PM2 Mismatch check and startup ---"
             PM2_BIN=""
             if [ -f "./node_modules/.bin/pm2" ]; then
               PM2_BIN="./node_modules/.bin/pm2"
@@ -78,11 +87,14 @@ jobs:
 
             # Check for version mismatch between the client and in-memory daemon to prevent hangs
             if [ -n "$PM2_BIN" ]; then
-              if $PM2_BIN -v 2>&1 | grep -q "In-memory PM2"; then
-                echo "PM2 version mismatch detected. Forcefully killing existing daemon to restart with client version..."
-                pkill -f pm2 || kill -9 $(pgrep -f pm2) || true
-                sleep 2
-              fi
+              VERSION_CHECK=$($PM2_BIN -v 2>&1 || echo "")
+              case "$VERSION_CHECK" in
+                *"In-memory PM2"*)
+                  echo "PM2 version mismatch detected. Forcefully killing existing daemon to restart with client version..."
+                  pkill -f pm2 || kill -9 $(pgrep -f pm2) || true
+                  sleep 2
+                  ;;
+              esac
             fi
 
             # 6. Gracefully reload or start the NestJS API process using your ecosystem configuration
@@ -102,3 +114,5 @@ jobs:
               echo "Error: PM2 engine binary is not accessible in this shell execution scope."
               exit 1
             fi
+            
+            echo "--- DEPLOYMENT SUCCESSFUL ---"
