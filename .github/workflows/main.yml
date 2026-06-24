@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main # Triggers the deployment when you push to the main branch
-      - staging
 
 jobs:
   deploy:
@@ -21,20 +20,29 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Force non-interactive shell to load environment profile paths
+            export HOME="/home/ec2-user"
+            [ -s "$HOME/.bash_profile" ] && source "$HOME/.bash_profile"
+            [ -s "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+
             # 1. Navigate to the project folder or clone it if it's the first deployment
             if [ ! -d "/home/ec2-user/trendupp-server" ]; then
               echo "Repository not found on server. Cloning..."
               git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
               cd /home/ec2-user/trendupp-server
             else
-              cd /home/ec2-user/trendupp-server
+              cd /home/ec2-user/trendupp-server || exit 1
               echo "Repository found. Pulling latest changes..."
               git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git pull origin main
             fi
 
-            # 2. Inject the environment variables from GitHub Secrets dynamically
-            echo "${{ secrets.ENV_FILE }}" > .env
+            # Fix directory ownership recursively to ensure ec2-user has full clearance
+            sudo chown -R ec2-user:ec2-user /home/ec2-user/trendupp-server
+
+            # 2. Inject environment variables securely using an absolute path and sudo tee
+            echo "${{ secrets.ENV_FILE }}" | sudo tee /home/ec2-user/trendupp-server/.env > /dev/null
+            sudo chown ec2-user:ec2-user /home/ec2-user/trendupp-server/.env
 
             # 3. Install all dependencies optimized for production speed
             npm ci --no-audit --no-fund
