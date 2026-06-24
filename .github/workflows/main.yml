@@ -34,8 +34,8 @@ jobs:
 
             # 1. Navigate to the project folder or clone it if it's the first deployment
             if [ ! -d "/home/ec2-user/trendupp-server" ]; then
-              echo "Repository not found on server. Cloning..."
-              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
+              echo "Repository not found on server. Cloning branch ${{ github.ref_name }}..."
+              git clone --branch ${{ github.ref_name }} https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /home/ec2-user/trendupp-server
               cd /home/ec2-user/trendupp-server || exit 1
             else
               cd /home/ec2-user/trendupp-server || exit 1
@@ -45,9 +45,11 @@ jobs:
               git reset --hard
               git clean -fd
               
-              echo "Pulling latest changes from GitHub..."
+              echo "Checking out and pulling branch ${{ github.ref_name }}..."
               git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-              git pull origin main
+              git fetch origin
+              git checkout ${{ github.ref_name }}
+              git pull origin ${{ github.ref_name }}
             fi
 
             # Fix directory ownership recursively to ensure ec2-user has full clearance
