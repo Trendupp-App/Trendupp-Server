@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main # Triggers the deployment when you push to the main branch
+      - staging
 
 jobs:
   deploy:
@@ -32,7 +33,13 @@ jobs:
               cd /home/ec2-user/trendupp-server
             else
               cd /home/ec2-user/trendupp-server || exit 1
-              echo "Repository found. Pulling latest changes..."
+              echo "Repository found. Cleaning up unexpected local modifications..."
+              
+              # Aggressively clear untracked files and local code modifications
+              git reset --hard
+              git clean -fd
+              
+              echo "Pulling latest changes from GitHub..."
               git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git pull origin main
             fi
