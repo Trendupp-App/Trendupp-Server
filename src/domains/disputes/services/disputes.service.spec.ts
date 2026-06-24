@@ -33,6 +33,8 @@ describe('DisputesService', () => {
       getApiKey: jest.fn(),
       createChannel: jest.fn(),
       freezeChannel: jest.fn(),
+      upsertUser: jest.fn(),
+      upsertUsers: jest.fn(),
     } as unknown as jest.Mocked<StreamService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,12 +54,24 @@ describe('DisputesService', () => {
   });
 
   describe('getStreamToken', () => {
-    it('should generate token using StreamService', () => {
+    it('should generate token using StreamService', async () => {
       streamServiceMock.generateUserToken.mockReturnValue('mock_token');
       streamServiceMock.getApiKey.mockReturnValue('mock_api_key');
+      streamServiceMock.upsertUser.mockResolvedValue(undefined);
 
-      const result = service.getStreamToken('user1');
+      const result = await service.getStreamToken({
+        id: 'user1',
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john@example.com',
+      });
 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(streamServiceMock.upsertUser).toHaveBeenCalledWith({
+        id: 'user1',
+        name: 'John Doe',
+        image: undefined,
+      });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(streamServiceMock.generateUserToken).toHaveBeenCalledWith('user1');
       // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -147,12 +161,20 @@ describe('DisputesService', () => {
       } as unknown as Dispute;
 
       disputeRepoMock.findById.mockResolvedValue(dispute);
+      streamServiceMock.upsertUsers.mockResolvedValue(undefined);
       streamServiceMock.createChannel.mockResolvedValue(undefined);
 
       const result = await service.activateDispute('disp1', 'admin1', {
         financeAdminId: 'finance1',
       });
 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(streamServiceMock.upsertUsers).toHaveBeenCalledWith([
+        'creator1',
+        'brand1',
+        'admin1',
+        'finance1',
+      ]);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(streamServiceMock.createChannel).toHaveBeenCalledWith(
         'dispute',
@@ -169,8 +191,8 @@ describe('DisputesService', () => {
       expect(result).toBe(dispute);
     });
 
-    it('should throw BadRequestException if dispute is already active', async () => {
-      const dispute = { id: 'disp1', status: 'under_review' } as Dispute;
+    it('should throw BadRequestException if dispute is resolved', async () => {
+      const dispute = { id: 'disp1', status: 'resolved' } as Dispute;
       disputeRepoMock.findById.mockResolvedValue(dispute);
 
       await expect(
@@ -191,15 +213,17 @@ describe('DisputesService', () => {
       disputeRepoMock.findById.mockResolvedValue(dispute);
       streamServiceMock.freezeChannel.mockResolvedValue(undefined);
 
-      const result = await service.resolveDispute('disp1', {
+      const result = await service.resolveDispute('disp1', 'admin1', {
         action: 'release_to_creator',
-        notes: 'Release escrow',
+        resolutionNotes: 'Release escrow',
       });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(streamServiceMock.freezeChannel).toHaveBeenCalledWith('dispute', 'dispute_disp1');
       expect(dispute.status).toBe('resolved');
       expect(dispute.escrowAction).toBe('release_to_creator');
+      expect(dispute.resolvedById).toBe('admin1');
+      expect(dispute.resolutionNotes).toBe('Release escrow');
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(dispute.save).toHaveBeenCalled();
