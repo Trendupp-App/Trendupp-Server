@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main # Triggers the deployment when you push to the main branch
+      - staging
 
 jobs:
   deploy:
@@ -65,19 +66,27 @@ jobs:
             # 5. Prune devDependencies to keep the production footprint small
             npm prune --omit=dev
 
+            # Resolve the correct PM2 binary path (prefer local, fallback to global)
+            PM2_BIN=""
+            if [ -f "./node_modules/.bin/pm2" ]; then
+              PM2_BIN="./node_modules/.bin/pm2"
+            elif command -v pm2 &> /dev/null; then
+              PM2_BIN="pm2"
+            fi
+
             # 6. Gracefully reload or start the NestJS API process using your ecosystem configuration
-            if command -v pm2 &> /dev/null; then
-              pm2 describe trendupp-api > /dev/null 2>&1
+            if [ -n "$PM2_BIN" ]; then
+              $PM2_BIN describe trendupp-api > /dev/null 2>&1
               if [ $? -eq 0 ]; then
                 echo "Trendupp-Server is running. Reloading gracefully via ecosystem file..."
-                pm2 reload ecosystem.config.js --env production
+                $PM2_BIN reload ecosystem.config.js --env production
               else
                 echo "Trendupp-Server is offline. Starting new PM2 instance via ecosystem file..."
-                pm2 start ecosystem.config.js --env production
+                $PM2_BIN start ecosystem.config.js --env production
               fi
               
               # 7. Save the PM2 process list so it survives a server reboot
-              pm2 save
+              $PM2_BIN save
             else
               echo "Error: PM2 engine binary is not accessible in this shell execution scope."
               exit 1
