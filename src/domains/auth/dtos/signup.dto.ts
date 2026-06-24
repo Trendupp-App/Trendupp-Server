@@ -46,7 +46,16 @@ export class SignupDto {
   lastName?: string;
 
   @ApiPropertyOptional({
-    description: 'Brand name (required if signing up as a Brand)',
+    description: 'Unique username (required if signing up as a Creator)',
+    example: 'ojima_creator',
+  })
+  @IsString()
+  @IsOptional()
+  @Length(3, 30)
+  username?: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand name (required if signing up as a Brand; mapped to username)',
     example: 'Trendupp Inc.',
   })
   @IsString()
@@ -103,6 +112,9 @@ export class CreatorSignupDto {
   })
   password: string;
 
+  @ApiProperty({ description: 'Unique username for the creator', example: 'ojima_creator' })
+  username: string;
+
   @ApiProperty({ description: 'First name of the creator', example: 'Ojima' })
   firstName: string;
 
@@ -142,7 +154,7 @@ export class BrandSignupDto {
   password: string;
 
   @ApiProperty({
-    description: 'Official brand / company name',
+    description: 'Official brand / company name (mapped to username)',
     example: 'Trendupp Inc.',
     minLength: 2,
     maxLength: 50,

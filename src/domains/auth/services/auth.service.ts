@@ -64,6 +64,7 @@ export interface SignupResponse {
     email: string;
     firstName: string;
     lastName: string;
+    username?: string;
     role: string;
     isEmailVerified: boolean;
     onboardingPercentage: number;
@@ -131,16 +132,29 @@ export class AuthService {
 
     let finalFirstName = firstName || '';
     let finalLastName = lastName || '';
+    let finalUsername = '';
 
     if (roleRecord.name === 'brand') {
       if (!signupDto.brandName) {
         throw new BadRequestException('brandName is required for brand signup');
       }
-      finalFirstName = signupDto.brandName;
+      finalUsername = signupDto.brandName;
+      finalFirstName = '';
       finalLastName = '';
     } else {
       if (!firstName || !lastName) {
         throw new BadRequestException('firstName and lastName are required for creator signup');
+      }
+      if (!signupDto.username) {
+        throw new BadRequestException('username is required for creator signup');
+      }
+      finalUsername = signupDto.username;
+    }
+
+    if (finalUsername) {
+      const usernameExists = await this.usersService.findByUsername(finalUsername);
+      if (usernameExists && usernameExists.email !== email) {
+        throw new ConflictException('Username is already taken');
       }
     }
 
@@ -150,6 +164,7 @@ export class AuthService {
         password: hashedPassword,
         firstName: finalFirstName,
         lastName: finalLastName,
+        username: finalUsername || undefined,
         phoneNumber,
         roleId: roleRecord.id,
         acceptedPromotions: signupDto.acceptedPromotions || false,
@@ -178,6 +193,7 @@ export class AuthService {
           email: existingUser.email,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName,
+          username: existingUser.username,
           role: roleRecord.name,
           isEmailVerified: existingUser.isEmailVerified,
           acceptedPromotions: existingUser.acceptedPromotions,
@@ -194,6 +210,7 @@ export class AuthService {
       password: hashedPassword,
       firstName: finalFirstName,
       lastName: finalLastName,
+      username: finalUsername || undefined,
       phoneNumber,
       roleId: roleRecord.id,
       isEmailVerified: false,
@@ -227,6 +244,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        username: user.username,
         role: roleRecord.name,
         isEmailVerified: user.isEmailVerified,
         acceptedPromotions: user.acceptedPromotions,
@@ -741,5 +759,15 @@ export class AuthService {
         throw new UnauthorizedException('Account is inactive.');
       }
     }
+  }
+
+  async checkUsernameAvailability(
+    username: string,
+  ): Promise<{ username: string; isAvailable: boolean }> {
+    const user = await this.usersService.findByUsername(username);
+    return {
+      username,
+      isAvailable: !user,
+    };
   }
 }
