@@ -1,4 +1,14 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Query,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import {
@@ -7,6 +17,8 @@ import {
   ApiResponse,
   ApiExtraModels,
   ApiBody,
+  ApiSecurity,
+  ApiQuery,
   getSchemaPath,
 } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
@@ -19,6 +31,7 @@ import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
 import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
 import { InstagramLoginDto } from '../dtos/instagram-login.dto';
+import { ApiKeyGuard } from '../guards/api-key.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -143,5 +156,25 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Expired or invalid verification OTP' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Get('username/check')
+  @UseGuards(ApiKeyGuard)
+  @ApiSecurity('onboarding-key')
+  @Throttle({ default: THROTTLE_LIMITS.USERNAME_CHECK })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check if a username/brandName is available or taken' })
+  @ApiQuery({
+    name: 'username',
+    description: 'The username to check',
+    example: 'trendsetter_ojima',
+  })
+  @ApiResponse({ status: 200, description: 'Availability status of the username' })
+  @ApiResponse({ status: 400, description: 'Username query parameter is required' })
+  async checkUsernameAvailability(@Query('username') username: string) {
+    if (!username || username.trim() === '') {
+      throw new BadRequestException('username query parameter is required');
+    }
+    return this.authService.checkUsernameAvailability(username.trim());
   }
 }

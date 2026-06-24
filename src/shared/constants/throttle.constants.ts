@@ -28,6 +28,8 @@ export const THROTTLE_LIMITS = {
 
   ONBOARDING_STEP: { ttl: 60000, limit: 10 },
 
+  USERNAME_CHECK: { ttl: 60000, limit: 20 },
+
   // Campaigns
 
   CAMPAIGN_CREATE: { ttl: 60000, limit: 5 },

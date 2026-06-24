@@ -16,6 +16,7 @@ import { AuthModule } from './domains/auth/auth.module';
 import { CampaignsModule } from './domains/campaigns/campaigns.module';
 import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
+import { DisputesModule } from './domains/disputes/disputes.module';
 
 @Module({
   imports: [
@@ -70,12 +71,15 @@ import { ProfileModule } from './domains/profile/profile.module';
     }),
 
     // Rate Limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 60 seconds (in ms)
-        limit: 1000, // global fallback ceiling — per-route decorators override this
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      errorMessage: 'too many request try again later',
+      throttlers: [
+        {
+          ttl: 60000, // 60 seconds (in ms)
+          limit: 1000, // global fallback ceiling — per-route decorators override this
+        },
+      ],
+    }),
 
     // Domain Modules
     UsersModule,
@@ -83,6 +87,7 @@ import { ProfileModule } from './domains/profile/profile.module';
     CampaignsModule,
     AdminModule,
     ProfileModule,
+    DisputesModule,
   ],
   controllers: [AppController],
   providers: [
