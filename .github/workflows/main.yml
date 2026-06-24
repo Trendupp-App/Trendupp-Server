@@ -70,6 +70,9 @@ jobs:
 
             # 4. Build the NestJS project using the local node_modules binary path safety reference
             echo "--- STEP 4: Building the NestJS project ---"
+            if [ -f "nest-cli.json" ]; then
+              sed -i 's/"watchAssets": *true/"watchAssets": false/g' nest-cli.json
+            fi
             ./node_modules/.bin/nest build
 
             # 5. Prune devDependencies to keep the production footprint small
