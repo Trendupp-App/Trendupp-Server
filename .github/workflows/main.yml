@@ -3,7 +3,7 @@ name: Deploy Trendupp-Server to AL2023
 on:
   push:
     branches:
-      - main # Triggers the deployment when you push to the main branch
+      - main
       - staging
 
 jobs:
@@ -20,6 +20,11 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          # --- SSH HANDSHAKE HARDENING OPTIONS ---
+          timeout: 40s
+          command_timeout: 15m
+          sync: true 
+          # --------------------------------------
           script: |
             # Force non-interactive shell to load environment profile paths and global directories
             export HOME="/home/ec2-user"
@@ -92,7 +97,7 @@ jobs:
             if [ -n "$PM2_BIN" ]; then
               VERSION_CHECK=$($PM2_BIN -v 2>&1 || echo "")
               case "$VERSION_CHECK" in
-                *"In-memory PM2"*)
+                "In-memory PM2")
                   echo "PM2 version mismatch detected. Forcefully killing existing daemon to restart with client version..."
                   pkill -f pm2 || kill -9 $(pgrep -f pm2) || true
                   sleep 2
