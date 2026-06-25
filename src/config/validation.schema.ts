@@ -51,6 +51,14 @@ export const validationSchema = Joi.object({
   INSTAGRAM_APP_ID: Joi.string().allow('').optional(),
   INSTAGRAM_APP_SECRET: Joi.string().allow('').optional(),
 
+  // YouTube OAuth (social connect)
+  YOUTUBE_CLIENT_ID: Joi.string().allow('').optional(),
+  YOUTUBE_CLIENT_SECRET: Joi.string().allow('').optional(),
+
+  // Twitter / X OAuth (social connect)
+  TWITTER_CLIENT_ID: Joi.string().allow('').optional(),
+  TWITTER_CLIENT_SECRET: Joi.string().allow('').optional(),
+
   // Stream Chat
   STREAM_API_KEY: Joi.string().allow('').optional(),
   STREAM_API_SECRET: Joi.string().allow('').optional(),

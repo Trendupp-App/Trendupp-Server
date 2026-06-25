@@ -11,6 +11,12 @@ export interface InstagramUserProfile {
   username: string;
 }
 
+export interface InstagramFollowerStats {
+  id: string;
+  username: string;
+  followerCount: number;
+}
+
 @Injectable()
 export class InstagramAuthService {
   private readonly logger = new Logger(InstagramAuthService.name);
@@ -161,6 +167,56 @@ export class InstagramAuthService {
         error instanceof Error ? error.stack : error,
       );
       throw new UnauthorizedException('Failed to retrieve Instagram user profile info');
+    }
+  }
+
+  /**
+   * Fetch follower count + handle to *verify* an Instagram connection.
+   * `followers_count` is only returned for Professional (Business/Creator)
+   * accounts on the Instagram Graph API; for personal accounts it is absent
+   * and we default to 0. Falls back to mock data without credentials.
+   */
+  async getFollowerStats(accessToken: string): Promise<InstagramFollowerStats> {
+    if (this.isMockMode || accessToken.startsWith('mock-instagram-access-token-')) {
+      this.logger.warn('MOCK mode: Simulating Instagram follower stats fetch.');
+      let id = 'mock-instagram-user-id-123456789';
+      const parts = accessToken.split('mock-instagram-access-token-');
+      if (parts.length > 1 && parts[1]) id = parts[1];
+      return { id, username: 'mock_instagram_user', followerCount: 12400 };
+    }
+
+    try {
+      const fields = 'user_id,username,followers_count,account_type';
+      const profileUrl = `https://graph.instagram.com/me?fields=${fields}&access_token=${accessToken}`;
+
+      const response = await fetch(profileUrl, { method: 'GET' });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Instagram stats fetch failed: Status ${response.status} - ${errorText}`);
+        throw new UnauthorizedException('Failed to fetch Instagram follower stats');
+      }
+
+      const responseBody = (await response.json()) as Record<string, unknown>;
+      const rawId = responseBody.user_id ?? responseBody.id;
+      const id = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId) : '';
+      const username = responseBody.username as string;
+      const followerCount = Number(responseBody.followers_count ?? 0);
+
+      if (!id || !username) {
+        this.logger.error(
+          `Instagram stats payload missing fields: ${JSON.stringify(responseBody)}`,
+        );
+        throw new UnauthorizedException('Invalid stats payload from Instagram');
+      }
+
+      return { id, username, followerCount };
+    } catch (error) {
+      this.logger.error(
+        'Instagram getFollowerStats error',
+        error instanceof Error ? error.stack : error,
+      );
+      throw new UnauthorizedException('Failed to retrieve Instagram follower stats');
     }
   }
 }

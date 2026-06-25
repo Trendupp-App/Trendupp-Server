@@ -52,6 +52,14 @@ export default () => ({
     appId: process.env.INSTAGRAM_APP_ID,
     appSecret: process.env.INSTAGRAM_APP_SECRET,
   },
+  youtube: {
+    clientId: process.env.YOUTUBE_CLIENT_ID,
+    clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+  },
+  twitter: {
+    clientId: process.env.TWITTER_CLIENT_ID,
+    clientSecret: process.env.TWITTER_CLIENT_SECRET,
+  },
   stream: {
     apiKey: process.env.STREAM_API_KEY,
     apiSecret: process.env.STREAM_API_SECRET,
