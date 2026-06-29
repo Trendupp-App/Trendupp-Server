@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Attributes, Op, Sequelize } from 'sequelize';
+import { Attributes, Op } from 'sequelize';
 import { Campaign } from '../entities/campaign.entity';
 import { User } from '../../users/entities/user.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
 import { Platform } from '../entities/platform.entity';
+import { Payment } from '../entities/payment.entity';
+import { CampaignApplication } from '../entities/campaign-application.entity';
+import { ContentSubmission } from '../entities/content-submission.entity';
 
 @Injectable()
 export class CampaignRepository {
@@ -15,6 +18,12 @@ export class CampaignRepository {
     private readonly creatorCategoryModel: typeof CreatorCategory,
     @InjectModel(Platform)
     private readonly platformModel: typeof Platform,
+    @InjectModel(Payment)
+    private readonly paymentModel: typeof Payment,
+    @InjectModel(CampaignApplication)
+    private readonly campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(ContentSubmission)
+    private readonly contentSubmissionModel: typeof ContentSubmission,
   ) {}
 
   private readonly fullIncludes = [
@@ -44,8 +53,13 @@ export class CampaignRepository {
     });
   }
 
-  findAll(): Promise<Campaign[]> {
+  findAll(status?: string): Promise<Campaign[]> {
+    const where: { status?: string } = {};
+    if (status) {
+      where.status = status;
+    }
     return this.campaignModel.findAll({
+      where,
       include: this.fullIncludes,
       order: [['createdAt', 'DESC']],
     });
@@ -54,28 +68,25 @@ export class CampaignRepository {
   /**
    * Campaigns owned by a specific brand user.
    */
-  findByBrandId(brandId: string): Promise<Campaign[]> {
+  findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
+    const where: { brandId: string; status?: string } = { brandId };
+    if (status) {
+      where.status = status;
+    }
     return this.campaignModel.findAll({
-      where: { brandId },
+      where,
       include: this.fullIncludes,
       order: [['createdAt', 'DESC']],
     });
   }
 
   /**
-   * Campaigns currently live: status = 'live' AND within the duration window.
-   * Uses Postgres interval arithmetic: approved_at + (duration || ' days')::interval
+   * Campaigns currently live.
    */
   findLiveCampaigns(): Promise<Campaign[]> {
     return this.campaignModel.findAll({
       where: {
         status: 'live',
-        [Op.and]: [
-          Sequelize.literal(`"Campaign"."approved_at" IS NOT NULL`),
-          Sequelize.literal(
-            `NOW() <= "Campaign"."approved_at" + ("Campaign"."duration" || ' days')::interval`,
-          ),
-        ],
       },
       include: this.fullIncludes,
       order: [['approvedAt', 'DESC']],
@@ -83,17 +94,12 @@ export class CampaignRepository {
   }
 
   /**
-   * Campaigns that have ended: completed, cancelled, or expired live campaigns.
+   * Campaigns that have ended (completed or cancelled).
    */
   findPastCampaigns(): Promise<Campaign[]> {
     return this.campaignModel.findAll({
       where: {
-        [Op.or]: [
-          { status: { [Op.in]: ['completed', 'cancelled'] } },
-          Sequelize.literal(
-            `("Campaign"."status" = 'live' AND "Campaign"."approved_at" IS NOT NULL AND NOW() > "Campaign"."approved_at" + ("Campaign"."duration" || ' days')::interval)`,
-          ),
-        ],
+        status: { [Op.in]: ['completed', 'cancelled'] },
       },
       include: this.fullIncludes,
       order: [['createdAt', 'DESC']],
@@ -124,6 +130,148 @@ export class CampaignRepository {
   findAllPlatforms(): Promise<Platform[]> {
     return this.platformModel.findAll({
       order: [['name', 'ASC']],
+    });
+  }
+
+  createPayment(data: {
+    campaignId: string;
+    amount: number;
+    paymentStatus: string;
+    paymentReference?: string;
+  }): Promise<Payment> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.paymentModel as any).create(data) as Promise<Payment>;
+  }
+
+  createApplication(data: {
+    campaignId: string;
+    creatorId: string;
+    contentIdea: string;
+    pastWorkLink?: string;
+    primaryPlatformId: string;
+    secondaryPlatformId?: string;
+    feeRequest: number;
+    comments?: string;
+  }): Promise<CampaignApplication> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.campaignApplicationModel as any).create(data) as Promise<CampaignApplication>;
+  }
+
+  findApplicationById(id: string): Promise<CampaignApplication | null> {
+    return this.campaignApplicationModel.findOne({
+      where: { id },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Campaign, as: 'campaign' },
+        { model: Platform, as: 'primaryPlatform' },
+        { model: Platform, as: 'secondaryPlatform' },
+      ],
+    });
+  }
+
+  findApplication(campaignId: string, creatorId: string): Promise<CampaignApplication | null> {
+    return this.campaignApplicationModel.findOne({
+      where: { campaignId, creatorId },
+    });
+  }
+
+  findApplicationsByCampaignId(campaignId: string): Promise<CampaignApplication[]> {
+    return this.campaignApplicationModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Platform, as: 'primaryPlatform' },
+        { model: Platform, as: 'secondaryPlatform' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  findApplicationsByCreatorId(creatorId: string): Promise<CampaignApplication[]> {
+    return this.campaignApplicationModel.findAll({
+      where: { creatorId },
+      include: [
+        { model: Campaign, as: 'campaign' },
+        { model: Platform, as: 'primaryPlatform' },
+        { model: Platform, as: 'secondaryPlatform' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  createSubmission(data: Partial<Attributes<ContentSubmission>>): Promise<ContentSubmission> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.contentSubmissionModel as any).create(data) as Promise<ContentSubmission>;
+  }
+
+  findSubmissionById(id: string): Promise<ContentSubmission | null> {
+    return this.contentSubmissionModel.findOne({
+      where: { id },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Campaign, as: 'campaign' },
+        { model: CampaignApplication, as: 'application' },
+      ],
+    });
+  }
+
+  findLatestSubmissionByApplicationId(applicationId: string): Promise<ContentSubmission | null> {
+    return this.contentSubmissionModel.findOne({
+      where: { applicationId },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Campaign, as: 'campaign' },
+        { model: CampaignApplication, as: 'application' },
+      ],
+    });
+  }
+
+  findSubmissionsByCampaignId(campaignId: string): Promise<ContentSubmission[]> {
+    return this.contentSubmissionModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Campaign, as: 'campaign' },
+        { model: CampaignApplication, as: 'application' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  findSubmissionsByApplicationId(applicationId: string): Promise<ContentSubmission[]> {
+    return this.contentSubmissionModel.findAll({
+      where: { applicationId },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Campaign, as: 'campaign' },
+        { model: CampaignApplication, as: 'application' },
+      ],
+      order: [['createdAt', 'DESC']],
     });
   }
 }
