@@ -6,7 +6,6 @@ import {
   Body,
   Param,
   UseGuards,
-  ConflictException,
   HttpCode,
   HttpStatus,
   Query,
@@ -194,14 +193,6 @@ export class OnboardingController {
     )
     avatar?: Express.Multer.File,
   ) {
-    const checkUsername = dto.username || dto.brandName;
-    if (checkUsername) {
-      const existing = await this.usersService.findByUsername(checkUsername);
-      if (existing && existing.id !== user.id) {
-        throw new ConflictException('Username is already taken');
-      }
-    }
-
     const updates: Partial<User> = {
       countryId: dto.countryId,
       stateId: dto.stateId,

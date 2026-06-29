@@ -4,11 +4,13 @@ import { CampaignRepository } from '../repository/campaign.repository';
 import { Campaign } from '../entities/campaign.entity';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let s3ServiceMock: jest.Mocked<S3Service>;
+  let urlValidatorMock: jest.Mocked<UrlValidatorService>;
 
   const mockCampaign = {
     id: 'c1',
@@ -16,13 +18,19 @@ describe('CampaignsService', () => {
     title: 'Summer Campaign',
     goal: 'Create Content',
     totalBudget: 3000000,
-    paymentPerCreator: '80,000 - 150,000',
     creatorCategoryId: 'cc1',
-    contentType: 'Video',
-    duration: 15,
-    status: 'pending_approval',
+    status: 'draft',
+    currentStep: 1,
+    paymentStatus: 'unpaid',
     approvedAt: null,
+    update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
+    paymentBreakdown: {
+      campaignBudget: 3000000,
+      trenduppFee: 450000,
+      vat: 225000,
+      totalToPay: 3675000,
+    },
   } as unknown as Campaign;
 
   beforeEach(async () => {
@@ -34,17 +42,35 @@ describe('CampaignsService', () => {
       findLiveCampaigns: jest.fn(),
       findPastCampaigns: jest.fn(),
       updateStatus: jest.fn(),
+      createPayment: jest.fn(),
+      createApplication: jest.fn(),
+      findApplicationById: jest.fn(),
+      findApplication: jest.fn(),
+      findApplicationsByCampaignId: jest.fn(),
+      findApplicationsByCreatorId: jest.fn(),
+      createSubmission: jest.fn(),
+      findSubmissionById: jest.fn(),
+      findLatestSubmissionByApplicationId: jest.fn(),
+      findSubmissionsByCampaignId: jest.fn(),
+      findSubmissionsByApplicationId: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
       uploadFile: jest.fn().mockResolvedValue('https://mock-s3-url.com/image.jpg'),
     } as unknown as jest.Mocked<S3Service>;
 
+    urlValidatorMock = {
+      validateUrl: jest
+        .fn()
+        .mockResolvedValue({ isLive: true, platform: 'YouTube', checkedAt: new Date() }),
+    } as unknown as jest.Mocked<UrlValidatorService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: S3Service, useValue: s3ServiceMock },
+        { provide: UrlValidatorService, useValue: urlValidatorMock },
       ],
     }).compile();
 
@@ -56,16 +82,13 @@ describe('CampaignsService', () => {
   });
 
   describe('create', () => {
-    it('should create a campaign with pending_approval status and re-fetch it', async () => {
+    it('should create a campaign with draft status and re-fetch it', async () => {
       const createData = {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        paymentPerCreator: '80,000 - 150,000',
         creatorCategoryId: 'cc1',
         preferredPlatformIds: ['p1'],
-        contentType: 'Video',
-        duration: 15,
       };
 
       campaignRepoMock.create.mockResolvedValue(mockCampaign);
@@ -78,13 +101,12 @@ describe('CampaignsService', () => {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        paymentPerCreator: '80,000 - 150,000',
         creatorCategoryId: 'cc1',
-        contentType: 'Video',
-        duration: 15,
         brandId: 'b1',
         coverImage: undefined,
-        status: 'pending_approval',
+        status: 'draft',
+        currentStep: 1,
+        paymentStatus: 'unpaid',
       });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
@@ -96,11 +118,8 @@ describe('CampaignsService', () => {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        paymentPerCreator: '80,000 - 150,000',
         creatorCategoryId: 'cc1',
         preferredPlatformIds: ['p1'],
-        contentType: 'Video',
-        duration: 15,
       };
 
       const mockFile = {
@@ -120,13 +139,142 @@ describe('CampaignsService', () => {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        paymentPerCreator: '80,000 - 150,000',
         creatorCategoryId: 'cc1',
-        contentType: 'Video',
-        duration: 15,
         brandId: 'b1',
         coverImage: 'https://mock-s3-url.com/image.jpg',
+        status: 'draft',
+        currentStep: 1,
+        paymentStatus: 'unpaid',
+      });
+    });
+  });
+
+  describe('updateDraft', () => {
+    it('should update draft fields successfully', async () => {
+      const draft = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'draft',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(draft);
+
+      const updateData = {
+        deliverables: ['1x post'],
+      };
+
+      await service.updateDraft('c1', 'b1', updateData);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(draft.update).toHaveBeenCalledWith({
+        deliverables: ['1x post'],
+      });
+    });
+
+    it('should throw ForbiddenException if user does not own the campaign', async () => {
+      const draft = { ...mockCampaign, brandId: 'b2', status: 'draft' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(draft);
+
+      await expect(service.updateDraft('c1', 'b1', {})).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw ForbiddenException if campaign is not a draft', async () => {
+      const campaign = {
+        ...mockCampaign,
+        brandId: 'b1',
         status: 'pending_approval',
+      } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(campaign);
+
+      await expect(service.updateDraft('c1', 'b1', {})).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('submit', () => {
+    it('should throw ForbiddenException if required fields are missing on submit', async () => {
+      const incompleteCampaign = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'draft',
+        title: 'incomplete',
+        deliverables: null, // missing required field
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(incompleteCampaign);
+
+      await expect(service.submit('c1', 'b1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should submit successfully if complete', async () => {
+      const completeCampaign = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'draft',
+        title: 'complete campaign',
+        goal: 'Amplify Content',
+        totalBudget: 3000000,
+        creatorCategoryId: 'cc1',
+        preferredPlatforms: [{ id: 'p1' }],
+        deliverables: ['1x post'],
+        contentDirection: ['d1'],
+        contentGuidelines: { dos: ['do1'], donts: [] },
+        usageRights: 'full rights',
+        successLooksLike: 'very good',
+        campaignBrief: 'our brand guidelines brief',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+
+      const result = await service.submit('c1', 'b1');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(completeCampaign.update).toHaveBeenCalledWith({
+        status: 'submitted',
+        currentStep: 5,
+        acceptedTerms: true,
+      });
+
+      expect(result).toEqual({
+        campaign: completeCampaign,
+        payment: {
+          campaignId: 'c1',
+          amount: 3675000,
+          paymentStatus: 'unpaid',
+        },
+      });
+    });
+  });
+
+  describe('pay', () => {
+    it('should create payment and update status to paid', async () => {
+      const submittedCampaign = {
+        ...mockCampaign,
+        id: 'c1',
+        brandId: 'b1',
+        status: 'pending_approval',
+        paymentStatus: 'unpaid',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(submittedCampaign);
+      campaignRepoMock.createPayment.mockResolvedValue({ id: 'pay1' } as any);
+
+      await service.pay('c1', 'b1', 'tx_ref_123');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createPayment).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        amount: 3675000,
+        paymentStatus: 'paid',
+        paymentReference: 'tx_ref_123',
+      });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(submittedCampaign.update).toHaveBeenCalledWith({
+        paymentStatus: 'paid',
+        status: 'live',
       });
     });
   });
@@ -167,7 +315,7 @@ describe('CampaignsService', () => {
       const result = await service.findByBrandId('b1');
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findByBrandId).toHaveBeenCalledWith('b1');
+      expect(campaignRepoMock.findByBrandId).toHaveBeenCalledWith('b1', undefined);
       expect(result).toEqual([mockCampaign]);
     });
   });
@@ -204,7 +352,7 @@ describe('CampaignsService', () => {
       } as unknown as Campaign;
       const approvedCampaign = {
         ...mockCampaign,
-        status: 'live',
+        status: 'approved',
         approvedAt: new Date(),
       } as unknown as Campaign;
 
@@ -216,7 +364,7 @@ describe('CampaignsService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.updateStatus).toHaveBeenCalledWith(
         'c1',
-        'live',
+        'approved',
         expect.any(Date) as Date,
       );
       expect(result).toEqual(approvedCampaign);
@@ -240,6 +388,244 @@ describe('CampaignsService', () => {
       campaignRepoMock.findById.mockResolvedValue(completedCampaign);
 
       await expect(service.approve('c1')).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('applyToCampaign', () => {
+    const mockAppDto = {
+      contentIdea: 'I will write a morning skincare styling tutorial video concept.',
+      pastWorkLink: 'https://instagram.com/p/example',
+      primaryPlatformId: 'p1',
+      secondaryPlatformId: 'p2',
+      feeRequest: 150000,
+      comments: 'Looking forward to this!',
+    };
+
+    it('should successfully submit an application for a live campaign', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      const mockApplication = { id: 'app1', ...mockAppDto };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplication.mockResolvedValue(null);
+      campaignRepoMock.createApplication.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+
+      const result = await service.applyToCampaign('c1', 'creator1', mockAppDto);
+
+      expect(result).toEqual(mockApplication);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createApplication).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        creatorId: 'creator1',
+        ...mockAppDto,
+      });
+    });
+
+    it('should throw ForbiddenException if campaign is not live', async () => {
+      const draftCampaign = { ...mockCampaign, status: 'draft' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(draftCampaign);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw ForbiddenException if creator has already applied', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplication.mockResolvedValue({ id: 'app1' } as any);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('getCampaignApplications', () => {
+    it('should return list of applications if requested by brand owner', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockAppsList = [{ id: 'app1' }, { id: 'app2' }];
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue(mockAppsList as any);
+
+      const result = await service.getCampaignApplications('c1', 'brand1');
+
+      expect(result).toEqual(mockAppsList);
+    });
+
+    it('should throw ForbiddenException if brand does not own the campaign', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand2' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+
+      await expect(service.getCampaignApplications('c1', 'brand1')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('reviewCampaignApplication', () => {
+    it('should successfully update status to accepted', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp = {
+        id: 'app1',
+        campaignId: 'c1',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+
+      await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'accepted');
+
+      expect(mockApp.update).toHaveBeenCalledWith({ status: 'accepted' });
+    });
+  });
+
+  describe('getMyApplications', () => {
+    it('should retrieve applications submitted by the creator', async () => {
+      const mockAppsList = [{ id: 'app1' }];
+      campaignRepoMock.findApplicationsByCreatorId.mockResolvedValue(mockAppsList as any);
+
+      const result = await service.getMyApplications('creator1');
+
+      expect(result).toEqual(mockAppsList);
+    });
+  });
+
+  // ─── Content Submissions Flow Tests ────────────────────────────────────────
+
+  describe('submitDraft', () => {
+    it('should submit draft successfully for accepted application', async () => {
+      const mockApplication = { id: 'app1', creatorId: 'creator1', status: 'accepted' };
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findLatestSubmissionByApplicationId.mockResolvedValue(null);
+      campaignRepoMock.createSubmission.mockResolvedValue({ id: 'sub1' } as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue({
+        id: 'sub1',
+        draftLink: 'link1',
+      } as any);
+
+      const result = await service.submitDraft('c1', 'app1', 'creator1', 'link1');
+
+      expect(result).toBeDefined();
+      expect(result.draftLink).toBe('link1');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createSubmission).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        draftLink: 'link1',
+        status: 'pending_approval',
+      });
+    });
+
+    it('should update existing draft and set status to revision-sent', async () => {
+      const mockApplication = { id: 'app1', creatorId: 'creator1', status: 'accepted' };
+      const mockSubmission = {
+        id: 'sub1',
+        status: 'request_revision',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findLatestSubmissionByApplicationId.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue({
+        id: 'sub1',
+        draftLink: 'link-updated',
+        status: 'revision-sent',
+      } as any);
+
+      const result = await service.submitDraft('c1', 'app1', 'creator1', 'link-updated');
+
+      expect(result.status).toBe('revision-sent');
+
+      expect(mockSubmission.update).toHaveBeenCalledWith({
+        draftLink: 'link-updated',
+        status: 'revision-sent',
+        brandFeedback: null,
+      });
+    });
+
+    it('should throw ForbiddenException if creator tries to submit draft but previous is already revision-sent', async () => {
+      const mockApplication = { id: 'app1', creatorId: 'creator1', status: 'accepted' };
+      const mockSubmission = { id: 'sub1', status: 'revision-sent' };
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findLatestSubmissionByApplicationId.mockResolvedValue(mockSubmission as any);
+
+      await expect(service.submitDraft('c1', 'app1', 'creator1', 'another-link')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('vetDraft', () => {
+    it('should update submission status to approved', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        status: 'pending_approval',
+        update: jest.fn(),
+      };
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+
+      await service.vetDraft('c1', 'sub1', 'brand1', 'approved');
+
+      expect(mockSubmission.update).toHaveBeenCalledWith({
+        status: 'approved',
+        brandFeedback: null,
+      });
+    });
+
+    it('should throw ForbiddenException if brand tries to request revision on revision-sent submission', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
+      const mockSubmission = { id: 'sub1', campaignId: 'c1', status: 'revision-sent' };
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+
+      await expect(
+        service.vetDraft('c1', 'sub1', 'brand1', 'request_revision', 'More revisions'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('submitLivePost', () => {
+    it('should run validator and update submission status to done', async () => {
+      const mockCampaignVal = { id: 'c1', update: jest.fn() };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        status: 'approved',
+        update: jest.fn(),
+      };
+      const mockApplication = { id: 'app1', update: jest.fn() };
+
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+
+      urlValidatorMock.validateUrl.mockResolvedValue({
+        isLive: true,
+        platform: 'Instagram',
+        checkedAt: new Date('2026-06-29'),
+      });
+
+      await service.submitLivePost('c1', 'sub1', 'creator1', 'https://instagram.com/p/live');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(urlValidatorMock.validateUrl).toHaveBeenCalledWith('https://instagram.com/p/live');
+
+      expect(mockSubmission.update).toHaveBeenCalledWith({
+        liveLink: 'https://instagram.com/p/live',
+        urlIsLive: true,
+        urlCheckedAt: expect.any(Date) as Date,
+        status: 'done',
+      });
+
+      expect(mockApplication.update).toHaveBeenCalledWith({ status: 'approved' });
     });
   });
 });

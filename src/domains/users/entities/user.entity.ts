@@ -16,6 +16,7 @@ import { UserNiche } from './user-niche.entity';
 import { Industry } from './industry.entity';
 import { UserIndustry } from './user-industry.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { Bank } from './bank.entity';
 
 @Table({ tableName: 'users' })
@@ -255,6 +256,9 @@ export class User extends BaseEntity<User> {
 
   @HasMany(() => Campaign)
   declare campaigns?: Campaign[];
+
+  @HasMany(() => CampaignApplication)
+  declare applications?: CampaignApplication[];
 
   get onboardingPercentage(): number {
     let percentage = 0;
