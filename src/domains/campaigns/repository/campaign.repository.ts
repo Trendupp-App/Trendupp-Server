@@ -8,6 +8,8 @@ import { Platform } from '../entities/platform.entity';
 import { Payment } from '../entities/payment.entity';
 import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
+import { Niche } from '../../users/entities/niche.entity';
+import { Fee } from '../entities/fee.entity';
 
 @Injectable()
 export class CampaignRepository {
@@ -24,6 +26,8 @@ export class CampaignRepository {
     private readonly campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(ContentSubmission)
     private readonly contentSubmissionModel: typeof ContentSubmission,
+    @InjectModel(Fee)
+    private readonly feeModel: typeof Fee,
   ) {}
 
   private readonly fullIncludes = [
@@ -39,6 +43,10 @@ export class CampaignRepository {
     {
       model: Platform,
       as: 'preferredPlatforms',
+    },
+    {
+      model: Niche,
+      as: 'creatorNiche',
     },
   ];
 
@@ -136,11 +144,32 @@ export class CampaignRepository {
   createPayment(data: {
     campaignId: string;
     amount: number;
+    totalAmount: number;
     paymentStatus: string;
     paymentReference?: string;
   }): Promise<Payment> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return (this.paymentModel as any).create(data) as Promise<Payment>;
+  }
+
+  // ─── Fee Config CRUD ───────────────────────────────────────────────────────
+
+  findFees(): Promise<Fee[]> {
+    return this.feeModel.findAll({
+      order: [['name', 'ASC']],
+    });
+  }
+
+  createFee(data: { name: string; type: string; value: number }): Promise<Fee> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.feeModel as any).create(data) as Promise<Fee>;
+  }
+
+  async deleteFee(id: string): Promise<boolean> {
+    const affected = await this.feeModel.destroy({
+      where: { id },
+    });
+    return affected > 0;
   }
 
   createApplication(data: {

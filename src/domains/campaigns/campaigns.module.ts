@@ -12,6 +12,7 @@ import { S3Service } from '../../integration/s3/s3.service';
 import { Payment } from './entities/payment.entity';
 import { CampaignApplication } from './entities/campaign-application.entity';
 import { ContentSubmission } from './entities/content-submission.entity';
+import { Fee } from './entities/fee.entity';
 import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { UrlValidatorModule } from '../../integration/url-validator/url-validato
       Payment,
       CampaignApplication,
       ContentSubmission,
+      Fee,
     ]),
     UsersModule,
     UrlValidatorModule,

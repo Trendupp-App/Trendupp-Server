@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -31,6 +32,7 @@ import { ReviewApplicationDto } from '../dtos/review-application.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
+import { CreateFeeDto } from '../dtos/create-fee.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
@@ -78,6 +80,8 @@ export class CampaignsController {
         totalBudget: dto.totalBudget,
         creatorCategoryId: dto.creatorCategoryId,
         preferredPlatformIds: dto.preferredPlatformIds,
+        timeline: dto.timeline,
+        creatorNicheId: dto.creatorNicheId,
         campaignBrief: dto.campaignBrief,
         contentGuidelines,
       },
@@ -416,6 +420,48 @@ export class CampaignsController {
     const submissions = await this.campaignsService.getSubmittedContent(campaignId, user.id);
     return {
       submissions,
+    };
+  }
+
+  // ─── Admin Fees Management Endpoints ─────────────────────────────────────
+
+  @Get('fees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active fees/charges' })
+  @ApiResponse({ status: 200, description: 'List of fees retrieved' })
+  async getFees() {
+    const fees = await this.campaignsService.getFees();
+    return { fees };
+  }
+
+  @Post('fees')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
+  @ApiResponse({ status: 201, description: 'Fee created successfully' })
+  async createFee(@Body() dto: CreateFeeDto) {
+    const fee = await this.campaignsService.createFee(dto);
+    return {
+      message: 'Fee configuration created successfully.',
+      fee,
+    };
+  }
+
+  @Delete('fees/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
+  @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Fee configuration not found' })
+  async deleteFee(@Param('id') id: string) {
+    await this.campaignsService.deleteFee(id);
+    return {
+      message: 'Fee configuration deleted permanently.',
     };
   }
 }

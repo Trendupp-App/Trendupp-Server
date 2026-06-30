@@ -15,6 +15,7 @@ import { CampaignPlatform } from './campaign-platform.entity';
 import { Payment } from './payment.entity';
 import { CampaignApplication } from './campaign-application.entity';
 import { ContentSubmission } from './content-submission.entity';
+import { Niche } from '../../users/entities/niche.entity';
 
 @Table({ tableName: 'campaigns' })
 export class Campaign extends BaseEntity<Campaign> {
@@ -40,6 +41,16 @@ export class Campaign extends BaseEntity<Campaign> {
 
   @BelongsTo(() => CreatorCategory)
   declare creatorCategory?: CreatorCategory;
+
+  @ForeignKey(() => Niche)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'creator_niche_id' })
+  declare creatorNicheId?: string;
+
+  @BelongsTo(() => Niche)
+  declare creatorNiche?: Niche;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare timeline?: Date;
 
   @BelongsToMany(() => Platform, () => CampaignPlatform)
   declare preferredPlatforms?: Platform[];
@@ -152,21 +163,32 @@ export class Campaign extends BaseEntity<Campaign> {
   /**
    * Returns dynamic billing breakdown based on the budget
    */
+  @Column(DataType.VIRTUAL)
   get paymentBreakdown(): {
     campaignBudget: number;
     trenduppFee: number;
     vat: number;
     totalToPay: number;
+    breakdownItems?: { name: string; type: string; value: number; amount: number }[];
   } {
-    const budget = this.totalBudget || 0;
-    const fee = budget * 0.15;
-    const vat = budget * 0.075;
-    return {
-      campaignBudget: budget,
-      trenduppFee: fee,
-      vat,
-      totalToPay: budget + fee + vat,
-    };
+    return (
+      this.getDataValue('paymentBreakdown') || {
+        campaignBudget: this.totalBudget || 0,
+        trenduppFee: (this.totalBudget || 0) * 0.15,
+        vat: (this.totalBudget || 0) * 0.075,
+        totalToPay: (this.totalBudget || 0) * 1.225,
+      }
+    );
+  }
+
+  set paymentBreakdown(value: {
+    campaignBudget: number;
+    trenduppFee: number;
+    vat: number;
+    totalToPay: number;
+    breakdownItems?: { name: string; type: string; value: number; amount: number }[];
+  }) {
+    this.setDataValue('paymentBreakdown', value);
   }
 
   @HasMany(() => Payment)

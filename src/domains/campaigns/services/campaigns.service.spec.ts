@@ -19,6 +19,8 @@ describe('CampaignsService', () => {
     goal: 'Create Content',
     totalBudget: 3000000,
     creatorCategoryId: 'cc1',
+    creatorNicheId: 'n1',
+    timeline: new Date('2026-07-31T23:59:59.999Z'),
     status: 'draft',
     currentStep: 1,
     paymentStatus: 'unpaid',
@@ -53,6 +55,10 @@ describe('CampaignsService', () => {
       findLatestSubmissionByApplicationId: jest.fn(),
       findSubmissionsByCampaignId: jest.fn(),
       findSubmissionsByApplicationId: jest.fn(),
+      findFees: jest.fn().mockResolvedValue([
+        { name: 'VAT', type: 'percentage', value: 0.075 },
+        { name: 'Trendupp Fee', type: 'percentage', value: 0.15 },
+      ]),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -89,6 +95,8 @@ describe('CampaignsService', () => {
         totalBudget: 3000000,
         creatorCategoryId: 'cc1',
         preferredPlatformIds: ['p1'],
+        timeline: '2026-07-31T23:59:59.999Z',
+        creatorNicheId: 'n1',
       };
 
       campaignRepoMock.create.mockResolvedValue(mockCampaign);
@@ -107,6 +115,8 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
+        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        creatorNicheId: 'n1',
       });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
@@ -120,6 +130,8 @@ describe('CampaignsService', () => {
         totalBudget: 3000000,
         creatorCategoryId: 'cc1',
         preferredPlatformIds: ['p1'],
+        timeline: '2026-07-31T23:59:59.999Z',
+        creatorNicheId: 'n1',
       };
 
       const mockFile = {
@@ -145,6 +157,8 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
+        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        creatorNicheId: 'n1',
       });
     });
   });
@@ -215,6 +229,8 @@ describe('CampaignsService', () => {
         goal: 'Amplify Content',
         totalBudget: 3000000,
         creatorCategoryId: 'cc1',
+        creatorNicheId: 'n1',
+        timeline: new Date('2026-07-31T23:59:59.999Z'),
         preferredPlatforms: [{ id: 'p1' }],
         deliverables: ['1x post'],
         contentDirection: ['d1'],
@@ -240,7 +256,8 @@ describe('CampaignsService', () => {
         campaign: completeCampaign,
         payment: {
           campaignId: 'c1',
-          amount: 3675000,
+          amount: 3000000,
+          totalAmount: 3675000,
           paymentStatus: 'unpaid',
         },
       });
@@ -266,7 +283,8 @@ describe('CampaignsService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.createPayment).toHaveBeenCalledWith({
         campaignId: 'c1',
-        amount: 3675000,
+        amount: 3000000,
+        totalAmount: 3675000,
         paymentStatus: 'paid',
         paymentReference: 'tx_ref_123',
       });

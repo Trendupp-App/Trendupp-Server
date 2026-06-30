@@ -8,6 +8,8 @@ import { ContentSubmission } from '../entities/content-submission.entity';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
+import { Fee } from '../entities/fee.entity';
+import { CreateFeeDto } from '../dtos/create-fee.dto';
 
 @Injectable()
 export class CampaignsService {
@@ -17,6 +19,68 @@ export class CampaignsService {
     private readonly urlValidatorService: UrlValidatorService,
   ) {}
 
+  // ─── Billing Calculations ──────────────────────────────────────────────────
+
+  async calculateBreakdown(budget: number): Promise<{
+    campaignBudget: number;
+    trenduppFee: number;
+    vat: number;
+    totalToPay: number;
+    breakdownItems: { name: string; type: string; value: number; amount: number }[];
+  }> {
+    const fees = await this.campaignRepository.findFees();
+    let trenduppFee = 0;
+    let vat = 0;
+    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [];
+
+    for (const fee of fees) {
+      let amount = 0;
+      if (fee.type === 'percentage') {
+        amount = budget * fee.value;
+      } else {
+        amount = fee.value;
+      }
+      breakdownItems.push({
+        name: fee.name,
+        type: fee.type,
+        value: fee.value,
+        amount,
+      });
+
+      const nameLower = fee.name.toLowerCase();
+      if (
+        nameLower.includes('fee') ||
+        nameLower.includes('percentage') ||
+        nameLower.includes('commission')
+      ) {
+        trenduppFee += amount;
+      } else if (nameLower.includes('vat') || nameLower.includes('tax')) {
+        vat += amount;
+      }
+    }
+
+    return {
+      campaignBudget: budget,
+      trenduppFee,
+      vat,
+      totalToPay: budget + trenduppFee + vat,
+      breakdownItems,
+    };
+  }
+
+  async populateBreakdown(campaign: Campaign): Promise<Campaign> {
+    if (campaign) {
+      const breakdown = await this.calculateBreakdown(campaign.totalBudget);
+      campaign.paymentBreakdown = breakdown;
+    }
+    return campaign;
+  }
+
+  async populateBreakdowns(campaigns: Campaign[]): Promise<Campaign[]> {
+    await Promise.all(campaigns.map((c) => this.populateBreakdown(c)));
+    return campaigns;
+  }
+
   async create(
     brandId: string,
     data: {
@@ -25,6 +89,8 @@ export class CampaignsService {
       totalBudget: number;
       creatorCategoryId: string;
       preferredPlatformIds: string[];
+      timeline: string;
+      creatorNicheId: string;
       campaignBrief?: string;
       contentGuidelines?: { dos: string[]; donts: string[] };
     },
@@ -35,10 +101,11 @@ export class CampaignsService {
       coverImage = await this.s3Service.uploadFile(file);
     }
 
-    const { preferredPlatformIds, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const campaign = await this.campaignRepository.create({
       ...campaignData,
+      timeline: timeline ? new Date(timeline) : undefined,
       brandId,
       coverImage,
       status: 'draft',
@@ -51,7 +118,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return populated!;
+    return this.populateBreakdown(populated!);
   }
 
   async updateDraft(
@@ -64,6 +131,8 @@ export class CampaignsService {
       totalBudget?: number;
       creatorCategoryId?: string;
       preferredPlatformIds?: string[];
+      timeline?: string;
+      creatorNicheId?: string;
       deliverables?: string[];
       contentDirection?: string[];
       contentGuidelines?: { dos: string[]; donts: string[] };
@@ -93,11 +162,14 @@ export class CampaignsService {
       coverImage = await this.s3Service.uploadFile(file);
     }
 
-    const { preferredPlatformIds, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
     };
+    if (timeline !== undefined) {
+      updates.timeline = timeline ? new Date(timeline) : null;
+    }
     if (file) {
       updates.coverImage = coverImage;
     }
@@ -109,7 +181,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return populated!;
+    return this.populateBreakdown(populated!);
   }
 
   async submit(
@@ -117,7 +189,7 @@ export class CampaignsService {
     brandId: string,
   ): Promise<{
     campaign: Campaign;
-    payment: { campaignId: string; amount: number; paymentStatus: string };
+    payment: { campaignId: string; amount: number; totalAmount: number; paymentStatus: string };
   }> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
@@ -137,6 +209,8 @@ export class CampaignsService {
     if (!campaign.goal) errors.push('goal is required');
     if (!campaign.totalBudget) errors.push('totalBudget is required');
     if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
+    if (!campaign.timeline) errors.push('timeline is required');
+    if (!campaign.creatorNicheId) errors.push('creatorNiche is required');
     if (!campaign.preferredPlatforms || campaign.preferredPlatforms.length === 0) {
       errors.push('at least one preferred platform is required');
     }
@@ -167,12 +241,15 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    const breakdown = populated!.paymentBreakdown;
+    const breakdown = await this.calculateBreakdown(populated!.totalBudget);
+    populated!.paymentBreakdown = breakdown;
+
     return {
       campaign: populated!,
       payment: {
         campaignId: populated!.id,
-        amount: breakdown.totalToPay,
+        amount: populated!.totalBudget,
+        totalAmount: breakdown.totalToPay,
         paymentStatus: 'unpaid',
       },
     };
@@ -192,11 +269,12 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    const breakdown = campaign.paymentBreakdown;
+    const breakdown = await this.calculateBreakdown(campaign.totalBudget);
 
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
-      amount: breakdown.totalToPay,
+      amount: campaign.totalBudget,
+      totalAmount: breakdown.totalToPay,
       paymentStatus: 'paid',
       paymentReference: paymentReference || `tx_${Math.random().toString(36).substring(2, 11)}`,
     });
@@ -207,14 +285,17 @@ export class CampaignsService {
     });
 
     const updated = await this.campaignRepository.findById(campaign.id);
+    const populated = await this.populateBreakdown(updated!);
+
     return {
-      campaign: updated!,
+      campaign: populated,
       payment,
     };
   }
 
-  findAll(status?: string): Promise<Campaign[]> {
-    return this.campaignRepository.findAll(status);
+  async findAll(status?: string): Promise<Campaign[]> {
+    const campaigns = await this.campaignRepository.findAll(status);
+    return this.populateBreakdowns(campaigns);
   }
 
   async findById(id: string): Promise<Campaign> {
@@ -222,19 +303,22 @@ export class CampaignsService {
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);
     }
-    return campaign;
+    return this.populateBreakdown(campaign);
   }
 
-  findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
-    return this.campaignRepository.findByBrandId(brandId, status);
+  async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
+    const campaigns = await this.campaignRepository.findByBrandId(brandId, status);
+    return this.populateBreakdowns(campaigns);
   }
 
-  findLive(): Promise<Campaign[]> {
-    return this.campaignRepository.findLiveCampaigns();
+  async findLive(): Promise<Campaign[]> {
+    const campaigns = await this.campaignRepository.findLiveCampaigns();
+    return this.populateBreakdowns(campaigns);
   }
 
-  findPast(): Promise<Campaign[]> {
-    return this.campaignRepository.findPastCampaigns();
+  async findPast(): Promise<Campaign[]> {
+    const campaigns = await this.campaignRepository.findPastCampaigns();
+    return this.populateBreakdowns(campaigns);
   }
 
   // ─── Lookup endpoints ─────────────────────────────────────────────────────
@@ -264,7 +348,7 @@ export class CampaignsService {
     }
 
     const updated = await this.campaignRepository.updateStatus(campaignId, 'approved', new Date());
-    return updated!;
+    return this.populateBreakdown(updated!);
   }
 
   async applyToCampaign(
@@ -300,6 +384,9 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findApplicationById(application.id);
+    if (populated && populated.campaign) {
+      await this.populateBreakdown(populated.campaign);
+    }
     return populated!;
   }
 
@@ -341,11 +428,20 @@ export class CampaignsService {
 
     await application.update({ status });
     const updated = await this.campaignRepository.findApplicationById(appId);
+    if (updated && updated.campaign) {
+      await this.populateBreakdown(updated.campaign);
+    }
     return updated!;
   }
 
-  getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
-    return this.campaignRepository.findApplicationsByCreatorId(creatorId);
+  async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
+    const apps = await this.campaignRepository.findApplicationsByCreatorId(creatorId);
+    for (const app of apps) {
+      if (app.campaign) {
+        await this.populateBreakdown(app.campaign);
+      }
+    }
+    return apps;
   }
 
   // ─── Content Submissions Flow ─────────────────────────────────────────────
@@ -531,5 +627,27 @@ export class CampaignsService {
 
     // Refresh and return latest
     return this.campaignRepository.findSubmissionsByCampaignId(campaignId);
+  }
+
+  // ─── Fee Management Actions ────────────────────────────────────────────────
+
+  getFees(): Promise<Fee[]> {
+    return this.campaignRepository.findFees();
+  }
+
+  createFee(dto: CreateFeeDto): Promise<Fee> {
+    return this.campaignRepository.createFee({
+      name: dto.name,
+      type: dto.type,
+      value: dto.value,
+    });
+  }
+
+  async deleteFee(id: string): Promise<boolean> {
+    const deleted = await this.campaignRepository.deleteFee(id);
+    if (!deleted) {
+      throw new NotFoundException(`Fee configuration with ID "${id}" not found`);
+    }
+    return true;
   }
 }
