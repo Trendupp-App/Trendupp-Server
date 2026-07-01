@@ -10,6 +10,7 @@ import {
   IsArray,
   IsObject,
   IsNotEmpty,
+  IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -235,6 +236,34 @@ export class UpdateCampaignDto {
   @IsString()
   @IsOptional()
   successLooksLike?: string;
+
+  @ApiPropertyOptional({
+    description: 'Timeline date for the campaign (ISO string)',
+    example: '2026-07-31T23:59:59.999Z',
+  })
+  @Transform(({ value }: { value: unknown }): string | undefined => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return undefined;
+  })
+  @IsDateString()
+  @IsOptional()
+  timeline?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the targeted creator niche',
+    example: 'a00d1390-63d3-4a5e-8f07-b10f837fb5ad',
+  })
+  @Transform(({ value }: { value: unknown }): string | undefined => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return undefined;
+  })
+  @IsUUID(4)
+  @IsOptional()
+  creatorNicheId?: string;
 
   @ApiPropertyOptional({
     description: 'Campaign cover image file',

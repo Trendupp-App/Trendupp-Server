@@ -14,6 +14,9 @@ export class Payment extends BaseEntity<Payment> {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare amount: number;
 
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'total_amount' })
+  declare totalAmount?: number;
+
   @Column({
     type: DataType.STRING,
     allowNull: false,

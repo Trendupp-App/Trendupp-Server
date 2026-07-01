@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Campaign } from '../entities/campaign.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
 import { Platform } from '../entities/platform.entity';
@@ -8,6 +13,9 @@ import { ContentSubmission } from '../entities/content-submission.entity';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
+import { Fee } from '../entities/fee.entity';
+import { CreateFeeDto } from '../dtos/create-fee.dto';
+import { PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
 export class CampaignsService {
@@ -17,6 +25,68 @@ export class CampaignsService {
     private readonly urlValidatorService: UrlValidatorService,
   ) {}
 
+  // ─── Billing Calculations ──────────────────────────────────────────────────
+
+  async calculateBreakdown(budget: number): Promise<{
+    campaignBudget: number;
+    trenduppFee: number;
+    vat: number;
+    totalToPay: number;
+    breakdownItems: { name: string; type: string; value: number; amount: number }[];
+  }> {
+    const fees = await this.campaignRepository.findFees();
+    let trenduppFee = 0;
+    let vat = 0;
+    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [];
+
+    for (const fee of fees) {
+      let amount = 0;
+      if (fee.type === 'percentage') {
+        amount = budget * fee.value;
+      } else {
+        amount = fee.value;
+      }
+      breakdownItems.push({
+        name: fee.name,
+        type: fee.type,
+        value: fee.value,
+        amount,
+      });
+
+      const nameLower = fee.name.toLowerCase();
+      if (
+        nameLower.includes('fee') ||
+        nameLower.includes('percentage') ||
+        nameLower.includes('commission')
+      ) {
+        trenduppFee += amount;
+      } else if (nameLower.includes('vat') || nameLower.includes('tax')) {
+        vat += amount;
+      }
+    }
+
+    return {
+      campaignBudget: budget,
+      trenduppFee,
+      vat,
+      totalToPay: budget + trenduppFee + vat,
+      breakdownItems,
+    };
+  }
+
+  async populateBreakdown(campaign: Campaign): Promise<Campaign> {
+    if (campaign) {
+      const breakdown = await this.calculateBreakdown(campaign.totalBudget);
+      campaign.paymentBreakdown = breakdown;
+    }
+    return campaign;
+  }
+
+  async populateBreakdowns(campaigns: Campaign[]): Promise<Campaign[]> {
+    await Promise.all(campaigns.map((c) => this.populateBreakdown(c)));
+    return campaigns;
+  }
+
   async create(
     brandId: string,
     data: {
@@ -25,6 +95,8 @@ export class CampaignsService {
       totalBudget: number;
       creatorCategoryId: string;
       preferredPlatformIds: string[];
+      timeline: string;
+      creatorNicheId: string;
       campaignBrief?: string;
       contentGuidelines?: { dos: string[]; donts: string[] };
     },
@@ -35,10 +107,11 @@ export class CampaignsService {
       coverImage = await this.s3Service.uploadFile(file);
     }
 
-    const { preferredPlatformIds, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const campaign = await this.campaignRepository.create({
       ...campaignData,
+      timeline: timeline ? new Date(timeline) : undefined,
       brandId,
       coverImage,
       status: 'draft',
@@ -51,7 +124,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return populated!;
+    return this.populateBreakdown(populated!);
   }
 
   async updateDraft(
@@ -64,6 +137,8 @@ export class CampaignsService {
       totalBudget?: number;
       creatorCategoryId?: string;
       preferredPlatformIds?: string[];
+      timeline?: string;
+      creatorNicheId?: string;
       deliverables?: string[];
       contentDirection?: string[];
       contentGuidelines?: { dos: string[]; donts: string[] };
@@ -93,11 +168,14 @@ export class CampaignsService {
       coverImage = await this.s3Service.uploadFile(file);
     }
 
-    const { preferredPlatformIds, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
     };
+    if (timeline !== undefined) {
+      updates.timeline = timeline ? new Date(timeline) : null;
+    }
     if (file) {
       updates.coverImage = coverImage;
     }
@@ -109,7 +187,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return populated!;
+    return this.populateBreakdown(populated!);
   }
 
   async submit(
@@ -117,7 +195,7 @@ export class CampaignsService {
     brandId: string,
   ): Promise<{
     campaign: Campaign;
-    payment: { campaignId: string; amount: number; paymentStatus: string };
+    payment: { campaignId: string; amount: number; totalAmount: number; paymentStatus: string };
   }> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
@@ -137,6 +215,8 @@ export class CampaignsService {
     if (!campaign.goal) errors.push('goal is required');
     if (!campaign.totalBudget) errors.push('totalBudget is required');
     if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
+    if (!campaign.timeline) errors.push('timeline is required');
+    if (!campaign.creatorNicheId) errors.push('creatorNiche is required');
     if (!campaign.preferredPlatforms || campaign.preferredPlatforms.length === 0) {
       errors.push('at least one preferred platform is required');
     }
@@ -167,12 +247,15 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    const breakdown = populated!.paymentBreakdown;
+    const breakdown = await this.calculateBreakdown(populated!.totalBudget);
+    populated!.paymentBreakdown = breakdown;
+
     return {
       campaign: populated!,
       payment: {
         campaignId: populated!.id,
-        amount: breakdown.totalToPay,
+        amount: populated!.totalBudget,
+        totalAmount: breakdown.totalToPay,
         paymentStatus: 'unpaid',
       },
     };
@@ -192,11 +275,12 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    const breakdown = campaign.paymentBreakdown;
+    const breakdown = await this.calculateBreakdown(campaign.totalBudget);
 
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
-      amount: breakdown.totalToPay,
+      amount: campaign.totalBudget,
+      totalAmount: breakdown.totalToPay,
       paymentStatus: 'paid',
       paymentReference: paymentReference || `tx_${Math.random().toString(36).substring(2, 11)}`,
     });
@@ -207,14 +291,23 @@ export class CampaignsService {
     });
 
     const updated = await this.campaignRepository.findById(campaign.id);
+    const populated = await this.populateBreakdown(updated!);
+
     return {
-      campaign: updated!,
+      campaign: populated,
       payment,
     };
   }
 
-  findAll(status?: string): Promise<Campaign[]> {
-    return this.campaignRepository.findAll(status);
+  async findAll(
+    status?: string,
+    pagination?: { page?: number; limit?: number },
+  ): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findAll(status, page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
   async findById(id: string): Promise<Campaign> {
@@ -222,19 +315,34 @@ export class CampaignsService {
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);
     }
-    return campaign;
+    return this.populateBreakdown(campaign);
   }
 
-  findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
-    return this.campaignRepository.findByBrandId(brandId, status);
+  async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
+    const campaigns = await this.campaignRepository.findByBrandId(brandId, status);
+    return this.populateBreakdowns(campaigns);
   }
 
-  findLive(): Promise<Campaign[]> {
-    return this.campaignRepository.findLiveCampaigns();
+  async findLive(pagination?: {
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findLiveCampaigns(page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
-  findPast(): Promise<Campaign[]> {
-    return this.campaignRepository.findPastCampaigns();
+  async findPast(pagination?: {
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findPastCampaigns(page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
   // ─── Lookup endpoints ─────────────────────────────────────────────────────
@@ -264,7 +372,7 @@ export class CampaignsService {
     }
 
     const updated = await this.campaignRepository.updateStatus(campaignId, 'approved', new Date());
-    return updated!;
+    return this.populateBreakdown(updated!);
   }
 
   async applyToCampaign(
@@ -300,6 +408,9 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findApplicationById(application.id);
+    if (populated && populated.campaign) {
+      await this.populateBreakdown(populated.campaign);
+    }
     return populated!;
   }
 
@@ -341,11 +452,59 @@ export class CampaignsService {
 
     await application.update({ status });
     const updated = await this.campaignRepository.findApplicationById(appId);
+    if (updated && updated.campaign) {
+      await this.populateBreakdown(updated.campaign);
+    }
     return updated!;
   }
 
-  getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
-    return this.campaignRepository.findApplicationsByCreatorId(creatorId);
+  async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
+    const apps = await this.campaignRepository.findApplicationsByCreatorId(creatorId);
+    for (const app of apps) {
+      if (app.campaign) {
+        await this.populateBreakdown(app.campaign);
+      }
+    }
+    return apps;
+  }
+
+  async getApplicationById(
+    appId: string,
+    userId: string,
+    role: string,
+  ): Promise<CampaignApplication> {
+    const application = await this.campaignRepository.findApplicationById(appId);
+    if (!application) {
+      throw new NotFoundException(`Application with ID "${appId}" not found`);
+    }
+
+    const isAdmin = ['admin', 'finance_admin', 'superadmin'].includes(role);
+    if (isAdmin) {
+      if (application.campaign) {
+        await this.populateBreakdown(application.campaign);
+      }
+      return application;
+    }
+
+    if (role === 'creator') {
+      if (application.creatorId !== userId) {
+        throw new ForbiddenException(`You do not own this application`);
+      }
+      if (application.campaign) {
+        await this.populateBreakdown(application.campaign);
+      }
+      return application;
+    }
+
+    if (role === 'brand') {
+      if (application.campaign?.brandId !== userId) {
+        throw new ForbiddenException(`You do not own the campaign for this application`);
+      }
+      await this.populateBreakdown(application.campaign);
+      return application;
+    }
+
+    throw new ForbiddenException(`Unauthorized access`);
   }
 
   // ─── Content Submissions Flow ─────────────────────────────────────────────
@@ -372,7 +531,7 @@ export class CampaignsService {
     if (previousSub) {
       if (previousSub.status !== 'request_revision') {
         throw new ForbiddenException(
-          `You cannot submit a new draft. Revision has already been sent or approved.`,
+          `You cannot submit a new draft. Wait for brand to request revision or approve the current.`,
         );
       }
       // Re-submission / Revision
@@ -429,7 +588,7 @@ export class CampaignsService {
 
     if (decision === 'request_revision' && submission.status === 'revision-sent') {
       throw new ForbiddenException(
-        `Revision has already been requested once. You must approve this revised draft.`,
+        `Revision has already been requested once. You must approve this revised draft or file a dispute.`,
       );
     }
 
@@ -449,7 +608,7 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     creatorId: string,
-    liveLink: string,
+    liveLink: Record<string, string>,
   ): Promise<ContentSubmission> {
     const submission = await this.campaignRepository.findSubmissionById(submissionId);
     if (!submission || submission.campaignId !== campaignId) {
@@ -466,13 +625,44 @@ export class CampaignsService {
       throw new ForbiddenException(`You can only submit proof of posting for approved drafts`);
     }
 
-    // Run Tier 1 url check
-    const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(liveLink);
+    if (typeof liveLink !== 'object' || liveLink === null || Object.keys(liveLink).length === 0) {
+      throw new BadRequestException(
+        'liveLink must be a non-empty object of platform-to-URL mappings',
+      );
+    }
+
+    // Run Tier 1 url check on each URL inside the liveLink object
+    const processedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> = {};
+    let overallIsLive = true;
+    let checkedAt = new Date();
+
+    for (const [platform, url] of Object.entries(liveLink)) {
+      if (typeof url !== 'string') {
+        throw new BadRequestException(`URL for platform "${platform}" must be a string`);
+      }
+      try {
+        new URL(url);
+      } catch {
+        throw new BadRequestException(`URL for platform "${platform}" is invalid: "${url}"`);
+      }
+
+      const { isLive, checkedAt: checkTime } = await this.urlValidatorService.validateUrl(url);
+      if (!isLive) {
+        overallIsLive = false;
+      }
+      checkedAt = checkTime;
+
+      processedLinks[platform] = {
+        url,
+        isLive,
+        checkedAt: checkTime,
+      };
+    }
 
     // Update submission
     await submission.update({
-      liveLink,
-      urlIsLive: isLive,
+      liveLink: processedLinks as unknown as Record<string, string>,
+      urlIsLive: overallIsLive,
       urlCheckedAt: checkedAt,
       status: 'done',
     });
@@ -480,7 +670,7 @@ export class CampaignsService {
     // Update campaign level convenience status
     const campaign = await this.campaignRepository.findById(campaignId);
     if (campaign) {
-      await campaign.update({ urlIsLive: isLive });
+      await campaign.update({ urlIsLive: overallIsLive });
     }
 
     // Update application status to approved
@@ -510,12 +700,62 @@ export class CampaignsService {
     if (liveSubs.length > 0) {
       const results = await Promise.allSettled(
         liveSubs.map(async (sub) => {
-          const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(sub.liveLink!);
+          let liveLinkObj: Record<string, unknown> | null = null;
+          if (typeof sub.liveLink === 'string') {
+            try {
+              liveLinkObj = JSON.parse(sub.liveLink) as Record<string, unknown>;
+            } catch {
+              liveLinkObj = { link: sub.liveLink };
+            }
+          } else if (sub.liveLink && typeof sub.liveLink === 'object') {
+            liveLinkObj = sub.liveLink;
+          }
+
+          let overallIsLive = true;
+          let latestCheckedAt = new Date();
+          const updatedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> =
+            {};
+
+          if (liveLinkObj && typeof liveLinkObj === 'object') {
+            const entries = Object.entries(liveLinkObj);
+            if (entries.length > 0) {
+              for (const [platform, linkData] of entries) {
+                let url = '';
+                if (typeof linkData === 'string') {
+                  url = linkData;
+                } else if (linkData && typeof linkData === 'object') {
+                  const dataObj = linkData as Record<string, unknown>;
+                  if (typeof dataObj.url === 'string') {
+                    url = dataObj.url;
+                  }
+                }
+
+                if (url) {
+                  const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(url);
+                  if (!isLive) {
+                    overallIsLive = false;
+                  }
+                  latestCheckedAt = checkedAt;
+                  updatedLinks[platform] = {
+                    url,
+                    isLive,
+                    checkedAt,
+                  };
+                }
+              }
+            } else {
+              overallIsLive = false;
+            }
+          } else {
+            overallIsLive = false;
+          }
+
           await sub.update({
-            urlIsLive: isLive,
-            urlCheckedAt: checkedAt,
+            liveLink: updatedLinks as unknown as Record<string, string>,
+            urlIsLive: overallIsLive,
+            urlCheckedAt: latestCheckedAt,
           });
-          return { id: sub.id, isLive };
+          return { id: sub.id, isLive: overallIsLive };
         }),
       );
 
@@ -531,5 +771,27 @@ export class CampaignsService {
 
     // Refresh and return latest
     return this.campaignRepository.findSubmissionsByCampaignId(campaignId);
+  }
+
+  // ─── Fee Management Actions ────────────────────────────────────────────────
+
+  getFees(): Promise<Fee[]> {
+    return this.campaignRepository.findFees();
+  }
+
+  createFee(dto: CreateFeeDto): Promise<Fee> {
+    return this.campaignRepository.createFee({
+      name: dto.name,
+      type: dto.type,
+      value: dto.value,
+    });
+  }
+
+  async deleteFee(id: string): Promise<boolean> {
+    const deleted = await this.campaignRepository.deleteFee(id);
+    if (!deleted) {
+      throw new NotFoundException(`Fee configuration with ID "${id}" not found`);
+    }
+    return true;
   }
 }

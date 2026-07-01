@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -21,6 +22,8 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiConsumes,
+  ApiExtraModels,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 import { CampaignsService } from '../services/campaigns.service';
@@ -31,6 +34,9 @@ import { ReviewApplicationDto } from '../dtos/review-application.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
+import { CreateFeeDto } from '../dtos/create-fee.dto';
+import { PaginationDto } from '../../../shared/dtos/pagination.dto';
+import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
@@ -78,6 +84,8 @@ export class CampaignsController {
         totalBudget: dto.totalBudget,
         creatorCategoryId: dto.creatorCategoryId,
         preferredPlatformIds: dto.preferredPlatformIds,
+        timeline: dto.timeline,
+        creatorNicheId: dto.creatorNicheId,
         campaignBrief: dto.campaignBrief,
         contentGuidelines,
       },
@@ -201,15 +209,37 @@ export class CampaignsController {
     enum: ['draft', 'live', 'active', 'completed'],
     description: 'Filter campaigns by status',
   })
-  @ApiResponse({ status: 200, description: 'List of campaigns retrieved' })
-  async findAll(@Query('status') status?: string) {
+  @ApiExtraModels(Campaign)
+  @ApiResponse({
+    status: 200,
+    description: 'List of campaigns retrieved with pagination metadata',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: getSchemaPath(Campaign) },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            pages: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  async findAll(@Query('status') status?: string, @Query() paginationDto?: PaginationDto) {
     if (status === 'live') {
-      return this.campaignsService.findLive();
+      return this.campaignsService.findLive(paginationDto);
     }
     if (status === 'past') {
-      return this.campaignsService.findPast();
+      return this.campaignsService.findPast(paginationDto);
     }
-    return this.campaignsService.findAll(status);
+    return this.campaignsService.findAll(status, paginationDto);
   }
 
   @Get('creator-categories')
@@ -249,12 +279,32 @@ export class CampaignsController {
   @Roles('creator')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get campaign applications submitted by the creator' })
+  @ApiOperation({
+    summary: 'Get campaign applications submitted by the creator',
+  })
   @ApiResponse({ status: 200, description: 'Creator applications retrieved' })
   async getMyApplications(@CurrentUser() user: User) {
     const applications = await this.campaignsService.getMyApplications(user.id);
     return {
       applications,
+    };
+  }
+
+  @Get('applications/:appId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand', 'creator', 'admin', 'finance_admin', 'superadmin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Get a single campaign application by ID (creator applicant, brand owner, or admin only)',
+  })
+  @ApiResponse({ status: 200, description: 'Application retrieved successfully' })
+  async getApplicationById(@Param('appId') appId: string, @CurrentUser() user: User) {
+    const userRole = user.role?.name || 'creator';
+    const application = await this.campaignsService.getApplicationById(appId, user.id, userRole);
+    return {
+      application,
     };
   }
 
@@ -291,7 +341,9 @@ export class CampaignsController {
   @Roles('brand')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get applications submitted for a campaign (brand owner only)' })
+  @ApiOperation({
+    summary: 'Get applications submitted for a campaign (brand owner only)',
+  })
   @ApiResponse({ status: 200, description: 'Applications list retrieved' })
   async getApplications(@Param('id') campaignId: string, @CurrentUser() user: User) {
     const applications = await this.campaignsService.getCampaignApplications(campaignId, user.id);
@@ -416,6 +468,48 @@ export class CampaignsController {
     const submissions = await this.campaignsService.getSubmittedContent(campaignId, user.id);
     return {
       submissions,
+    };
+  }
+
+  // ─── Admin Fees Management Endpoints ─────────────────────────────────────
+
+  @Get('fees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active fees/charges' })
+  @ApiResponse({ status: 200, description: 'List of fees retrieved' })
+  async getFees() {
+    const fees = await this.campaignsService.getFees();
+    return { fees };
+  }
+
+  @Post('fees')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
+  @ApiResponse({ status: 201, description: 'Fee created successfully' })
+  async createFee(@Body() dto: CreateFeeDto) {
+    const fee = await this.campaignsService.createFee(dto);
+    return {
+      message: 'Fee configuration created successfully.',
+      fee,
+    };
+  }
+
+  @Delete('fees/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
+  @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Fee configuration not found' })
+  async deleteFee(@Param('id') id: string) {
+    await this.campaignsService.deleteFee(id);
+    return {
+      message: 'Fee configuration deleted permanently.',
     };
   }
 }

@@ -8,6 +8,7 @@ import {
   Min,
   IsUUID,
   IsArray,
+  IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -113,6 +114,22 @@ export class CreateCampaignDto {
   })
   @IsOptional()
   contentGuidelines?: { dos: string[]; donts: string[] };
+
+  @ApiProperty({
+    description: 'Timeline date for the campaign (ISO string)',
+    example: '2026-07-31T23:59:59.999Z',
+  })
+  @IsDateString()
+  @IsNotEmpty()
+  timeline: string;
+
+  @ApiProperty({
+    description: 'ID of the targeted creator niche',
+    example: 'a00d1390-63d3-4a5e-8f07-b10f837fb5ad',
+  })
+  @IsUUID(4)
+  @IsNotEmpty()
+  creatorNicheId: string;
 
   @ApiPropertyOptional({
     description: 'Campaign cover image file',
