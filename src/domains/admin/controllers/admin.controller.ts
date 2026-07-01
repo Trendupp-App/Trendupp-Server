@@ -28,7 +28,7 @@ export class AdminController {
   async approveCampaign(@Param('id') id: string) {
     const campaign = await this.campaignsService.approve(id);
     return {
-      message: 'Campaign approved successfully. It is now live.',
+      message: 'Campaign approved successfully.',
       campaign,
     };
   }

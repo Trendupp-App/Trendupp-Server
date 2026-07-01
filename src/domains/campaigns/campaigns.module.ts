@@ -9,11 +9,26 @@ import { CampaignsService } from './services/campaigns.service';
 import { CampaignsController } from './controllers/campaigns.controller';
 import { UsersModule } from '../users/users.module';
 import { S3Service } from '../../integration/s3/s3.service';
+import { Payment } from './entities/payment.entity';
+import { CampaignApplication } from './entities/campaign-application.entity';
+import { ContentSubmission } from './entities/content-submission.entity';
+import { Fee } from './entities/fee.entity';
+import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
 
 @Module({
   imports: [
-    SequelizeModule.forFeature([Campaign, CreatorCategory, Platform, CampaignPlatform]),
+    SequelizeModule.forFeature([
+      Campaign,
+      CreatorCategory,
+      Platform,
+      CampaignPlatform,
+      Payment,
+      CampaignApplication,
+      ContentSubmission,
+      Fee,
+    ]),
     UsersModule,
+    UrlValidatorModule,
   ],
   providers: [CampaignRepository, CampaignsService, S3Service],
   controllers: [CampaignsController],

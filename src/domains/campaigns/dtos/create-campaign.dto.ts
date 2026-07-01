@@ -6,9 +6,9 @@ import {
   IsOptional,
   IsIn,
   Min,
-  Max,
   IsUUID,
   IsArray,
+  IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -38,14 +38,6 @@ export class CreateCampaignDto {
   @IsInt()
   @Min(1)
   totalBudget: number;
-
-  @ApiProperty({
-    description: 'Payment estimate range per creator as a string (e.g. "80,000 - 150,000")',
-    example: '80,000 - 150,000',
-  })
-  @IsString()
-  @IsNotEmpty()
-  paymentPerCreator: string;
 
   @ApiProperty({
     description: 'ID of the creator category targeted',
@@ -91,49 +83,53 @@ export class CreateCampaignDto {
   @IsUUID(4, { each: true })
   preferredPlatformIds: string[];
 
+  @ApiPropertyOptional({
+    description: 'Campaign brief detailing goals and directions',
+    example: 'A brief description of our campaign goals.',
+  })
+  @Transform(({ value }: { value: unknown }): string | undefined => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return undefined;
+  })
+  @IsString()
+  @IsOptional()
+  campaignBrief?: string;
+
+  @ApiPropertyOptional({
+    description: 'Content guidelines containing dos and donts lists',
+    example: { dos: ['use natural lighting'], donts: ['no logo displays'] },
+  })
+  @Transform(({ value }: { value: unknown }): unknown => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+    return value;
+  })
+  @IsOptional()
+  contentGuidelines?: { dos: string[]; donts: string[] };
+
   @ApiProperty({
-    description: 'Type of content required',
-    example: 'Video',
-    enum: ['Video', 'Carousel', 'Reel', 'Tweet', 'Image'],
+    description: 'Timeline date for the campaign (ISO string)',
+    example: '2026-07-31T23:59:59.999Z',
   })
-  @IsString()
-  @IsIn(['Video', 'Carousel', 'Reel', 'Tweet', 'Image'])
-  contentType: string;
+  @IsDateString()
+  @IsNotEmpty()
+  timeline: string;
 
   @ApiProperty({
-    description: 'Campaign timeline in days (10-15 days recommended by PRD)',
-    example: 15,
+    description: 'ID of the targeted creator niche',
+    example: 'a00d1390-63d3-4a5e-8f07-b10f837fb5ad',
   })
-  @Transform(({ value }) => Number(value))
-  @IsInt()
-  @Min(1)
-  @Max(90)
-  duration: number;
-
-  @ApiPropertyOptional({
-    description: 'Content duration constraint per creator (e.g. "30secs - 1min")',
-    example: '30secs - 1min',
-  })
-  @IsString()
-  @IsOptional()
-  contentDuration?: string;
-
-  @ApiPropertyOptional({
-    description: 'Content guidelines written by the brand (e.g. "Creator must not wear red")',
-    example: 'Creator must not show nudity in content.',
-  })
-  @IsString()
-  @IsOptional()
-  contentGuidelines?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Campaign rules written by Trendupp (e.g. "Brands cannot use content after 6 months")',
-    example: 'Brands cannot use creator content after 6 months.',
-  })
-  @IsString()
-  @IsOptional()
-  campaignRules?: string;
+  @IsUUID(4)
+  @IsNotEmpty()
+  creatorNicheId: string;
 
   @ApiPropertyOptional({
     description: 'Campaign cover image file',

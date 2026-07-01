@@ -151,13 +151,6 @@ export class AuthService {
       finalUsername = signupDto.username;
     }
 
-    if (finalUsername) {
-      const usernameExists = await this.usersService.findByUsername(finalUsername);
-      if (usernameExists && usernameExists.email !== email) {
-        throw new ConflictException('Username is already taken');
-      }
-    }
-
     if (existingUser) {
       // If email is not verified, update details, generate a new OTP, and resend
       await existingUser.update({

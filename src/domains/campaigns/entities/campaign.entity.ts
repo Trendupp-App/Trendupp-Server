@@ -5,12 +5,17 @@ import {
   ForeignKey,
   BelongsTo,
   BelongsToMany,
+  HasMany,
 } from 'sequelize-typescript';
 import { BaseEntity } from '../../../core/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { CreatorCategory } from './creator-category.entity';
 import { Platform } from './platform.entity';
 import { CampaignPlatform } from './campaign-platform.entity';
+import { Payment } from './payment.entity';
+import { CampaignApplication } from './campaign-application.entity';
+import { ContentSubmission } from './content-submission.entity';
+import { Niche } from '../../users/entities/niche.entity';
 
 @Table({ tableName: 'campaigns' })
 export class Campaign extends BaseEntity<Campaign> {
@@ -30,47 +35,74 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.INTEGER, allowNull: false, field: 'total_budget' })
   declare totalBudget: number;
 
-  @Column({ type: DataType.STRING, allowNull: false, field: 'payment_per_creator' })
-  declare paymentPerCreator: string;
-
   @ForeignKey(() => CreatorCategory)
-  @Column({ type: DataType.UUID, allowNull: false, field: 'creator_category_id' })
-  declare creatorCategoryId: string;
+  @Column({ type: DataType.UUID, allowNull: true, field: 'creator_category_id' })
+  declare creatorCategoryId?: string;
 
   @BelongsTo(() => CreatorCategory)
   declare creatorCategory?: CreatorCategory;
 
+  @ForeignKey(() => Niche)
+  @Column({ type: DataType.UUID, allowNull: true, field: 'creator_niche_id' })
+  declare creatorNicheId?: string;
+
+  @BelongsTo(() => Niche)
+  declare creatorNiche?: Niche;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare timeline?: Date;
+
   @BelongsToMany(() => Platform, () => CampaignPlatform)
   declare preferredPlatforms?: Platform[];
 
-  @Column({ type: DataType.STRING, allowNull: false, field: 'content_type' })
-  declare contentType: string;
+  @Column({ type: DataType.JSON, allowNull: true, field: 'content_guidelines' })
+  declare contentGuidelines?: { dos: string[]; donts: string[] };
 
-  /** Campaign timeline in days (e.g. 10–15 days) */
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare duration: number;
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare deliverables?: string[];
 
-  /** Per-creator content duration constraint, e.g. "30secs - 1min" */
-  @Column({ type: DataType.STRING, allowNull: true, field: 'content_duration' })
-  declare contentDuration?: string;
+  @Column({ type: DataType.JSON, allowNull: true, field: 'content_direction' })
+  declare contentDirection?: string[];
 
-  @Column({ type: DataType.TEXT, allowNull: true, field: 'content_guidelines' })
-  declare contentGuidelines?: string;
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'usage_rights' })
+  declare usageRights?: string;
 
-  @Column({ type: DataType.TEXT, allowNull: true, field: 'campaign_rules' })
-  declare campaignRules?: string;
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'success_looks_like' })
+  declare successLooksLike?: string;
+
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'campaign_brief' })
+  declare campaignBrief?: string;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'accepted_terms',
+  })
+  declare acceptedTerms: boolean;
+
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1, field: 'current_step' })
+  declare currentStep: number;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'unpaid',
+    field: 'payment_status',
+  })
+  declare paymentStatus: string;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
 
   /**
    * Campaign lifecycle status.
-   * Possible values: 'pending_approval' | 'live' | 'completed' | 'cancelled'
+   * Possible values: 'draft' | 'pending_approval' | 'live' | 'active' | 'completed' | 'cancelled'
    */
   @Column({
     type: DataType.STRING,
     allowNull: false,
-    defaultValue: 'pending_approval',
+    defaultValue: 'draft',
   })
   declare status: string;
 
@@ -78,27 +110,93 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.DATE, allowNull: true, field: 'approved_at' })
   declare approvedAt?: Date;
 
+  @Column({ type: DataType.BOOLEAN, allowNull: true, field: 'url_is_live' })
+  declare urlIsLive?: boolean;
+
   /**
-   * Determines whether this campaign is currently live based on
-   * its approval date and duration window.
+   * Determines whether this campaign is currently live.
    */
   get isLive(): boolean {
-    if (this.status !== 'live' || !this.approvedAt) return false;
-    const expiresAt = new Date(this.approvedAt);
-    expiresAt.setDate(expiresAt.getDate() + this.duration);
-    return new Date() <= expiresAt;
+    return this.status === 'live';
   }
 
   /**
    * Determines whether this campaign is past (expired or completed).
    */
   get isPast(): boolean {
-    if (this.status === 'completed' || this.status === 'cancelled') return true;
-    if (this.status === 'live' && this.approvedAt) {
-      const expiresAt = new Date(this.approvedAt);
-      expiresAt.setDate(expiresAt.getDate() + this.duration);
-      return new Date() > expiresAt;
-    }
-    return false;
+    return this.status === 'completed' || this.status === 'cancelled';
   }
+
+  /**
+   * Returns string e.g. "3/5 sections" based on currentStep progress
+   */
+  get sectionsProgress(): string {
+    if (this.status !== 'draft') {
+      return '5/5 sections';
+    }
+    return `${this.currentStep - 1}/5 sections`;
+  }
+
+  /**
+   * Returns progress percentage (e.g. 20% for step 1, 40% for step 2, etc.)
+   */
+  get progressPercentage(): number {
+    if (this.status !== 'draft') {
+      return 100;
+    }
+    switch (this.currentStep) {
+      case 1:
+        return 20;
+      case 2:
+        return 40;
+      case 3:
+        return 60;
+      case 4:
+        return 80;
+      case 5:
+        return 90;
+      default:
+        return 0;
+    }
+  }
+
+  /**
+   * Returns dynamic billing breakdown based on the budget
+   */
+  @Column(DataType.VIRTUAL)
+  get paymentBreakdown(): {
+    campaignBudget: number;
+    trenduppFee: number;
+    vat: number;
+    totalToPay: number;
+    breakdownItems?: { name: string; type: string; value: number; amount: number }[];
+  } {
+    return (
+      this.getDataValue('paymentBreakdown') || {
+        campaignBudget: this.totalBudget || 0,
+        trenduppFee: (this.totalBudget || 0) * 0.15,
+        vat: (this.totalBudget || 0) * 0.075,
+        totalToPay: (this.totalBudget || 0) * 1.225,
+      }
+    );
+  }
+
+  set paymentBreakdown(value: {
+    campaignBudget: number;
+    trenduppFee: number;
+    vat: number;
+    totalToPay: number;
+    breakdownItems?: { name: string; type: string; value: number; amount: number }[];
+  }) {
+    this.setDataValue('paymentBreakdown', value);
+  }
+
+  @HasMany(() => Payment)
+  declare payments?: Payment[];
+
+  @HasMany(() => CampaignApplication)
+  declare applications?: CampaignApplication[];
+
+  @HasMany(() => ContentSubmission)
+  declare submissions?: ContentSubmission[];
 }
