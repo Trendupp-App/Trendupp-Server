@@ -1,13 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsUrl, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject } from 'class-validator';
 
 export class SubmitLiveDto {
   @ApiProperty({
-    description: 'The actual published post link on the selected platform',
-    example: 'https://instagram.com/p/amara-summer-style-reel',
+    description: 'Map of platform names to live link URLs',
+    example: { instagram: 'https://instagram.com/p/amara-summer-style-reel' },
   })
-  @IsUrl({}, { message: 'liveLink must be a valid URL' })
-  @IsString()
+  @IsObject()
   @IsNotEmpty()
-  liveLink: string;
+  liveLink: Record<string, string>;
 }

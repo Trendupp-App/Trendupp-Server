@@ -50,6 +50,8 @@ describe('CampaignsService', () => {
       findApplication: jest.fn(),
       findApplicationsByCampaignId: jest.fn(),
       findApplicationsByCreatorId: jest.fn(),
+      findApplicationsByBrandId: jest.fn(),
+      findAllApplications: jest.fn(),
       createSubmission: jest.fn(),
       findSubmissionById: jest.fn(),
       findLatestSubmissionByApplicationId: jest.fn(),
@@ -299,14 +301,17 @@ describe('CampaignsService', () => {
 
   describe('findAll', () => {
     it('should delegate to campaignRepository.findAll', async () => {
-      const mockCampaigns = [mockCampaign];
-      campaignRepoMock.findAll.mockResolvedValue(mockCampaigns);
+      const mockResult = {
+        data: [mockCampaign],
+        pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+      };
+      campaignRepoMock.findAll.mockResolvedValue(mockResult);
 
       const result = await service.findAll();
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findAll).toHaveBeenCalled();
-      expect(result).toEqual(mockCampaigns);
+      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(undefined, 1, 10);
+      expect(result).toEqual(mockResult);
     });
   });
 
@@ -340,25 +345,33 @@ describe('CampaignsService', () => {
 
   describe('findLive', () => {
     it('should delegate to campaignRepository.findLiveCampaigns', async () => {
-      campaignRepoMock.findLiveCampaigns.mockResolvedValue([]);
+      const mockResult = {
+        data: [],
+        pagination: { total: 0, page: 1, limit: 10, pages: 0 },
+      };
+      campaignRepoMock.findLiveCampaigns.mockResolvedValue(mockResult);
 
       const result = await service.findLive();
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findLiveCampaigns).toHaveBeenCalled();
-      expect(result).toEqual([]);
+      expect(campaignRepoMock.findLiveCampaigns).toHaveBeenCalledWith(1, 10);
+      expect(result).toEqual(mockResult);
     });
   });
 
   describe('findPast', () => {
     it('should delegate to campaignRepository.findPastCampaigns', async () => {
-      campaignRepoMock.findPastCampaigns.mockResolvedValue([]);
+      const mockResult = {
+        data: [],
+        pagination: { total: 0, page: 1, limit: 10, pages: 0 },
+      };
+      campaignRepoMock.findPastCampaigns.mockResolvedValue(mockResult);
 
       const result = await service.findPast();
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findPastCampaigns).toHaveBeenCalled();
-      expect(result).toEqual([]);
+      expect(campaignRepoMock.findPastCampaigns).toHaveBeenCalledWith(1, 10);
+      expect(result).toEqual(mockResult);
     });
   });
 
@@ -511,6 +524,54 @@ describe('CampaignsService', () => {
     });
   });
 
+  describe('getApplicationById', () => {
+    const mockApp = {
+      id: 'app1',
+      creatorId: 'creator1',
+      campaign: { brandId: 'brand1' },
+      submissions: [],
+    };
+
+    it('should successfully return the application for creator owner', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      const result = await service.getApplicationById('app1', 'creator1', 'creator');
+      expect(result).toEqual(mockApp);
+    });
+
+    it('should throw ForbiddenException if creator does not own the application', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      await expect(service.getApplicationById('app1', 'creator2', 'creator')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should successfully return the application for campaign brand owner', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      const result = await service.getApplicationById('app1', 'brand1', 'brand');
+      expect(result).toEqual(mockApp);
+    });
+
+    it('should throw ForbiddenException if brand does not own the campaign', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      await expect(service.getApplicationById('app1', 'brand2', 'brand')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should successfully return the application for admin role', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      const result = await service.getApplicationById('app1', 'admin1', 'admin');
+      expect(result).toEqual(mockApp);
+    });
+
+    it('should throw NotFoundException if application not found', async () => {
+      campaignRepoMock.findApplicationById.mockResolvedValue(null);
+      await expect(
+        service.getApplicationById('missing-app-id', 'creator1', 'creator'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ─── Content Submissions Flow Tests ────────────────────────────────────────
 
   describe('submitDraft', () => {
@@ -631,13 +692,21 @@ describe('CampaignsService', () => {
         checkedAt: new Date('2026-06-29'),
       });
 
-      await service.submitLivePost('c1', 'sub1', 'creator1', 'https://instagram.com/p/live');
+      await service.submitLivePost('c1', 'sub1', 'creator1', {
+        instagram: 'https://instagram.com/p/live',
+      });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(urlValidatorMock.validateUrl).toHaveBeenCalledWith('https://instagram.com/p/live');
 
       expect(mockSubmission.update).toHaveBeenCalledWith({
-        liveLink: 'https://instagram.com/p/live',
+        liveLink: {
+          instagram: {
+            url: 'https://instagram.com/p/live',
+            isLive: true,
+            checkedAt: expect.any(Date) as Date,
+          },
+        },
         urlIsLive: true,
         urlCheckedAt: expect.any(Date) as Date,
         status: 'done',

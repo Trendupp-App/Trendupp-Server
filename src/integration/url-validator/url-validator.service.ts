@@ -71,7 +71,7 @@ export class UrlValidatorService {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Range: 'bytes=0-1024', // Request only the first 1KB
+          Range: 'bytes=0-10240', // Request only the first 10KB to optimize performance
         },
         signal: getController.signal,
       }).catch(() => null);
@@ -79,10 +79,54 @@ export class UrlValidatorService {
       clearTimeout(getTimeoutId);
 
       if (getResponse) {
-        // If we get a valid response (not a server error 5xx), we count it as live
-        if (getResponse.status < 500) {
-          return { isLive: true, platform, checkedAt };
+        if (getResponse.status >= 500) {
+          return { isLive: false, platform, checkedAt };
         }
+        if (getResponse.status === 404 || getResponse.status === 410) {
+          return { isLive: false, platform, checkedAt };
+        }
+
+        try {
+          const bodyText = await getResponse.text();
+          const lowerText = bodyText.toLowerCase();
+
+          // Check platform-specific SPA missing content indicators
+          if (platform === 'Instagram') {
+            if (
+              lowerText.includes("sorry, this page isn't available") ||
+              lowerText.includes("page isn't available") ||
+              lowerText.includes('link you followed may be broken')
+            ) {
+              return { isLive: false, platform, checkedAt };
+            }
+          } else if (platform === 'TikTok') {
+            if (
+              lowerText.includes('video currently unavailable') ||
+              lowerText.includes('video unavailable') ||
+              lowerText.includes('video is unavailable')
+            ) {
+              return { isLive: false, platform, checkedAt };
+            }
+          } else if (platform === 'YouTube') {
+            if (
+              lowerText.includes('video unavailable') ||
+              lowerText.includes('this video is unavailable')
+            ) {
+              return { isLive: false, platform, checkedAt };
+            }
+          } else if (platform === 'X') {
+            if (
+              lowerText.includes("page doesn't exist") ||
+              lowerText.includes('page doesn’t exist')
+            ) {
+              return { isLive: false, platform, checkedAt };
+            }
+          }
+        } catch {
+          // Fallback to true if reading body fails but status code is valid (e.g. 200/403)
+        }
+
+        return { isLive: true, platform, checkedAt };
       }
 
       return { isLive: false, platform, checkedAt };

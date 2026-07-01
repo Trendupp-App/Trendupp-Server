@@ -10,6 +10,7 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Fee } from '../entities/fee.entity';
+import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
 export class CampaignRepository {
@@ -61,16 +62,20 @@ export class CampaignRepository {
     });
   }
 
-  findAll(status?: string): Promise<Campaign[]> {
+  findAll(status?: string, page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
     const where: { status?: string } = {};
     if (status) {
       where.status = status;
     }
-    return this.campaignModel.findAll({
-      where,
-      include: this.fullIncludes,
-      order: [['createdAt', 'DESC']],
-    });
+    return paginate(
+      this.campaignModel,
+      {
+        where,
+        include: this.fullIncludes,
+        order: [['createdAt', 'DESC']],
+      },
+      { page, limit },
+    );
   }
 
   /**
@@ -91,27 +96,35 @@ export class CampaignRepository {
   /**
    * Campaigns currently live.
    */
-  findLiveCampaigns(): Promise<Campaign[]> {
-    return this.campaignModel.findAll({
-      where: {
-        status: 'live',
+  findLiveCampaigns(page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
+    return paginate(
+      this.campaignModel,
+      {
+        where: {
+          status: 'live',
+        },
+        include: this.fullIncludes,
+        order: [['approvedAt', 'DESC']],
       },
-      include: this.fullIncludes,
-      order: [['approvedAt', 'DESC']],
-    });
+      { page, limit },
+    );
   }
 
   /**
    * Campaigns that have ended (completed or cancelled).
    */
-  findPastCampaigns(): Promise<Campaign[]> {
-    return this.campaignModel.findAll({
-      where: {
-        status: { [Op.in]: ['completed', 'cancelled'] },
+  findPastCampaigns(page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
+    return paginate(
+      this.campaignModel,
+      {
+        where: {
+          status: { [Op.in]: ['completed', 'cancelled'] },
+        },
+        include: this.fullIncludes,
+        order: [['updatedAt', 'DESC']],
       },
-      include: this.fullIncludes,
-      order: [['createdAt', 'DESC']],
-    });
+      { page, limit },
+    );
   }
 
   async updateStatus(id: string, status: string, approvedAt?: Date): Promise<Campaign | null> {
@@ -198,6 +211,7 @@ export class CampaignRepository {
         { model: Campaign, as: 'campaign' },
         { model: Platform, as: 'primaryPlatform' },
         { model: Platform, as: 'secondaryPlatform' },
+        { model: ContentSubmission, as: 'submissions' },
       ],
     });
   }
@@ -229,6 +243,44 @@ export class CampaignRepository {
       where: { creatorId },
       include: [
         { model: Campaign, as: 'campaign' },
+        { model: Platform, as: 'primaryPlatform' },
+        { model: Platform, as: 'secondaryPlatform' },
+        { model: ContentSubmission, as: 'submissions' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  findApplicationsByBrandId(brandId: string): Promise<CampaignApplication[]> {
+    return this.campaignApplicationModel.findAll({
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          where: { brandId },
+          required: true,
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
+        { model: Platform, as: 'primaryPlatform' },
+        { model: Platform, as: 'secondaryPlatform' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  findAllApplications(): Promise<CampaignApplication[]> {
+    return this.campaignApplicationModel.findAll({
+      include: [
+        { model: Campaign, as: 'campaign' },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+        },
         { model: Platform, as: 'primaryPlatform' },
         { model: Platform, as: 'secondaryPlatform' },
       ],

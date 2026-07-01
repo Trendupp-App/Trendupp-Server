@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Campaign } from '../entities/campaign.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
 import { Platform } from '../entities/platform.entity';
@@ -10,6 +15,7 @@ import { S3Service } from '../../../integration/s3/s3.service';
 import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
 import { Fee } from '../entities/fee.entity';
 import { CreateFeeDto } from '../dtos/create-fee.dto';
+import { PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
 export class CampaignsService {
@@ -293,9 +299,15 @@ export class CampaignsService {
     };
   }
 
-  async findAll(status?: string): Promise<Campaign[]> {
-    const campaigns = await this.campaignRepository.findAll(status);
-    return this.populateBreakdowns(campaigns);
+  async findAll(
+    status?: string,
+    pagination?: { page?: number; limit?: number },
+  ): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findAll(status, page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
   async findById(id: string): Promise<Campaign> {
@@ -311,14 +323,26 @@ export class CampaignsService {
     return this.populateBreakdowns(campaigns);
   }
 
-  async findLive(): Promise<Campaign[]> {
-    const campaigns = await this.campaignRepository.findLiveCampaigns();
-    return this.populateBreakdowns(campaigns);
+  async findLive(pagination?: {
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findLiveCampaigns(page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
-  async findPast(): Promise<Campaign[]> {
-    const campaigns = await this.campaignRepository.findPastCampaigns();
-    return this.populateBreakdowns(campaigns);
+  async findPast(pagination?: {
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<Campaign>> {
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const result = await this.campaignRepository.findPastCampaigns(page, limit);
+    result.data = await this.populateBreakdowns(result.data);
+    return result;
   }
 
   // ─── Lookup endpoints ─────────────────────────────────────────────────────
@@ -444,6 +468,45 @@ export class CampaignsService {
     return apps;
   }
 
+  async getApplicationById(
+    appId: string,
+    userId: string,
+    role: string,
+  ): Promise<CampaignApplication> {
+    const application = await this.campaignRepository.findApplicationById(appId);
+    if (!application) {
+      throw new NotFoundException(`Application with ID "${appId}" not found`);
+    }
+
+    const isAdmin = ['admin', 'finance_admin', 'superadmin'].includes(role);
+    if (isAdmin) {
+      if (application.campaign) {
+        await this.populateBreakdown(application.campaign);
+      }
+      return application;
+    }
+
+    if (role === 'creator') {
+      if (application.creatorId !== userId) {
+        throw new ForbiddenException(`You do not own this application`);
+      }
+      if (application.campaign) {
+        await this.populateBreakdown(application.campaign);
+      }
+      return application;
+    }
+
+    if (role === 'brand') {
+      if (application.campaign?.brandId !== userId) {
+        throw new ForbiddenException(`You do not own the campaign for this application`);
+      }
+      await this.populateBreakdown(application.campaign);
+      return application;
+    }
+
+    throw new ForbiddenException(`Unauthorized access`);
+  }
+
   // ─── Content Submissions Flow ─────────────────────────────────────────────
 
   async submitDraft(
@@ -468,7 +531,7 @@ export class CampaignsService {
     if (previousSub) {
       if (previousSub.status !== 'request_revision') {
         throw new ForbiddenException(
-          `You cannot submit a new draft. Revision has already been sent or approved.`,
+          `You cannot submit a new draft. Wait for brand to request revision or approve the current.`,
         );
       }
       // Re-submission / Revision
@@ -525,7 +588,7 @@ export class CampaignsService {
 
     if (decision === 'request_revision' && submission.status === 'revision-sent') {
       throw new ForbiddenException(
-        `Revision has already been requested once. You must approve this revised draft.`,
+        `Revision has already been requested once. You must approve this revised draft or file a dispute.`,
       );
     }
 
@@ -545,7 +608,7 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     creatorId: string,
-    liveLink: string,
+    liveLink: Record<string, string>,
   ): Promise<ContentSubmission> {
     const submission = await this.campaignRepository.findSubmissionById(submissionId);
     if (!submission || submission.campaignId !== campaignId) {
@@ -562,13 +625,44 @@ export class CampaignsService {
       throw new ForbiddenException(`You can only submit proof of posting for approved drafts`);
     }
 
-    // Run Tier 1 url check
-    const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(liveLink);
+    if (typeof liveLink !== 'object' || liveLink === null || Object.keys(liveLink).length === 0) {
+      throw new BadRequestException(
+        'liveLink must be a non-empty object of platform-to-URL mappings',
+      );
+    }
+
+    // Run Tier 1 url check on each URL inside the liveLink object
+    const processedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> = {};
+    let overallIsLive = true;
+    let checkedAt = new Date();
+
+    for (const [platform, url] of Object.entries(liveLink)) {
+      if (typeof url !== 'string') {
+        throw new BadRequestException(`URL for platform "${platform}" must be a string`);
+      }
+      try {
+        new URL(url);
+      } catch {
+        throw new BadRequestException(`URL for platform "${platform}" is invalid: "${url}"`);
+      }
+
+      const { isLive, checkedAt: checkTime } = await this.urlValidatorService.validateUrl(url);
+      if (!isLive) {
+        overallIsLive = false;
+      }
+      checkedAt = checkTime;
+
+      processedLinks[platform] = {
+        url,
+        isLive,
+        checkedAt: checkTime,
+      };
+    }
 
     // Update submission
     await submission.update({
-      liveLink,
-      urlIsLive: isLive,
+      liveLink: processedLinks as unknown as Record<string, string>,
+      urlIsLive: overallIsLive,
       urlCheckedAt: checkedAt,
       status: 'done',
     });
@@ -576,7 +670,7 @@ export class CampaignsService {
     // Update campaign level convenience status
     const campaign = await this.campaignRepository.findById(campaignId);
     if (campaign) {
-      await campaign.update({ urlIsLive: isLive });
+      await campaign.update({ urlIsLive: overallIsLive });
     }
 
     // Update application status to approved
@@ -606,12 +700,62 @@ export class CampaignsService {
     if (liveSubs.length > 0) {
       const results = await Promise.allSettled(
         liveSubs.map(async (sub) => {
-          const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(sub.liveLink!);
+          let liveLinkObj: Record<string, unknown> | null = null;
+          if (typeof sub.liveLink === 'string') {
+            try {
+              liveLinkObj = JSON.parse(sub.liveLink) as Record<string, unknown>;
+            } catch {
+              liveLinkObj = { link: sub.liveLink };
+            }
+          } else if (sub.liveLink && typeof sub.liveLink === 'object') {
+            liveLinkObj = sub.liveLink;
+          }
+
+          let overallIsLive = true;
+          let latestCheckedAt = new Date();
+          const updatedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> =
+            {};
+
+          if (liveLinkObj && typeof liveLinkObj === 'object') {
+            const entries = Object.entries(liveLinkObj);
+            if (entries.length > 0) {
+              for (const [platform, linkData] of entries) {
+                let url = '';
+                if (typeof linkData === 'string') {
+                  url = linkData;
+                } else if (linkData && typeof linkData === 'object') {
+                  const dataObj = linkData as Record<string, unknown>;
+                  if (typeof dataObj.url === 'string') {
+                    url = dataObj.url;
+                  }
+                }
+
+                if (url) {
+                  const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(url);
+                  if (!isLive) {
+                    overallIsLive = false;
+                  }
+                  latestCheckedAt = checkedAt;
+                  updatedLinks[platform] = {
+                    url,
+                    isLive,
+                    checkedAt,
+                  };
+                }
+              }
+            } else {
+              overallIsLive = false;
+            }
+          } else {
+            overallIsLive = false;
+          }
+
           await sub.update({
-            urlIsLive: isLive,
-            urlCheckedAt: checkedAt,
+            liveLink: updatedLinks as unknown as Record<string, string>,
+            urlIsLive: overallIsLive,
+            urlCheckedAt: latestCheckedAt,
           });
-          return { id: sub.id, isLive };
+          return { id: sub.id, isLive: overallIsLive };
         }),
       );
 

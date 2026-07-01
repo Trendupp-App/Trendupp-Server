@@ -30,8 +30,8 @@ export class ContentSubmission extends BaseEntity<ContentSubmission> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'draft_link' })
   declare draftLink?: string;
 
-  @Column({ type: DataType.STRING, allowNull: true, field: 'live_link' })
-  declare liveLink?: string;
+  @Column({ type: DataType.JSONB, allowNull: true, field: 'live_link' })
+  declare liveLink?: Record<string, string>;
 
   @Column({
     type: DataType.STRING,
