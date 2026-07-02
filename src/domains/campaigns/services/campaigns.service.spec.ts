@@ -27,6 +27,7 @@ describe('CampaignsService', () => {
     approvedAt: null,
     update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
+    setDataValue: jest.fn(),
     paymentBreakdown: {
       campaignBudget: 3000000,
       trenduppFee: 450000,
@@ -52,6 +53,7 @@ describe('CampaignsService', () => {
       findApplicationsByCreatorId: jest.fn(),
       findApplicationsByBrandId: jest.fn(),
       findAllApplications: jest.fn(),
+      countApplications: jest.fn().mockResolvedValue(0),
       createSubmission: jest.fn(),
       findSubmissionById: jest.fn(),
       findLatestSubmissionByApplicationId: jest.fn(),
@@ -316,18 +318,53 @@ describe('CampaignsService', () => {
   });
 
   describe('findById', () => {
-    it('should return a campaign when found', async () => {
-      campaignRepoMock.findById.mockResolvedValue(mockCampaign);
+    it('should return a campaign with applicationsCount when found', async () => {
+      const campaignWithApps = {
+        ...mockCampaign,
+        applications: [],
+        brandId: 'brand1',
+        setDataValue: jest.fn(),
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(campaignWithApps);
+      campaignRepoMock.countApplications = jest.fn().mockResolvedValue(5);
 
       const result = await service.findById('c1');
 
-      expect(result).toEqual(mockCampaign);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.countApplications).toHaveBeenCalledWith('c1');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignWithApps.setDataValue as jest.Mock).toHaveBeenCalledWith('applicationsCount', {
+        total: 5,
+      });
+      expect(result).toEqual(campaignWithApps);
     });
 
     it('should throw NotFoundException when campaign is not found', async () => {
       campaignRepoMock.findById.mockResolvedValue(null);
 
       await expect(service.findById('missing-id')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should filter applications to only own application for creator role', async () => {
+      const creatorApp = { creatorId: 'creator1', id: 'app1' };
+      const otherApp = { creatorId: 'other', id: 'app2' };
+      const campaignWithApps = {
+        ...mockCampaign,
+        brandId: 'brand1',
+        applications: [creatorApp, otherApp],
+        setDataValue: jest.fn(),
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(campaignWithApps);
+      campaignRepoMock.countApplications = jest.fn().mockResolvedValue(2);
+
+      await service.findById('c1', { id: 'creator1', role: 'creator' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignWithApps.setDataValue as jest.Mock).toHaveBeenCalledWith('applications', [
+        creatorApp,
+      ]);
     });
   });
 
@@ -528,7 +565,7 @@ describe('CampaignsService', () => {
     const mockApp = {
       id: 'app1',
       creatorId: 'creator1',
-      campaign: { brandId: 'brand1' },
+      campaign: { brandId: 'brand1', setDataValue: jest.fn() },
       submissions: [],
     };
 

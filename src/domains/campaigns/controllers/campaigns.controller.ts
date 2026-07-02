@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Patch,
-  Delete,
   Body,
   Param,
   UseGuards,
@@ -34,7 +33,6 @@ import { ReviewApplicationDto } from '../dtos/review-application.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
-import { CreateFeeDto } from '../dtos/create-fee.dto';
 import { PaginationDto } from '../../../shared/dtos/pagination.dto';
 import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -310,11 +308,16 @@ export class CampaignsController {
 
   @Get(':id')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a single campaign by ID' })
   @ApiResponse({ status: 200, description: 'Campaign retrieved' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  async findOne(@Param('id') id: string) {
-    return this.campaignsService.findById(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.campaignsService.findById(
+      id,
+      user ? { id: user.id, role: user.role?.name ?? (user.role as unknown as string) } : undefined,
+    );
   }
 
   @Post(':id/applications')
@@ -468,48 +471,6 @@ export class CampaignsController {
     const submissions = await this.campaignsService.getSubmittedContent(campaignId, user.id);
     return {
       submissions,
-    };
-  }
-
-  // ─── Admin Fees Management Endpoints ─────────────────────────────────────
-
-  @Get('fees')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all active fees/charges' })
-  @ApiResponse({ status: 200, description: 'List of fees retrieved' })
-  async getFees() {
-    const fees = await this.campaignsService.getFees();
-    return { fees };
-  }
-
-  @Post('fees')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
-  @ApiResponse({ status: 201, description: 'Fee created successfully' })
-  async createFee(@Body() dto: CreateFeeDto) {
-    const fee = await this.campaignsService.createFee(dto);
-    return {
-      message: 'Fee configuration created successfully.',
-      fee,
-    };
-  }
-
-  @Delete('fees/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
-  @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Fee configuration not found' })
-  async deleteFee(@Param('id') id: string) {
-    await this.campaignsService.deleteFee(id);
-    return {
-      message: 'Fee configuration deleted permanently.',
     };
   }
 }

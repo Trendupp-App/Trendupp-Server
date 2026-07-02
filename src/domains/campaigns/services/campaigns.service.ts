@@ -78,6 +78,10 @@ export class CampaignsService {
     if (campaign) {
       const breakdown = await this.calculateBreakdown(campaign.totalBudget);
       campaign.paymentBreakdown = breakdown;
+
+      // Attach application count
+      const total = await this.campaignRepository.countApplications(campaign.id);
+      campaign.setDataValue('applicationsCount' as any, { total });
     }
     return campaign;
   }
@@ -310,12 +314,42 @@ export class CampaignsService {
     return result;
   }
 
-  async findById(id: string): Promise<Campaign> {
+  async findById(id: string, requestingUser?: { id: string; role?: string }): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(id);
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);
     }
-    return this.populateBreakdown(campaign);
+
+    await this.populateBreakdown(campaign);
+
+    // Filter applications based on requester role
+    if (campaign.applications && requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      if (role === 'brand') {
+        // Brand owner sees all applications; non-owners see none
+        if (campaign.brandId !== requestingUser.id) {
+          campaign.setDataValue('applications' as any, []);
+        }
+      } else if (role === 'creator') {
+        // Creators only see their own application
+        const ownApplication = campaign.applications.filter(
+          (app) => app.creatorId === requestingUser.id,
+        );
+        campaign.setDataValue('applications' as any, ownApplication);
+      } else {
+        // Admins see all applications
+      }
+    } else if (campaign.applications && !requestingUser) {
+      // Public (unauthenticated) access — strip all applications
+      campaign.setDataValue('applications' as any, []);
+    }
+
+    return campaign;
   }
 
   async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
