@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@ne
 import { UsersService } from '../services/users.service';
 import { User } from '../entities/user.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { ExploreSearchQueryDto } from '../dtos/explore-search-query.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -25,9 +26,28 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('explore/search')
+  @ApiOperation({
+    summary:
+      '📌Unified search for campaigns (by title) and users (creators/brands by name/username)',
+  })
+  @ApiResponse({ status: 200, description: 'Grouped explore search results' })
+  async exploreSearch(@Query() query: ExploreSearchQueryDto) {
+    return this.usersService.unifiedSearch(query);
+  }
+
+  @Get('explore/profile/:id')
+  @ApiOperation({
+    summary:
+      '📌Get single creator or brand profile details with campaign history and platform followers',
+  })
+  @ApiResponse({ status: 200, description: 'Profile details for creator or brand' })
+  async getExploreProfile(@Param('id') id: string): Promise<Record<string, unknown>> {
+    return this.usersService.exploreProfile(id);
+  }
+
   @Get('explore/:role')
-  @ApiOperation({ summary: 'Explore creators or brands with optional category/search filters' })
-  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiOperation({ summary: '📌Explore creators or brands with optional category filter' })
   @ApiQuery({
     name: 'category',
     required: false,
@@ -37,20 +57,9 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'List of creators or brands matching criteria' })
   async explore(
     @Param('role') role: string,
-    @Query('search') search?: string,
     @Query('category') category?: string,
   ): Promise<Record<string, unknown>[]> {
-    return this.usersService.exploreUsers(role, { search, category });
-  }
-
-  @Get('explore/profile/:id')
-  @ApiOperation({
-    summary:
-      'Get single creator or brand profile details with campaign history and platform followers',
-  })
-  @ApiResponse({ status: 200, description: 'Profile details for creator or brand' })
-  async getExploreProfile(@Param('id') id: string): Promise<Record<string, unknown>> {
-    return this.usersService.exploreProfile(id);
+    return this.usersService.exploreUsers(role, { category });
   }
 
   @Get(':id')

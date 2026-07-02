@@ -43,20 +43,10 @@ export class UserRepository {
 
   async findUsersByRole(
     roleId: string,
-    filters?: { search?: string; category?: string },
+    filters?: { category?: string },
     isBrand?: boolean,
   ): Promise<User[]> {
     const where: Record<string | symbol, unknown> = { roleId };
-
-    if (filters?.search) {
-      const searchPattern = `%${filters.search}%`;
-      where[Op.or] = [
-        { firstName: { [Op.iLike]: searchPattern } },
-        { lastName: { [Op.iLike]: searchPattern } },
-        { username: { [Op.iLike]: searchPattern } },
-        { bio: { [Op.iLike]: searchPattern } },
-      ];
-    }
 
     if (filters?.category) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(

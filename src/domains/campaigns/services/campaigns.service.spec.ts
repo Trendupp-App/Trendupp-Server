@@ -3,8 +3,13 @@ import { CampaignsService } from './campaigns.service';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { Campaign } from '../entities/campaign.entity';
 import { S3Service } from '../../../integration/s3/s3.service';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
+import { User } from '../../users/entities/user.entity';
+import { CreateReviewDto } from '../dtos/create-review.dto';
+import { CampaignApplication } from '../entities/campaign-application.entity';
+import { CampaignReview } from '../entities/campaign-review.entity';
+import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -63,6 +68,12 @@ describe('CampaignsService', () => {
         { name: 'VAT', type: 'percentage', value: 0.075 },
         { name: 'Trendupp Fee', type: 'percentage', value: 0.15 },
       ]),
+      findReviewsByCreator: jest.fn(),
+      findReviewByBrandAndCampaign: jest.fn(),
+      recalculateCreatorRating: jest.fn(),
+      createReview: jest.fn(),
+      findByIdAndBrandId: jest.fn(),
+      deleteDraftById: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -74,6 +85,18 @@ describe('CampaignsService', () => {
         .fn()
         .mockResolvedValue({ isLive: true, platform: 'YouTube', checkedAt: new Date() }),
     } as unknown as jest.Mocked<UrlValidatorService>;
+
+    Object.defineProperty(User, 'sequelize', {
+      value: {
+        transaction: jest.fn().mockResolvedValue({
+          commit: jest.fn().mockResolvedValue(undefined),
+          rollback: jest.fn().mockResolvedValue(undefined),
+        }),
+      },
+      configurable: true,
+      writable: true,
+    });
+    jest.spyOn(User, 'update').mockResolvedValue([1]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -309,10 +332,11 @@ describe('CampaignsService', () => {
       };
       campaignRepoMock.findAll.mockResolvedValue(mockResult);
 
-      const result = await service.findAll();
+      const query: FindAllCampaignsQueryDto = { status: 'live', sortBy: 'highest_budget' };
+      const result = await service.findAll(query);
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(undefined, 1, 10);
+      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query);
       expect(result).toEqual(mockResult);
     });
   });
@@ -750,6 +774,163 @@ describe('CampaignsService', () => {
       });
 
       expect(mockApplication.update).toHaveBeenCalledWith({ status: 'approved' });
+    });
+  });
+
+  describe('Reviews & Ratings', () => {
+    const mockBrandUser = {
+      id: 'brand1',
+      role: { name: 'brand' },
+    } as unknown as User;
+
+    const mockReviewDto: CreateReviewDto = {
+      campaignId: 'c1',
+      creatorId: 'creator1',
+      starRating: 5,
+      comment: 'Excellent content creator!',
+    };
+
+    const mockCampaignCompleted = {
+      id: 'c1',
+      brandId: 'brand1',
+      status: 'completed',
+    } as unknown as Campaign;
+
+    const mockApplicationApproved = {
+      id: 'app1',
+      status: 'approved',
+      creatorId: 'creator1',
+    } as unknown as CampaignApplication;
+
+    it('should submit a review successfully and recalculate rating', async () => {
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignCompleted);
+      campaignRepoMock.findApplication.mockResolvedValue(mockApplicationApproved);
+      campaignRepoMock.findReviewByBrandAndCampaign.mockResolvedValue(null);
+      campaignRepoMock.createReview.mockResolvedValue({ id: 'rev1' } as unknown as CampaignReview);
+      campaignRepoMock.recalculateCreatorRating.mockResolvedValue({
+        avgRating: 4.5,
+        totalReviews: 2,
+      });
+
+      const result = await service.submitReview(mockReviewDto, mockBrandUser);
+
+      expect(result).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createReview).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.recalculateCreatorRating).toHaveBeenCalledWith(
+        'creator1',
+        expect.any(Object),
+      );
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(User.update).toHaveBeenCalledWith(
+        { avgRating: 4.5, totalReviews: 2 },
+        { where: { id: 'creator1' }, transaction: expect.any(Object) as unknown },
+      );
+    });
+
+    it('should throw NotFoundException if campaign does not exist', async () => {
+      campaignRepoMock.findById.mockResolvedValue(null);
+
+      await expect(service.submitReview(mockReviewDto, mockBrandUser)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ForbiddenException if brand does not own the campaign', async () => {
+      const otherBrand = {
+        ...mockCampaignCompleted,
+        brandId: 'other_brand',
+      } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(otherBrand);
+
+      await expect(service.submitReview(mockReviewDto, mockBrandUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw ForbiddenException if campaign is not completed', async () => {
+      const draftCampaign = { ...mockCampaignCompleted, status: 'live' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(draftCampaign);
+
+      await expect(service.submitReview(mockReviewDto, mockBrandUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw BadRequestException if creator was not approved', async () => {
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignCompleted);
+      campaignRepoMock.findApplication.mockResolvedValue(null);
+
+      await expect(service.submitReview(mockReviewDto, mockBrandUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException if review is duplicate', async () => {
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignCompleted);
+      campaignRepoMock.findApplication.mockResolvedValue(mockApplicationApproved);
+      campaignRepoMock.findReviewByBrandAndCampaign.mockResolvedValue({
+        id: 'existing_review',
+      } as unknown as CampaignReview);
+
+      await expect(service.submitReview(mockReviewDto, mockBrandUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should get creator reviews', async () => {
+      const mockReviews = [{ id: 'rev1', starRating: 5 }];
+      campaignRepoMock.findReviewsByCreator.mockResolvedValue(
+        mockReviews as unknown as CampaignReview[],
+      );
+
+      const result = await service.getCreatorReviews('creator1', {
+        id: 'brand1',
+        role: 'brand',
+      });
+      expect(result).toEqual(mockReviews);
+    });
+
+    it('should throw ForbiddenException if another creator tries to view reviews', async () => {
+      await expect(
+        service.getCreatorReviews('creator1', {
+          id: 'creator2',
+          role: 'creator',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('deleteDraft', () => {
+    it('should permanently delete a campaign when it is in draft status and owned by the brand', async () => {
+      const draftCampaign = { id: 'c1', brandId: 'b1', status: 'draft' } as unknown as Campaign;
+      campaignRepoMock.findByIdAndBrandId.mockResolvedValue(draftCampaign);
+      campaignRepoMock.deleteDraftById.mockResolvedValue();
+
+      await expect(service.deleteDraft('c1', 'b1')).resolves.toBeUndefined();
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.findByIdAndBrandId).toHaveBeenCalledWith('c1', 'b1');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.deleteDraftById).toHaveBeenCalledWith('c1', 'b1');
+    });
+
+    it('should throw NotFoundException when campaign is not found or not owned by brand', async () => {
+      campaignRepoMock.findByIdAndBrandId.mockResolvedValue(null);
+
+      await expect(service.deleteDraft('nonexistent', 'b1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ForbiddenException when campaign status is not draft', async () => {
+      const liveCampaign = { id: 'c2', brandId: 'b1', status: 'live' } as unknown as Campaign;
+      campaignRepoMock.findByIdAndBrandId.mockResolvedValue(liveCampaign);
+
+      await expect(service.deleteDraft('c2', 'b1')).rejects.toThrow(ForbiddenException);
+
+      // deleteDraftById must NOT have been called
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.deleteDraftById).not.toHaveBeenCalled();
     });
   });
 });

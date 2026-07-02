@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Attributes, Op } from 'sequelize';
+import { Attributes, Op, Transaction } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { Campaign } from '../entities/campaign.entity';
 import { User } from '../../users/entities/user.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
@@ -10,6 +11,8 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Fee } from '../entities/fee.entity';
+import { CampaignReview } from '../entities/campaign-review.entity';
+import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
@@ -29,6 +32,8 @@ export class CampaignRepository {
     private readonly contentSubmissionModel: typeof ContentSubmission,
     @InjectModel(Fee)
     private readonly feeModel: typeof Fee,
+    @InjectModel(CampaignReview)
+    private readonly campaignReviewModel: typeof CampaignReview,
   ) {}
 
   private readonly fullIncludes = [
@@ -56,8 +61,8 @@ export class CampaignRepository {
     return (this.campaignModel as any).create(data) as Promise<Campaign>;
   }
 
-  findById(id: string): Promise<Campaign | null> {
-    return this.campaignModel.findByPk(id, {
+  async findById(id: string): Promise<Campaign | null> {
+    const campaign = await this.campaignModel.findByPk(id, {
       include: [
         ...this.fullIncludes,
         {
@@ -91,19 +96,78 @@ export class CampaignRepository {
         },
       ],
     });
+
+    if (campaign && campaign.status === 'deleted') {
+      return null;
+    }
+    return campaign;
   }
 
-  findAll(status?: string, page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
-    const where: { status?: string } = {};
+  findAll(query: FindAllCampaignsQueryDto): Promise<PaginatedResult<Campaign>> {
+    const { status, sortBy, platforms, niches, nicheIds, goal, page = 1, limit = 10 } = query;
+
+    const where: Record<string, unknown> = {};
+
+    // 1. Filter by Status
     if (status) {
-      where.status = status;
+      if (status === 'past') {
+        where['status'] = { [Op.in]: ['completed', 'cancelled'] };
+      } else {
+        where['status'] = status;
+      }
+    } else {
+      where['status'] = { [Op.ne]: 'deleted' };
     }
+
+    // 2. Filter by Platforms
+    if (platforms && platforms.length > 0) {
+      const platformNames = platforms.map((p) => {
+        const trimmed = p.trim();
+        return trimmed.toLowerCase() === 'x' ? 'Twitter' : trimmed;
+      });
+      where['$preferredPlatforms.name$'] = {
+        [Op.or]: platformNames.map((name) => ({ [Op.iLike]: name })),
+      };
+    }
+
+    // 3. Filter by Niches / Niche IDs
+    if (nicheIds && nicheIds.length > 0) {
+      where['creatorNicheId'] = { [Op.in]: nicheIds };
+    } else if (niches && niches.length > 0) {
+      where['$creatorNiche.name$'] = {
+        [Op.or]: niches.map((name) => ({ [Op.iLike]: name })),
+      };
+    }
+
+    // 4. Filter by Campaign Goal
+    if (goal) {
+      let targetGoal = goal;
+      if (goal.toLowerCase() === 'content creation') {
+        targetGoal = 'Create Content';
+      } else if (goal.toLowerCase() === 'amplification') {
+        targetGoal = 'Amplify Content';
+      }
+      where['goal'] = targetGoal;
+    }
+
+    // 5. Determine Order Sort Criteria
+    let order: Array<[string, string]> = [['createdAt', 'DESC']]; // default newest
+    if (sortBy) {
+      if (sortBy === 'highest_budget') {
+        order = [['totalBudget', 'DESC']];
+      } else if (sortBy === 'closing_soon') {
+        order = [['timeline', 'ASC']];
+      }
+    }
+
     return paginate(
       this.campaignModel,
       {
         where,
         include: this.fullIncludes,
-        order: [['createdAt', 'DESC']],
+        order,
+        distinct: true,
+        subQuery: false,
       },
       { page, limit },
     );
@@ -113,9 +177,11 @@ export class CampaignRepository {
    * Campaigns owned by a specific brand user.
    */
   findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
-    const where: { brandId: string; status?: string } = { brandId };
+    const where: Record<string | symbol, any> = { brandId };
     if (status) {
       where.status = status;
+    } else {
+      where.status = { [Op.ne]: 'deleted' };
     }
     return this.campaignModel.findAll({
       where,
@@ -128,34 +194,14 @@ export class CampaignRepository {
    * Campaigns currently live.
    */
   findLiveCampaigns(page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
-    return paginate(
-      this.campaignModel,
-      {
-        where: {
-          status: 'live',
-        },
-        include: this.fullIncludes,
-        order: [['approvedAt', 'DESC']],
-      },
-      { page, limit },
-    );
+    return this.findAll({ status: 'live', page, limit });
   }
 
   /**
    * Campaigns that have ended (completed or cancelled).
    */
   findPastCampaigns(page = 1, limit = 10): Promise<PaginatedResult<Campaign>> {
-    return paginate(
-      this.campaignModel,
-      {
-        where: {
-          status: { [Op.in]: ['completed', 'cancelled'] },
-        },
-        include: this.fullIncludes,
-        order: [['updatedAt', 'DESC']],
-      },
-      { page, limit },
-    );
+    return this.findAll({ status: 'past', page, limit });
   }
 
   async updateStatus(id: string, status: string, approvedAt?: Date): Promise<Campaign | null> {
@@ -439,5 +485,78 @@ export class CampaignRepository {
       ],
       order: [['createdAt', 'DESC']],
     });
+  }
+
+  createReview(
+    data: Partial<Attributes<CampaignReview>>,
+    transaction?: Transaction,
+  ): Promise<CampaignReview> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.campaignReviewModel as any).create(data, {
+      transaction,
+    }) as Promise<CampaignReview>;
+  }
+
+  findReviewsByCreator(creatorId: string): Promise<CampaignReview[]> {
+    return this.campaignReviewModel.findAll({
+      where: { creatorId },
+      include: [
+        {
+          model: User,
+          as: 'brand',
+          attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  findReviewByBrandAndCampaign(
+    brandId: string,
+    campaignId: string,
+  ): Promise<CampaignReview | null> {
+    return this.campaignReviewModel.findOne({
+      where: { brandId, campaignId },
+    });
+  }
+
+  async recalculateCreatorRating(
+    creatorId: string,
+    transaction?: Transaction,
+  ): Promise<{ avgRating: number; totalReviews: number }> {
+    const result = (await this.campaignReviewModel.findOne({
+      attributes: [
+        [Sequelize.fn('AVG', Sequelize.col('star_rating')), 'avgRating'],
+        [Sequelize.fn('COUNT', Sequelize.col('id')), 'totalReviews'],
+      ],
+      where: { creatorId },
+      raw: true,
+      transaction,
+    })) as unknown as Record<string, unknown> | null;
+
+    const avgRaw = result?.avgRating;
+    const avg =
+      typeof avgRaw === 'string' || typeof avgRaw === 'number' ? parseFloat(String(avgRaw)) : 0;
+
+    const totalRaw = result?.totalReviews;
+    const total =
+      typeof totalRaw === 'string' || typeof totalRaw === 'number'
+        ? parseInt(String(totalRaw), 10)
+        : 0;
+
+    return {
+      avgRating: parseFloat(avg.toFixed(2)),
+      totalReviews: total,
+    };
+  }
+
+  async findByIdAndBrandId(id: string, brandId: string): Promise<Campaign | null> {
+    return this.campaignModel.findOne({
+      where: { id, brandId },
+    });
+  }
+
+  async deleteDraftById(id: string, brandId: string): Promise<void> {
+    await this.campaignModel.update({ status: 'deleted' }, { where: { id, brandId } });
   }
 }

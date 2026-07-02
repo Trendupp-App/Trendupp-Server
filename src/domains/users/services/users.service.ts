@@ -1,15 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Attributes } from 'sequelize';
+import { Attributes, Op } from 'sequelize';
+import { InjectModel } from '@nestjs/sequelize';
 import { User } from '../entities/user.entity';
 import { UserRepository } from '../repository/user.repository';
 import { RoleRepository } from '../repository/role.repository';
 import { Role } from '../entities/role.entity';
+import { Niche } from '../entities/niche.entity';
+import { Industry } from '../entities/industry.entity';
+import { CampaignReview } from '../../campaigns/entities/campaign-review.entity';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { ExploreSearchQueryDto } from '../dtos/explore-search-query.dto';
+import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly roleRepository: RoleRepository,
+    @InjectModel(Campaign)
+    private readonly campaignModel: typeof Campaign,
   ) {}
 
   findAll(): Promise<User[]> {
@@ -77,7 +86,7 @@ export class UsersService {
 
   async exploreUsers(
     roleType: string,
-    filters?: { search?: string; category?: string },
+    filters?: { category?: string },
   ): Promise<Record<string, unknown>[]> {
     const rawRole = roleType.toLowerCase();
     const isBrand = rawRole.startsWith('brand');
@@ -123,6 +132,8 @@ export class UsersService {
             name: niche.name,
           })),
           assignedTier: user.assignedTier,
+          avgRating: user.avgRating ? parseFloat(user.avgRating.toString()) : null,
+          totalReviews: user.totalReviews || 0,
         };
       }
     });
@@ -131,7 +142,7 @@ export class UsersService {
   async exploreProfile(id: string): Promise<Record<string, unknown>> {
     const user = await this.userRepository.findProfileById(id);
     if (!user) {
-      throw new NotFoundException(`User with ID "${id}" not found`);
+      throw new NotFoundException('User not found');
     }
 
     const roleName = user.role?.name || (typeof user.role === 'string' ? user.role : 'creator');
@@ -200,8 +211,174 @@ export class UsersService {
         name: n.name,
       }));
       response['assignedTier'] = user.assignedTier;
+      response['avgRating'] = user.avgRating ? parseFloat(user.avgRating.toString()) : null;
+      response['totalReviews'] = user.totalReviews || 0;
+
+      const reviews = await CampaignReview.findAll({
+        where: { creatorId: id },
+        include: [
+          {
+            model: User,
+            as: 'brand',
+            attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      response['reviews'] = reviews.map((r) => ({
+        id: r.id,
+        starRating: r.starRating,
+        comment: r.comment,
+        createdAt: r.createdAt,
+        brand: r.brand
+          ? {
+              id: r.brand.id,
+              firstName: r.brand.firstName,
+              lastName: r.brand.lastName,
+              username: r.brand.username,
+              avatarUrl: r.brand.avatarUrl,
+            }
+          : null,
+      }));
     }
 
     return response;
+  }
+
+  async unifiedSearch(query: ExploreSearchQueryDto): Promise<{
+    campaigns: PaginatedResult<Campaign>;
+    creators: PaginatedResult<any>;
+    brands: PaginatedResult<any>;
+  }> {
+    const { q, page = 1, limit = 10 } = query;
+    const searchPattern = `%${q}%`;
+
+    // 1. Fetch roles
+    const creatorRole = await this.roleRepository.findByName('creator');
+    const brandRole = await this.roleRepository.findByName('brand');
+
+    const creatorRoleId = creatorRole?.id;
+    const brandRoleId = brandRole?.id;
+
+    // 2. Perform concurrent lookups
+    const [campaignsResult, creatorsResult, brandsResult] = await Promise.all([
+      // Campaign search: status = 'live', title matches
+      paginate(
+        this.campaignModel,
+        {
+          where: {
+            status: 'live',
+            title: { [Op.iLike]: searchPattern },
+          },
+          order: [['createdAt', 'DESC']],
+        },
+        { page, limit },
+      ),
+
+      // Creator search: role = creator, active & verified, name/username matches
+      creatorRoleId
+        ? paginate(
+            User,
+            {
+              where: {
+                roleId: creatorRoleId,
+                isActive: true,
+                isEmailVerified: true,
+                [Op.or]: [
+                  { firstName: { [Op.iLike]: searchPattern } },
+                  { lastName: { [Op.iLike]: searchPattern } },
+                  { username: { [Op.iLike]: searchPattern } },
+                ],
+              },
+              include: [{ model: Niche, as: 'niches', through: { attributes: [] } }],
+              order: [['createdAt', 'DESC']],
+              distinct: true,
+              subQuery: false,
+            },
+            { page, limit },
+          )
+        : Promise.resolve({ data: [] as User[], pagination: { total: 0, page, limit, pages: 0 } }),
+
+      // Brand search: role = brand, active & verified, name/username matches
+      brandRoleId
+        ? paginate(
+            User,
+            {
+              where: {
+                roleId: brandRoleId,
+                isActive: true,
+                isEmailVerified: true,
+                [Op.or]: [
+                  { firstName: { [Op.iLike]: searchPattern } },
+                  { lastName: { [Op.iLike]: searchPattern } },
+                  { username: { [Op.iLike]: searchPattern } },
+                ],
+              },
+              include: [{ model: Industry, as: 'industries', through: { attributes: [] } }],
+              order: [['createdAt', 'DESC']],
+              distinct: true,
+              subQuery: false,
+            },
+            { page, limit },
+          )
+        : Promise.resolve({ data: [] as User[], pagination: { total: 0, page, limit, pages: 0 } }),
+    ]);
+
+    // 3. Format creator results (calculate total followers count)
+    const formattedCreators = creatorsResult.data.map((user: User) => {
+      const followersCount =
+        (user.instagramFollowers || 0) +
+        (user.tiktokFollowers || 0) +
+        (user.youtubeFollowers || 0) +
+        (user.twitterFollowers || 0);
+
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        city: user.city,
+        followersCount,
+        niches: (user.niches || []).map((niche: Niche) => ({
+          id: niche.id,
+          name: niche.name,
+        })),
+        assignedTier: user.assignedTier,
+        avgRating: user.avgRating ? parseFloat(user.avgRating.toString()) : null,
+        totalReviews: user.totalReviews || 0,
+      };
+    });
+
+    // 4. Format brand results
+    const formattedBrands = brandsResult.data.map((user: User) => {
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        city: user.city,
+        industries: (user.industries || []).map((ind: Industry) => ({
+          id: ind.id,
+          name: ind.name,
+        })),
+      };
+    });
+
+    return {
+      campaigns: campaignsResult,
+      creators: {
+        data: formattedCreators,
+        pagination: creatorsResult.pagination,
+      },
+      brands: {
+        data: formattedBrands,
+        pagination: brandsResult.pagination,
+      },
+    };
   }
 }

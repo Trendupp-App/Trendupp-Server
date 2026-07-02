@@ -4,6 +4,29 @@ import { UserRepository } from '../repository/user.repository';
 import { User } from '../entities/user.entity';
 import { RoleRepository } from '../repository/role.repository';
 import { Role } from '../entities/role.entity';
+import { CampaignReview } from '../../campaigns/entities/campaign-review.entity';
+
+import { getModelToken } from '@nestjs/sequelize';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { paginate } from '../../../shared/utils/pagination.utils';
+
+jest.mock('../../../shared/utils/pagination.utils', () => ({
+  paginate: jest
+    .fn()
+    .mockImplementation(
+      (model: unknown, options: unknown, pagination: { page?: number; limit?: number }) => {
+        return Promise.resolve({
+          data: [],
+          pagination: {
+            total: 0,
+            page: pagination?.page || 1,
+            limit: pagination?.limit || 10,
+            pages: 0,
+          },
+        });
+      },
+    ),
+}));
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -32,8 +55,11 @@ describe('UsersService', () => {
         UsersService,
         { provide: UserRepository, useValue: userRepositoryMock },
         { provide: RoleRepository, useValue: roleRepositoryMock },
+        { provide: getModelToken(Campaign), useValue: {} },
       ],
     }).compile();
+
+    jest.spyOn(CampaignReview, 'findAll').mockResolvedValue([]);
 
     service = module.get<UsersService>(UsersService);
   });
@@ -201,14 +227,14 @@ describe('UsersService', () => {
 
       userRepositoryMock.findUsersByRole.mockResolvedValue(mockUsers);
 
-      const result = await service.exploreUsers('brands', { search: 'zara', category: 'Fashion' });
+      const result = await service.exploreUsers('brands', { category: 'Fashion' });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('brand');
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(userRepositoryMock.findUsersByRole).toHaveBeenCalledWith(
         'r-brand',
-        { search: 'zara', category: 'Fashion' },
+        { category: 'Fashion' },
         true,
       );
       expect(result).toEqual([
@@ -248,14 +274,14 @@ describe('UsersService', () => {
 
       userRepositoryMock.findUsersByRole.mockResolvedValue(mockUsers);
 
-      const result = await service.exploreUsers('creators', { search: 'john' });
+      const result = await service.exploreUsers('creators', {});
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('creator');
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(userRepositoryMock.findUsersByRole).toHaveBeenCalledWith(
         'r-creator',
-        { search: 'john', category: undefined },
+        { category: undefined },
         false,
       );
       expect(result).toEqual([
@@ -270,6 +296,8 @@ describe('UsersService', () => {
           followersCount: 500,
           niches: [{ id: 'n1', name: 'Tech' }],
           assignedTier: 'Micro',
+          avgRating: null,
+          totalReviews: 0,
         },
       ]);
     });
@@ -337,6 +365,162 @@ describe('UsersService', () => {
             timeline: new Date('2026-06-30'),
           },
         ],
+      });
+    });
+
+    it('should return a populated creator profile with reviews and ratings', async () => {
+      const mockUser = {
+        id: 'creator1',
+        email: 'creator@trendupp.com',
+        firstName: 'Creator',
+        lastName: 'One',
+        username: 'creator1',
+        tiktokUsername: 'creator1_tt',
+        tiktokFollowers: 15000,
+        role: { name: 'creator' },
+        niches: [{ id: 'n1', name: 'Tech' }],
+        assignedTier: 'Micro',
+        avgRating: 4.85,
+        totalReviews: 3,
+        toJSON: () => ({
+          state: { id: 's1', name: 'Lagos' },
+          country: { id: 'c1', name: 'Nigeria' },
+        }),
+      } as unknown as User;
+
+      userRepositoryMock.findProfileById.mockResolvedValue(mockUser);
+
+      const mockReviews = [
+        {
+          id: 'r1',
+          starRating: 5,
+          comment: 'Perfect delivery!',
+          createdAt: new Date('2026-07-01'),
+          brand: {
+            id: 'brand1',
+            firstName: 'Zara',
+            lastName: 'Africa',
+            username: 'zara',
+            avatarUrl: 'http://img.jpg',
+          },
+        },
+      ];
+
+      jest
+        .spyOn(CampaignReview, 'findAll')
+        .mockResolvedValue(mockReviews as unknown as CampaignReview[]);
+
+      const result = await service.exploreProfile('creator1');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(userRepositoryMock.findProfileById).toHaveBeenCalledWith('creator1');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(CampaignReview.findAll).toHaveBeenCalledWith({
+        where: { creatorId: 'creator1' },
+        include: [
+          {
+            model: User,
+            as: 'brand',
+            attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+      expect(result).toEqual({
+        id: 'creator1',
+        email: 'creator@trendupp.com',
+        firstName: 'Creator',
+        lastName: 'One',
+        username: 'creator1',
+        avatarUrl: undefined,
+        bio: undefined,
+        city: undefined,
+        state: { id: 's1', name: 'Lagos' },
+        country: { id: 'c1', name: 'Nigeria' },
+        role: 'creator',
+        platforms: {
+          tiktok: { username: 'creator1_tt', followers: 15000 },
+        },
+        niches: [{ id: 'n1', name: 'Tech' }],
+        assignedTier: 'Micro',
+        avgRating: 4.85,
+        totalReviews: 3,
+        reviews: [
+          {
+            id: 'r1',
+            starRating: 5,
+            comment: 'Perfect delivery!',
+            createdAt: new Date('2026-07-01'),
+            brand: {
+              id: 'brand1',
+              firstName: 'Zara',
+              lastName: 'Africa',
+              username: 'zara',
+              avatarUrl: 'http://img.jpg',
+            },
+          },
+        ],
+      });
+    });
+  });
+
+  describe('unifiedSearch', () => {
+    it('should search campaigns, creators, and brands and return grouped paginated results', async () => {
+      roleRepositoryMock.findByName.mockImplementation((name: string) => {
+        if (name === 'creator') return Promise.resolve({ id: 'role_creator' } as Role);
+        if (name === 'brand') return Promise.resolve({ id: 'role_brand' } as Role);
+        return Promise.resolve(null);
+      });
+
+      const mockCampaign = { id: 'camp1', title: 'Fashion Campaign', status: 'live' };
+      const mockCreator = {
+        id: 'user1',
+        firstName: 'John',
+        lastName: 'Doe',
+        username: 'jdoe',
+        instagramFollowers: 10000,
+        niches: [{ id: 'n1', name: 'Fashion' }],
+      };
+      const mockBrand = {
+        id: 'brand1',
+        firstName: 'Zara',
+        lastName: 'Corp',
+        username: 'zara',
+        industries: [{ id: 'i1', name: 'Clothing' }],
+      };
+
+      // Mock paginate to return different values depending on options.where details
+      (paginate as jest.Mock).mockImplementation(
+        (model: unknown, options: { where?: { status?: string; roleId?: string } }) => {
+          if (options?.where?.status === 'live') {
+            return Promise.resolve({
+              data: [mockCampaign],
+              pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+            });
+          }
+          if (options?.where?.roleId === 'role_creator') {
+            return Promise.resolve({
+              data: [mockCreator],
+              pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+            });
+          }
+          return Promise.resolve({
+            data: [mockBrand],
+            pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+          });
+        },
+      );
+
+      const result = await service.unifiedSearch({ q: 'Fashion', page: 1, limit: 10 });
+
+      expect(result).toHaveProperty('campaigns');
+      expect(result).toHaveProperty('creators');
+      expect(result).toHaveProperty('brands');
+
+      expect(result.campaigns.data).toContainEqual(mockCampaign);
+      expect(result.creators.data[0]).toMatchObject({
+        id: 'user1',
+        followersCount: 10000,
       });
     });
   });
