@@ -58,7 +58,38 @@ export class CampaignRepository {
 
   findById(id: string): Promise<Campaign | null> {
     return this.campaignModel.findByPk(id, {
-      include: this.fullIncludes,
+      include: [
+        ...this.fullIncludes,
+        {
+          model: CampaignApplication,
+          as: 'applications',
+          include: [
+            {
+              model: User,
+              as: 'creator',
+              attributes: [
+                'id',
+                'firstName',
+                'lastName',
+                'email',
+                'username',
+                'avatarUrl',
+                'assignedTier',
+                'instagramUsername',
+                'instagramFollowers',
+                'tiktokUsername',
+                'tiktokFollowers',
+                'youtubeUsername',
+                'youtubeFollowers',
+                'twitterUsername',
+                'twitterFollowers',
+              ],
+            },
+            { model: Platform, as: 'primaryPlatform' },
+            { model: Platform, as: 'secondaryPlatform' },
+          ],
+        },
+      ],
     });
   }
 
@@ -222,6 +253,12 @@ export class CampaignRepository {
     });
   }
 
+  countApplications(campaignId: string): Promise<number> {
+    return this.campaignApplicationModel.count({
+      where: { campaignId },
+    });
+  }
+
   findApplicationsByCampaignId(campaignId: string): Promise<CampaignApplication[]> {
     return this.campaignApplicationModel.findAll({
       where: { campaignId },
@@ -229,7 +266,23 @@ export class CampaignRepository {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+          attributes: [
+            'id',
+            'firstName',
+            'lastName',
+            'email',
+            'username',
+            'avatarUrl',
+            'assignedTier',
+            'instagramUsername',
+            'instagramFollowers',
+            'tiktokUsername',
+            'tiktokFollowers',
+            'youtubeUsername',
+            'youtubeFollowers',
+            'twitterUsername',
+            'twitterFollowers',
+          ],
         },
         { model: Platform, as: 'primaryPlatform' },
         { model: Platform, as: 'secondaryPlatform' },
@@ -263,7 +316,23 @@ export class CampaignRepository {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+          attributes: [
+            'id',
+            'firstName',
+            'lastName',
+            'email',
+            'username',
+            'avatarUrl',
+            'assignedTier',
+            'instagramUsername',
+            'instagramFollowers',
+            'tiktokUsername',
+            'tiktokFollowers',
+            'youtubeUsername',
+            'youtubeFollowers',
+            'twitterUsername',
+            'twitterFollowers',
+          ],
         },
         { model: Platform, as: 'primaryPlatform' },
         { model: Platform, as: 'secondaryPlatform' },
@@ -279,7 +348,23 @@ export class CampaignRepository {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'username'],
+          attributes: [
+            'id',
+            'firstName',
+            'lastName',
+            'email',
+            'username',
+            'avatarUrl',
+            'assignedTier',
+            'instagramUsername',
+            'instagramFollowers',
+            'tiktokUsername',
+            'tiktokFollowers',
+            'youtubeUsername',
+            'youtubeFollowers',
+            'twitterUsername',
+            'twitterFollowers',
+          ],
         },
         { model: Platform, as: 'primaryPlatform' },
         { model: Platform, as: 'secondaryPlatform' },

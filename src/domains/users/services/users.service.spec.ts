@@ -17,6 +17,8 @@ describe('UsersService', () => {
       findByEmail: jest.fn(),
       create: jest.fn(),
       remove: jest.fn(),
+      findUsersByRole: jest.fn(),
+      findProfileById: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
 
     roleRepositoryMock = {
@@ -174,6 +176,168 @@ describe('UsersService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(roleRepositoryMock.findAll).toHaveBeenCalledWith(true);
       expect(result).toEqual(mockRoles);
+    });
+  });
+
+  describe('exploreUsers', () => {
+    it('should query and return brand users with correct mappings', async () => {
+      const mockRole = { id: 'r-brand', name: 'brand' } as unknown as Role;
+      roleRepositoryMock.findByName.mockResolvedValue(mockRole);
+
+      const mockUsers = [
+        {
+          id: 'u1',
+          firstName: 'Zara',
+          lastName: 'Africa',
+          username: 'zara',
+          instagramFollowers: 1000,
+          tiktokFollowers: 2000,
+          youtubeFollowers: 0,
+          twitterFollowers: 0,
+          industries: [{ id: 'ind1', name: 'Fashion' }],
+          campaigns: [{ id: 'c1' }, { id: 'c2' }],
+        },
+      ] as unknown as User[];
+
+      userRepositoryMock.findUsersByRole.mockResolvedValue(mockUsers);
+
+      const result = await service.exploreUsers('brands', { search: 'zara', category: 'Fashion' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('brand');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(userRepositoryMock.findUsersByRole).toHaveBeenCalledWith(
+        'r-brand',
+        { search: 'zara', category: 'Fashion' },
+        true,
+      );
+      expect(result).toEqual([
+        {
+          id: 'u1',
+          firstName: 'Zara',
+          lastName: 'Africa',
+          username: 'zara',
+          avatarUrl: undefined,
+          bio: undefined,
+          city: undefined,
+          followersCount: 3000,
+          industries: [{ id: 'ind1', name: 'Fashion' }],
+          totalCampaigns: 2,
+        },
+      ]);
+    });
+
+    it('should query and return creator users with correct mappings', async () => {
+      const mockRole = { id: 'r-creator', name: 'creator' } as unknown as Role;
+      roleRepositoryMock.findByName.mockResolvedValue(mockRole);
+
+      const mockUsers = [
+        {
+          id: 'u2',
+          firstName: 'John',
+          lastName: 'Doe',
+          username: 'john',
+          instagramFollowers: 500,
+          tiktokFollowers: 0,
+          youtubeFollowers: 0,
+          twitterFollowers: 0,
+          niches: [{ id: 'n1', name: 'Tech' }],
+          assignedTier: 'Micro',
+        },
+      ] as unknown as User[];
+
+      userRepositoryMock.findUsersByRole.mockResolvedValue(mockUsers);
+
+      const result = await service.exploreUsers('creators', { search: 'john' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('creator');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(userRepositoryMock.findUsersByRole).toHaveBeenCalledWith(
+        'r-creator',
+        { search: 'john', category: undefined },
+        false,
+      );
+      expect(result).toEqual([
+        {
+          id: 'u2',
+          firstName: 'John',
+          lastName: 'Doe',
+          username: 'john',
+          avatarUrl: undefined,
+          bio: undefined,
+          city: undefined,
+          followersCount: 500,
+          niches: [{ id: 'n1', name: 'Tech' }],
+          assignedTier: 'Micro',
+        },
+      ]);
+    });
+  });
+
+  describe('exploreProfile', () => {
+    it('should return a populated brand profile', async () => {
+      const mockUser = {
+        id: 'u1',
+        email: 'brand@zara.com',
+        firstName: 'Zara',
+        lastName: 'Africa',
+        username: 'zara',
+        instagramUsername: 'zara_ig',
+        instagramFollowers: 5000,
+        role: { name: 'brand' },
+        industries: [{ id: 'ind1', name: 'Fashion' }],
+        campaigns: [
+          {
+            id: 'c1',
+            title: 'Summer',
+            goal: 'Promo',
+            totalBudget: 1000,
+            coverImage: 'img.png',
+            status: 'live',
+            timeline: new Date('2026-06-30'),
+          },
+        ],
+        toJSON: () => ({
+          state: { id: 's1', name: 'Lagos' },
+          country: { id: 'c1', name: 'Nigeria' },
+        }),
+      } as unknown as User;
+
+      userRepositoryMock.findProfileById.mockResolvedValue(mockUser);
+
+      const result = await service.exploreProfile('u1');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(userRepositoryMock.findProfileById).toHaveBeenCalledWith('u1');
+      expect(result).toEqual({
+        id: 'u1',
+        email: 'brand@zara.com',
+        firstName: 'Zara',
+        lastName: 'Africa',
+        username: 'zara',
+        avatarUrl: undefined,
+        bio: undefined,
+        city: undefined,
+        state: { id: 's1', name: 'Lagos' },
+        country: { id: 'c1', name: 'Nigeria' },
+        role: 'brand',
+        platforms: {
+          instagram: { username: 'zara_ig', followers: 5000 },
+        },
+        industries: [{ id: 'ind1', name: 'Fashion' }],
+        campaigns: [
+          {
+            id: 'c1',
+            title: 'Summer',
+            goal: 'Promo',
+            totalBudget: 1000,
+            coverImage: 'img.png',
+            status: 'live',
+            timeline: new Date('2026-06-30'),
+          },
+        ],
+      });
     });
   });
 });
