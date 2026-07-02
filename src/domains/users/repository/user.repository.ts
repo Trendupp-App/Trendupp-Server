@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Attributes, WhereOptions } from 'sequelize';
+import { Attributes, WhereOptions, Op } from 'sequelize';
 import { User } from '../entities/user.entity';
+import { Industry } from '../entities/industry.entity';
+import { Niche } from '../entities/niche.entity';
 
 @Injectable()
 export class UserRepository {
@@ -22,6 +24,78 @@ export class UserRepository {
       includes.push('niches');
     }
     return this.userModel.findByPk(id, { include: includes });
+  }
+
+  findProfileById(id: string): Promise<User | null> {
+    return this.userModel.findByPk(id, {
+      include: [
+        'role',
+        'nationality',
+        'country',
+        'state',
+        'bank',
+        'industries',
+        'niches',
+        'campaigns',
+      ],
+    });
+  }
+
+  async findUsersByRole(
+    roleId: string,
+    filters?: { category?: string },
+    isBrand?: boolean,
+  ): Promise<User[]> {
+    const where: Record<string | symbol, unknown> = { roleId };
+
+    if (filters?.category) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        filters.category,
+      );
+
+      if (isBrand) {
+        const matchedUsers = await this.userModel.findAll({
+          attributes: ['id'],
+          where: { roleId },
+          include: [
+            {
+              model: Industry,
+              as: 'industries',
+              where: isUuid
+                ? {
+                    [Op.or]: [{ id: filters.category }, { name: { [Op.iLike]: filters.category } }],
+                  }
+                : { name: { [Op.iLike]: filters.category } },
+              required: true,
+            },
+          ],
+        });
+        where['id'] = matchedUsers.map((u) => u.id);
+      } else {
+        const matchedUsers = await this.userModel.findAll({
+          attributes: ['id'],
+          where: { roleId },
+          include: [
+            {
+              model: Niche,
+              as: 'niches',
+              where: isUuid
+                ? {
+                    [Op.or]: [{ id: filters.category }, { name: { [Op.iLike]: filters.category } }],
+                  }
+                : { name: { [Op.iLike]: filters.category } },
+              required: true,
+            },
+          ],
+        });
+        where['id'] = matchedUsers.map((u) => u.id);
+      }
+    }
+
+    return this.userModel.findAll({
+      where: where as WhereOptions<User>,
+      include: ['role', 'nationality', 'country', 'state', 'niches', 'industries', 'campaigns'],
+    });
   }
 
   findByEmail(email: string): Promise<User | null> {

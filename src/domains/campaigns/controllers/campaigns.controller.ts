@@ -34,8 +34,8 @@ import { ReviewApplicationDto } from '../dtos/review-application.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
-import { CreateFeeDto } from '../dtos/create-fee.dto';
-import { PaginationDto } from '../../../shared/dtos/pagination.dto';
+import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
+import { CreateReviewDto } from '../dtos/create-review.dto';
 import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -199,15 +199,12 @@ export class CampaignsController {
   // ─── Public / Authenticated campaign listings ─────────────────────────────
 
   @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({
-    summary: 'Get all campaigns (optionally filter by status: draft | live | active | completed)',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: ['draft', 'live', 'active', 'completed'],
-    description: 'Filter campaigns by status',
+    summary:
+      '📌Get all campaigns (optionally filter and sort by status, platforms, niches, goals, etc.)',
   })
   @ApiExtraModels(Campaign)
   @ApiResponse({
@@ -232,14 +229,8 @@ export class CampaignsController {
       },
     },
   })
-  async findAll(@Query('status') status?: string, @Query() paginationDto?: PaginationDto) {
-    if (status === 'live') {
-      return this.campaignsService.findLive(paginationDto);
-    }
-    if (status === 'past') {
-      return this.campaignsService.findPast(paginationDto);
-    }
-    return this.campaignsService.findAll(status, paginationDto);
+  async findAll(@Query() query: FindAllCampaignsQueryDto) {
+    return this.campaignsService.findAll(query);
   }
 
   @Get('creator-categories')
@@ -310,11 +301,16 @@ export class CampaignsController {
 
   @Get(':id')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a single campaign by ID' })
   @ApiResponse({ status: 200, description: 'Campaign retrieved' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  async findOne(@Param('id') id: string) {
-    return this.campaignsService.findById(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.campaignsService.findById(
+      id,
+      user ? { id: user.id, role: user.role?.name ?? (user.role as unknown as string) } : undefined,
+    );
   }
 
   @Post(':id/applications')
@@ -471,45 +467,60 @@ export class CampaignsController {
     };
   }
 
-  // ─── Admin Fees Management Endpoints ─────────────────────────────────────
+  // ─── Delete Draft Campaign ─────────────────────────────────────────────────
 
-  @Get('fees')
-  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all active fees/charges' })
-  @ApiResponse({ status: 200, description: 'List of fees retrieved' })
-  async getFees() {
-    const fees = await this.campaignsService.getFees();
-    return { fees };
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Permanently delete a campaign draft (brand owner only, draft status only)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaign draft deleted successfully' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — campaign is not in draft status or not owned by you',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async deleteDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ): Promise<{ message: string }> {
+    await this.campaignsService.deleteDraft(id, user.id);
+    return { message: 'Campaign deleted successfully.' };
   }
 
-  @Post('fees')
+  // ─── Reviews & Star Ratings ────────────────────────────────────────────────
+
+  @Post('reviews')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('brand')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
-  @ApiResponse({ status: 201, description: 'Fee created successfully' })
-  async createFee(@Body() dto: CreateFeeDto) {
-    const fee = await this.campaignsService.createFee(dto);
+  @ApiOperation({
+    summary:
+      'Submit a star rating and written review for a creator after a campaign (brand owner only)',
+  })
+  @ApiResponse({ status: 201, description: 'Review submitted successfully' })
+  async createReview(@Body() dto: CreateReviewDto, @CurrentUser() user: User) {
+    const review = await this.campaignsService.submitReview(dto, user);
     return {
-      message: 'Fee configuration created successfully.',
-      fee,
+      message: 'Review submitted successfully.',
+      review,
     };
   }
 
-  @Delete('fees/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Get('reviews/creator/:creatorId')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
-  @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Fee configuration not found' })
-  async deleteFee(@Param('id') id: string) {
-    await this.campaignsService.deleteFee(id);
+  @ApiOperation({ summary: 'Get all reviews for a creator (Portfolio)' })
+  @ApiResponse({ status: 200, description: 'Reviews retrieved successfully' })
+  async getCreatorReviews(@Param('creatorId') creatorId: string, @CurrentUser() user: User) {
+    const reviews = await this.campaignsService.getCreatorReviews(creatorId, user);
     return {
-      message: 'Fee configuration deleted permanently.',
+      reviews,
     };
   }
 }

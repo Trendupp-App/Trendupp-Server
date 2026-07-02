@@ -19,6 +19,7 @@ import { UsersService } from './services/users.service';
 import { Role } from './entities/role.entity';
 import { RoleRepository } from './repository/role.repository';
 import { UsersController } from './controllers/users.controller';
+import { Campaign } from '../campaigns/entities/campaign.entity';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UsersController } from './controllers/users.controller';
       Bank,
       Industry,
       UserIndustry,
+      Campaign,
     ]),
   ],
   providers: [

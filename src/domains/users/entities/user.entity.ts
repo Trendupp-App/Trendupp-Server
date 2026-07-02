@@ -87,6 +87,22 @@ export class User extends BaseEntity<User> {
   declare acceptedTerms: boolean;
 
   @Column({
+    type: DataType.DECIMAL(3, 2),
+    allowNull: true,
+    defaultValue: null,
+    field: 'avg_rating',
+  })
+  declare avgRating?: number | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_reviews',
+  })
+  declare totalReviews: number;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
     allowNull: false,
@@ -418,6 +434,9 @@ export class User extends BaseEntity<User> {
       email: this.repEmail || null,
       phone: this.repPhone || null,
     };
+
+    values['avgRating'] = this.avgRating ? parseFloat(this.avgRating.toString()) : null;
+    values['totalReviews'] = this.totalReviews || 0;
 
     return values;
   }

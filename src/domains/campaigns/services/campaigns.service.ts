@@ -16,6 +16,10 @@ import { UrlValidatorService } from '../../../integration/url-validator/url-vali
 import { Fee } from '../entities/fee.entity';
 import { CreateFeeDto } from '../dtos/create-fee.dto';
 import { PaginatedResult } from '../../../shared/utils/pagination.utils';
+import { CreateReviewDto } from '../dtos/create-review.dto';
+import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
+import { CampaignReview } from '../entities/campaign-review.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -78,6 +82,10 @@ export class CampaignsService {
     if (campaign) {
       const breakdown = await this.calculateBreakdown(campaign.totalBudget);
       campaign.paymentBreakdown = breakdown;
+
+      // Attach application count
+      const total = await this.campaignRepository.countApplications(campaign.id);
+      campaign.setDataValue('applicationsCount' as any, { total });
     }
     return campaign;
   }
@@ -150,7 +158,7 @@ export class CampaignsService {
   ): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -199,7 +207,7 @@ export class CampaignsService {
   }> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -268,7 +276,7 @@ export class CampaignsService {
   ): Promise<{ campaign: Campaign; payment: Payment }> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -299,23 +307,48 @@ export class CampaignsService {
     };
   }
 
-  async findAll(
-    status?: string,
-    pagination?: { page?: number; limit?: number },
-  ): Promise<PaginatedResult<Campaign>> {
-    const page = pagination?.page || 1;
-    const limit = pagination?.limit || 10;
-    const result = await this.campaignRepository.findAll(status, page, limit);
+  async findAll(query: FindAllCampaignsQueryDto = {}): Promise<PaginatedResult<Campaign>> {
+    const result = await this.campaignRepository.findAll(query);
     result.data = await this.populateBreakdowns(result.data);
     return result;
   }
 
-  async findById(id: string): Promise<Campaign> {
+  async findById(id: string, requestingUser?: { id: string; role?: string }): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(id);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${id}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
-    return this.populateBreakdown(campaign);
+
+    await this.populateBreakdown(campaign);
+
+    // Filter applications based on requester role
+    if (campaign.applications && requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      if (role === 'brand') {
+        // Brand owner sees all applications; non-owners see none
+        if (campaign.brandId !== requestingUser.id) {
+          campaign.setDataValue('applications' as any, []);
+        }
+      } else if (role === 'creator') {
+        // Creators only see their own application
+        const ownApplication = campaign.applications.filter(
+          (app) => app.creatorId === requestingUser.id,
+        );
+        campaign.setDataValue('applications' as any, ownApplication);
+      } else {
+        // Admins see all applications
+      }
+    } else if (campaign.applications && !requestingUser) {
+      // Public (unauthenticated) access — strip all applications
+      campaign.setDataValue('applications' as any, []);
+    }
+
+    return campaign;
   }
 
   async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
@@ -362,7 +395,7 @@ export class CampaignsService {
   async approve(campaignId: string): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.status !== 'pending_approval') {
@@ -389,7 +422,7 @@ export class CampaignsService {
   ): Promise<CampaignApplication> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.status !== 'live') {
@@ -420,7 +453,7 @@ export class CampaignsService {
   ): Promise<CampaignApplication[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -438,7 +471,7 @@ export class CampaignsService {
   ): Promise<CampaignApplication> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -447,7 +480,7 @@ export class CampaignsService {
 
     const application = await this.campaignRepository.findApplicationById(appId);
     if (!application || application.campaignId !== campaignId) {
-      throw new NotFoundException(`Application with ID "${appId}" not found for this campaign`);
+      throw new NotFoundException('Application not found');
     }
 
     await application.update({ status });
@@ -475,7 +508,7 @@ export class CampaignsService {
   ): Promise<CampaignApplication> {
     const application = await this.campaignRepository.findApplicationById(appId);
     if (!application) {
-      throw new NotFoundException(`Application with ID "${appId}" not found`);
+      throw new NotFoundException('Application not found');
     }
 
     const isAdmin = ['admin', 'finance_admin', 'superadmin'].includes(role);
@@ -517,7 +550,7 @@ export class CampaignsService {
   ): Promise<ContentSubmission> {
     const application = await this.campaignRepository.findApplicationById(applicationId);
     if (!application) {
-      throw new NotFoundException(`Application with ID "${applicationId}" not found`);
+      throw new NotFoundException('Application not found');
     }
 
     if (application.creatorId !== creatorId) {
@@ -568,7 +601,7 @@ export class CampaignsService {
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -577,9 +610,7 @@ export class CampaignsService {
 
     const submission = await this.campaignRepository.findSubmissionById(submissionId);
     if (!submission || submission.campaignId !== campaignId) {
-      throw new NotFoundException(
-        `Submission with ID "${submissionId}" not found for this campaign`,
-      );
+      throw new NotFoundException('Submission not found');
     }
 
     if (submission.status !== 'pending_approval' && submission.status !== 'revision-sent') {
@@ -612,9 +643,7 @@ export class CampaignsService {
   ): Promise<ContentSubmission> {
     const submission = await this.campaignRepository.findSubmissionById(submissionId);
     if (!submission || submission.campaignId !== campaignId) {
-      throw new NotFoundException(
-        `Submission with ID "${submissionId}" not found for this campaign`,
-      );
+      throw new NotFoundException('Submission not found');
     }
 
     if (submission.creatorId !== creatorId) {
@@ -686,7 +715,7 @@ export class CampaignsService {
   async getSubmittedContent(campaignId: string, brandId: string): Promise<ContentSubmission[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
-      throw new NotFoundException(`Campaign with ID "${campaignId}" not found`);
+      throw new NotFoundException('Campaign not found');
     }
 
     if (campaign.brandId !== brandId) {
@@ -790,8 +819,112 @@ export class CampaignsService {
   async deleteFee(id: string): Promise<boolean> {
     const deleted = await this.campaignRepository.deleteFee(id);
     if (!deleted) {
-      throw new NotFoundException(`Fee configuration with ID "${id}" not found`);
+      throw new NotFoundException('Fee configuration not found');
     }
     return true;
+  }
+
+  // ─── Reviews & Star Ratings ────────────────────────────────────────────────
+
+  async submitReview(dto: CreateReviewDto, brandUser: User): Promise<CampaignReview> {
+    // 1. Fetch target campaign
+    const campaign = await this.campaignRepository.findById(dto.campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    // 2. Validate brand owner
+    if (campaign.brandId !== brandUser.id) {
+      throw new ForbiddenException(`You can only review creators on campaigns that you own`);
+    }
+
+    // 3. Validate campaign status is completed
+    if (campaign.status !== 'completed') {
+      throw new ForbiddenException(`You can only review creators after the campaign is completed`);
+    }
+
+    // 4. Validate creator was an approved participant of this campaign
+    const application = await this.campaignRepository.findApplication(
+      dto.campaignId,
+      dto.creatorId,
+    );
+    if (!application || !['approved', 'accepted'].includes(application.status)) {
+      throw new BadRequestException(
+        `Creator with ID "${dto.creatorId}" is not an approved participant of this campaign`,
+      );
+    }
+
+    // 5. Check for duplicate review
+    const existingReview = await this.campaignRepository.findReviewByBrandAndCampaign(
+      brandUser.id,
+      dto.campaignId,
+    );
+    if (existingReview) {
+      throw new BadRequestException(`You have already reviewed this campaign`);
+    }
+
+    // 6. Save review and update creator cached ratings in a transaction
+    const t = await User.sequelize!.transaction();
+    try {
+      const review = await this.campaignRepository.createReview(
+        {
+          campaignId: dto.campaignId,
+          brandId: brandUser.id,
+          creatorId: dto.creatorId,
+          starRating: dto.starRating,
+          comment: dto.comment,
+        },
+        t,
+      );
+
+      const stats = await this.campaignRepository.recalculateCreatorRating(dto.creatorId, t);
+
+      await User.update(
+        { avgRating: stats.avgRating, totalReviews: stats.totalReviews },
+        { where: { id: dto.creatorId }, transaction: t },
+      );
+
+      await t.commit();
+      return review;
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  }
+
+  async getCreatorReviews(
+    creatorId: string,
+    requestingUser: { id: string; role?: string | { name: string } },
+  ): Promise<CampaignReview[]> {
+    const roleRaw = requestingUser.role;
+    const roleName =
+      typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+        ? roleRaw.name
+        : (roleRaw ?? '');
+
+    // If requester is a creator, they can only view their own reviews
+    if (roleName === 'creator' && requestingUser.id !== creatorId) {
+      throw new ForbiddenException(`You are not authorized to view this creator's reviews`);
+    }
+
+    return this.campaignRepository.findReviewsByCreator(creatorId);
+  }
+
+  // ─── Delete Draft Campaign ─────────────────────────────────────────────────
+
+  async deleteDraft(id: string, brandId: string): Promise<void> {
+    const campaign = await this.campaignRepository.findByIdAndBrandId(id, brandId);
+
+    if (!campaign) {
+      throw new NotFoundException(`Campaign not found or you do not own it.`);
+    }
+
+    if (campaign.status !== 'draft') {
+      throw new ForbiddenException(
+        `Only campaigns in draft status can be permanently deleted. This campaign is currently '${campaign.status}'.`,
+      );
+    }
+
+    await this.campaignRepository.deleteDraftById(id, brandId);
   }
 }

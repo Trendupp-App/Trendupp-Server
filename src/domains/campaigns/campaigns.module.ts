@@ -13,6 +13,7 @@ import { Payment } from './entities/payment.entity';
 import { CampaignApplication } from './entities/campaign-application.entity';
 import { ContentSubmission } from './entities/content-submission.entity';
 import { Fee } from './entities/fee.entity';
+import { CampaignReview } from './entities/campaign-review.entity';
 import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { UrlValidatorModule } from '../../integration/url-validator/url-validato
       CampaignApplication,
       ContentSubmission,
       Fee,
+      CampaignReview,
     ]),
     UsersModule,
     UrlValidatorModule,
