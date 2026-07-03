@@ -116,16 +116,6 @@ export class CampaignRepository {
       if (status === 'past') {
         // Past = completed or cancelled campaigns
         where['status'] = { [Op.in]: ['completed', 'cancelled'] };
-      } else if (status === 'active') {
-        // Virtual: campaigns that have at least one accepted application
-        where['status'] = { [Op.ne]: 'deleted' };
-        extraIncludes.push({
-          model: CampaignApplication,
-          as: 'applications',
-          where: { status: 'accepted' },
-          required: true,
-          attributes: [],
-        });
       } else if (status === 'content_review') {
         // Virtual: campaigns that have a content submission awaiting content review
         where['status'] = { [Op.ne]: 'deleted' };
@@ -147,6 +137,7 @@ export class CampaignRepository {
           attributes: [],
         });
       } else {
+        // Standard DB column filter (draft, live, active, completed, etc.)
         where['status'] = status;
       }
     } else {

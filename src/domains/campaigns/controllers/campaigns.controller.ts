@@ -350,7 +350,7 @@ export class CampaignsController {
 
   @Patch(':id/applications/:appId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
+  @Roles('brand', 'admin', 'superadmin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -363,11 +363,13 @@ export class CampaignsController {
     @CurrentUser() user: User,
     @Body() dto: ReviewApplicationDto,
   ) {
+    const callerRole = user.role?.name ?? (user.role as unknown as string) ?? 'brand';
     const application = await this.campaignsService.reviewCampaignApplication(
       campaignId,
       appId,
       user.id,
       dto.status,
+      callerRole,
     );
     return {
       message: `Application has been ${dto.status} successfully.`,

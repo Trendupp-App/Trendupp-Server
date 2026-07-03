@@ -313,11 +313,8 @@ export class CampaignsService {
 
     // For virtual statuses, override the status field in the response so the
     // frontend receives the filter name it sent, not the raw DB value.
-    if (
-      query.status === 'active' ||
-      query.status === 'content_review' ||
-      query.status === 'revisions'
-    ) {
+    // NOTE: 'active' is now a real DB column value so no override needed.
+    if (query.status === 'content_review' || query.status === 'revisions') {
       result.data.forEach((c) => c.setDataValue('status' as any, query.status));
     }
 
@@ -437,7 +434,7 @@ export class CampaignsService {
     }
 
     if (campaign.status !== 'live') {
-      throw new ForbiddenException(`You can only apply to live campaigns`);
+      throw new ForbiddenException(`Oops! You can only apply to live campaigns. Kindly refresh!`);
     }
 
     const existingApp = await this.campaignRepository.findApplication(campaignId, creatorId);
@@ -477,15 +474,19 @@ export class CampaignsService {
   async reviewCampaignApplication(
     campaignId: string,
     appId: string,
-    brandId: string,
+    callerId: string,
     status: string,
+    callerRole: string = 'brand',
   ): Promise<CampaignApplication> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isAdmin = ['admin', 'superadmin'].includes(callerRole);
+
+    // Brands must own the campaign; admins can act on any campaign
+    if (!isAdmin && campaign.brandId !== callerId) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -494,9 +495,31 @@ export class CampaignsService {
       throw new NotFoundException('Application not found');
     }
 
+    // Attempting to undo an already-accepted application
+    if (application.status === 'accepted' && status === 'rejected') {
+      if (!isAdmin) {
+        throw new ForbiddenException(
+          `You do not have sufficient access to undo an accepted application. Please contact support.`,
+        );
+      }
+      // Admin undo: revert application + campaign back to live
+      await application.update({ status: 'rejected' });
+      await campaign.update({ status: 'live' });
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+      return updated!;
+    }
+
+    // Normal path: update application status
     await application.update({ status });
+
+    // When a brand accepts an application, promote the campaign to active
+    if (status === 'accepted') {
+      await campaign.update({ status: 'active' });
+    }
+
     const updated = await this.campaignRepository.findApplicationById(appId);
-    if (updated && updated.campaign) {
+    if (updated?.campaign) {
       await this.populateBreakdown(updated.campaign);
     }
     return updated!;
@@ -714,10 +737,10 @@ export class CampaignsService {
     }
 
     // Update application status to approved
-    const application = await this.campaignRepository.findApplicationById(submission.applicationId);
-    if (application) {
-      await application.update({ status: 'approved' });
-    }
+    // const application = await this.campaignRepository.findApplicationById(submission.applicationId);
+    // if (application) {
+    //   await application.update({ status: 'approved' });
+    // }
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);
     return updated!;
