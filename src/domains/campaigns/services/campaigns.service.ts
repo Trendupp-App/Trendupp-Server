@@ -310,6 +310,17 @@ export class CampaignsService {
   async findAll(query: FindAllCampaignsQueryDto = {}): Promise<PaginatedResult<Campaign>> {
     const result = await this.campaignRepository.findAll(query);
     result.data = await this.populateBreakdowns(result.data);
+
+    // For virtual statuses, override the status field in the response so the
+    // frontend receives the filter name it sent, not the raw DB value.
+    if (
+      query.status === 'active' ||
+      query.status === 'content_review' ||
+      query.status === 'revisions'
+    ) {
+      result.data.forEach((c) => c.setDataValue('status' as any, query.status));
+    }
+
     return result;
   }
 

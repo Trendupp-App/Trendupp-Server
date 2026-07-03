@@ -6,11 +6,29 @@ import { PaginationDto } from '../../../shared/dtos/pagination.dto';
 export class FindAllCampaignsQueryDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter campaigns by status',
-    enum: ['draft', 'live', 'active', 'completed', 'past', 'social_impact'],
+    enum: [
+      'draft',
+      'live',
+      'active',
+      'completed',
+      'past',
+      'social_impact',
+      'content_review',
+      'revisions',
+    ],
   })
   @IsOptional()
   @IsString()
-  @IsIn(['draft', 'live', 'active', 'completed', 'past', 'social_impact'])
+  @IsIn([
+    'draft',
+    'live',
+    'active',
+    'completed',
+    'past',
+    'social_impact',
+    'content_review',
+    'revisions',
+  ])
   status?: string;
 
   @ApiPropertyOptional({

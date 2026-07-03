@@ -108,10 +108,44 @@ export class CampaignRepository {
 
     const where: Record<string, unknown> = {};
 
+    // Extra includes appended for virtual status lookups (active, content_review, revisions)
+    const extraIncludes: object[] = [];
+
     // 1. Filter by Status
     if (status) {
       if (status === 'past') {
+        // Past = completed or cancelled campaigns
         where['status'] = { [Op.in]: ['completed', 'cancelled'] };
+      } else if (status === 'active') {
+        // Virtual: campaigns that have at least one accepted application
+        where['status'] = { [Op.ne]: 'deleted' };
+        extraIncludes.push({
+          model: CampaignApplication,
+          as: 'applications',
+          where: { status: 'accepted' },
+          required: true,
+          attributes: [],
+        });
+      } else if (status === 'content_review') {
+        // Virtual: campaigns that have a content submission awaiting content review
+        where['status'] = { [Op.ne]: 'deleted' };
+        extraIncludes.push({
+          model: ContentSubmission,
+          as: 'submissions',
+          where: { status: 'request_review' },
+          required: true,
+          attributes: [],
+        });
+      } else if (status === 'revisions') {
+        // Virtual: campaigns that have a content submission in the revision-sent state
+        where['status'] = { [Op.ne]: 'deleted' };
+        extraIncludes.push({
+          model: ContentSubmission,
+          as: 'submissions',
+          where: { status: 'revision-sent' },
+          required: true,
+          attributes: [],
+        });
       } else {
         where['status'] = status;
       }
@@ -164,7 +198,7 @@ export class CampaignRepository {
       this.campaignModel,
       {
         where,
-        include: this.fullIncludes,
+        include: [...this.fullIncludes, ...extraIncludes],
         order,
         distinct: true,
         subQuery: false,
