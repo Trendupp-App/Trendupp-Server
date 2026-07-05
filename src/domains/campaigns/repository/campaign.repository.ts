@@ -12,6 +12,7 @@ import { ContentSubmission } from '../entities/content-submission.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { PaymentRelease } from '../entities/payment-release.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
@@ -34,6 +35,8 @@ export class CampaignRepository {
     private readonly feeModel: typeof Fee,
     @InjectModel(CampaignReview)
     private readonly campaignReviewModel: typeof CampaignReview,
+    @InjectModel(PaymentRelease)
+    private readonly paymentReleaseModel: typeof PaymentRelease,
   ) {}
 
   private readonly fullIncludes = [
@@ -256,13 +259,7 @@ export class CampaignRepository {
     });
   }
 
-  createPayment(data: {
-    campaignId: string;
-    amount: number;
-    totalAmount: number;
-    paymentStatus: string;
-    paymentReference?: string;
-  }): Promise<Payment> {
+  createPayment(data: Partial<Attributes<Payment>>): Promise<Payment> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return (this.paymentModel as any).create(data) as Promise<Payment>;
   }
@@ -583,5 +580,60 @@ export class CampaignRepository {
 
   async deleteDraftById(id: string, brandId: string): Promise<void> {
     await this.campaignModel.update({ status: 'deleted' }, { where: { id, brandId } });
+  }
+
+  // ─── Payment Release & Webhook Helper Methods ─────────────────────────────
+
+  async createPaymentRelease(data: Partial<Attributes<PaymentRelease>>): Promise<PaymentRelease> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.paymentReleaseModel as any).create(data) as Promise<PaymentRelease>;
+  }
+
+  async findDuePendingReleases(now: Date): Promise<PaymentRelease[]> {
+    return this.paymentReleaseModel.findAll({
+      where: {
+        status: 'pending',
+        releaseDate: {
+          [Op.lte]: now,
+        },
+      },
+    });
+  }
+
+  async countPendingReleases(campaignId: string): Promise<number> {
+    return this.paymentReleaseModel.count({
+      where: { campaignId, status: 'pending' },
+    });
+  }
+
+  async countActiveSubmissions(campaignId: string): Promise<number> {
+    // Submissions that are not in status 'done' or 'rejected'
+    return this.contentSubmissionModel.count({
+      where: {
+        campaignId,
+        status: {
+          [Op.notIn]: ['done', 'rejected'],
+        },
+      },
+    });
+  }
+
+  async findPaymentByCampaignId(campaignId: string): Promise<Payment | null> {
+    return this.paymentModel.findOne({
+      where: { campaignId },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  async findPaymentByEscrowId(escrowId: string): Promise<Payment | null> {
+    return this.paymentModel.findOne({
+      where: { escrowId },
+    });
+  }
+
+  async updatePayment(id: string, data: Partial<Attributes<Payment>>): Promise<void> {
+    await this.paymentModel.update(data, {
+      where: { id },
+    });
   }
 }

@@ -56,4 +56,10 @@ export default () => ({
     apiKey: process.env.STREAM_API_KEY,
     apiSecret: process.env.STREAM_API_SECRET,
   },
+  pandascrow: {
+    apiKey: process.env.PANDASCROW_API_KEY,
+    secretKey: process.env.PANDASCROW_SECRET_KEY,
+    apiUrl: process.env.PANDASCROW_API_URL || 'https://sandbox.pandascrow.io',
+    accountUuid: process.env.PANDASCROW_ACCOUNT_UUID,
+  },
 });

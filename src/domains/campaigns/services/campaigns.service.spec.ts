@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { CampaignsService } from './campaigns.service';
 import { CampaignRepository } from '../repository/campaign.repository';
@@ -10,12 +11,16 @@ import { CreateReviewDto } from '../dtos/create-review.dto';
 import { CampaignApplication } from '../entities/campaign-application.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
+import { UsersService } from '../../users/services/users.service';
+import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let s3ServiceMock: jest.Mocked<S3Service>;
   let urlValidatorMock: jest.Mocked<UrlValidatorService>;
+  let usersServiceMock: jest.Mocked<UsersService>;
+  let pandascrowServiceMock: jest.Mocked<PandascrowService>;
 
   const mockCampaign = {
     id: 'c1',
@@ -74,6 +79,7 @@ describe('CampaignsService', () => {
       createReview: jest.fn(),
       findByIdAndBrandId: jest.fn(),
       deleteDraftById: jest.fn(),
+      createPaymentRelease: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -85,6 +91,15 @@ describe('CampaignsService', () => {
         .fn()
         .mockResolvedValue({ isLive: true, platform: 'YouTube', checkedAt: new Date() }),
     } as unknown as jest.Mocked<UrlValidatorService>;
+
+    usersServiceMock = {
+      findOne: jest.fn(),
+    } as unknown as jest.Mocked<UsersService>;
+
+    pandascrowServiceMock = {
+      initializeEscrow: jest.fn(),
+      requestPayout: jest.fn(),
+    } as unknown as jest.Mocked<PandascrowService>;
 
     Object.defineProperty(User, 'sequelize', {
       value: {
@@ -104,6 +119,8 @@ describe('CampaignsService', () => {
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: S3Service, useValue: s3ServiceMock },
         { provide: UrlValidatorService, useValue: urlValidatorMock },
+        { provide: UsersService, useValue: usersServiceMock },
+        { provide: PandascrowService, useValue: pandascrowServiceMock },
       ],
     }).compile();
 
@@ -269,6 +286,35 @@ describe('CampaignsService', () => {
       } as unknown as Campaign;
 
       campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+      usersServiceMock.findOne.mockResolvedValue({
+        firstName: 'Brand',
+        lastName: 'Owner',
+        email: 'brand@owner.com',
+        phoneNumber: '+2348000000000',
+      } as any);
+
+      pandascrowServiceMock.initializeEscrow.mockResolvedValue({
+        escrow_id: 12345,
+        payment_url: 'https://sandbox.pandascrow.io/checkout/12345',
+        transaction_ref: 'tx_ref_123',
+        provider: 'paystack',
+        status: 'pending',
+      });
+
+      const mockPayment = {
+        id: 'pay1',
+        campaignId: 'c1',
+        amount: 3000000,
+        totalAmount: 3675000,
+        paymentStatus: 'pending',
+        paymentReference: 'tx_ref_123',
+        escrowId: '12345',
+        paymentUrl: 'https://sandbox.pandascrow.io/checkout/12345',
+        transactionRef: 'tx_ref_123',
+        provider: 'paystack',
+        escrowStatus: 'pending',
+      } as any;
+      campaignRepoMock.createPayment.mockResolvedValue(mockPayment);
 
       const result = await service.submit('c1', 'b1');
 
@@ -277,49 +323,12 @@ describe('CampaignsService', () => {
         status: 'submitted',
         currentStep: 5,
         acceptedTerms: true,
+        paymentStatus: 'pending',
       });
 
       expect(result).toEqual({
         campaign: completeCampaign,
-        payment: {
-          campaignId: 'c1',
-          amount: 3000000,
-          totalAmount: 3675000,
-          paymentStatus: 'unpaid',
-        },
-      });
-    });
-  });
-
-  describe('pay', () => {
-    it('should create payment and update status to paid', async () => {
-      const submittedCampaign = {
-        ...mockCampaign,
-        id: 'c1',
-        brandId: 'b1',
-        status: 'pending_approval',
-        paymentStatus: 'unpaid',
-        update: jest.fn().mockResolvedValue(undefined),
-      } as unknown as Campaign;
-
-      campaignRepoMock.findById.mockResolvedValue(submittedCampaign);
-      campaignRepoMock.createPayment.mockResolvedValue({ id: 'pay1' } as any);
-
-      await service.pay('c1', 'b1', 'tx_ref_123');
-
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.createPayment).toHaveBeenCalledWith({
-        campaignId: 'c1',
-        amount: 3000000,
-        totalAmount: 3675000,
-        paymentStatus: 'paid',
-        paymentReference: 'tx_ref_123',
-      });
-
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(submittedCampaign.update).toHaveBeenCalledWith({
-        paymentStatus: 'paid',
-        status: 'live',
+        payment: mockPayment,
       });
     });
   });
@@ -770,10 +779,69 @@ describe('CampaignsService', () => {
         },
         urlIsLive: true,
         urlCheckedAt: expect.any(Date) as Date,
-        status: 'done',
+        status: 'livelink_available',
       });
 
       // expect(mockApplication.update).toHaveBeenCalledWith({ status: 'approved' });
+    });
+  });
+
+  describe('approveLivePost', () => {
+    it('should successfully approve live post, set status to done, and create payment release', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'b1', status: 'active' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        status: 'livelink_available',
+        update: jest.fn(),
+      };
+      const mockApplication = { id: 'app1', feeRequest: 150000 };
+
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.createPaymentRelease.mockResolvedValue({ id: 'rel1' } as any);
+
+      const result = await service.approveLivePost('c1', 'sub1', 'b1');
+
+      expect(mockSubmission.update).toHaveBeenCalledWith({ status: 'done' });
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createPaymentRelease).toHaveBeenCalledWith(
+        expect.objectContaining({
+          campaignId: 'c1',
+          creatorId: 'creator1',
+          applicationId: 'app1',
+          amount: 150000,
+          status: 'pending',
+          releaseDate: expect.any(Date) as Date,
+        }),
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('should throw ForbiddenException if brand does not own the campaign', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'different_brand', status: 'active' };
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+
+      await expect(service.approveLivePost('c1', 'sub1', 'b1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw ForbiddenException if submission status is not livelink_available', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'b1', status: 'active' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        status: 'pending_approval',
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+
+      await expect(service.approveLivePost('c1', 'sub1', 'b1')).rejects.toThrow(ForbiddenException);
     });
   });
 

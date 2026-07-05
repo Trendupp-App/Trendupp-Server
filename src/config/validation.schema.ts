@@ -54,4 +54,10 @@ export const validationSchema = Joi.object({
   // Stream Chat
   STREAM_API_KEY: Joi.string().allow('').optional(),
   STREAM_API_SECRET: Joi.string().allow('').optional(),
+
+  // Pandascrow Escrow System
+  PANDASCROW_API_KEY: Joi.string().allow('').optional(),
+  PANDASCROW_SECRET_KEY: Joi.string().allow('').optional(),
+  PANDASCROW_API_URL: Joi.string().uri().allow('').optional(),
+  PANDASCROW_ACCOUNT_UUID: Joi.string().allow('').optional(),
 });

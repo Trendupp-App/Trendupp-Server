@@ -315,10 +315,10 @@ export class OnboardingController {
     );
 
     let tier = 'Nano Creator';
-    if (maxFollowers >= 500000) {
+    if (maxFollowers >= 1000000) {
+      tier = 'Mega Creator';
+    } else if (maxFollowers >= 200000) {
       tier = 'Macro Creator';
-    } else if (maxFollowers >= 100000) {
-      tier = 'Mid-tier Creator';
     } else if (maxFollowers >= 10000) {
       tier = 'Micro Creator';
     }

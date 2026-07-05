@@ -27,4 +27,19 @@ export class Payment extends BaseEntity<Payment> {
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'payment_reference' })
   declare paymentReference?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'escrow_id' })
+  declare escrowId?: string;
+
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'payment_url' })
+  declare paymentUrl?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'transaction_ref' })
+  declare transactionRef?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'provider' })
+  declare provider?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'escrow_status' })
+  declare escrowStatus?: string;
 }
