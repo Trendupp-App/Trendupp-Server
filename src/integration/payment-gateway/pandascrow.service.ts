@@ -74,7 +74,7 @@ export class PandascrowService {
       this.logger.warn('Pandascrow credentials missing. Running in simulated mode.');
       return {
         escrow_id: Math.floor(Math.random() * 100000),
-        payment_url: 'https://sandbox.pandascrow.io/simulated-checkout',
+        payment_url: `${this.apiUrl}/simulated-checkout`,
         transaction_ref: `sim_ref_${Math.random().toString(36).substring(2, 11)}`,
         provider: 'simulated',
         status: 'pending',
@@ -149,30 +149,42 @@ export class PandascrowService {
       return true;
     }
 
-    // Build URL query parameters
-    const query = new URLSearchParams({
-      uuid: payload.payoutRef,
-      wallet_id: payload.walletId.toString(),
+    const body = {
+      uuid: this.accountUuid,
+      idempotency_key: payload.payoutRef,
       amount: payload.amount.toString(),
       currency: payload.currency.toUpperCase(),
-      method: 'bank_transfer',
-      'destination[account_number]': payload.accountNumber,
-      'destination[account_name]': payload.accountName,
-      'destination[bank_code]': payload.bankCode,
-    });
+      bank: {
+        account_number: payload.accountNumber,
+        account_name: payload.accountName,
+        bank_code: payload.bankCode,
+      },
+      description: 'Trendupp Creator Payout',
+    };
 
     try {
-      const response = await fetch(`${this.apiUrl}/wallet/payout?${query.toString()}`, {
+      const response = await fetch(`${this.apiUrl}/bank/transfers`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Token: this.apiKey,
         },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         this.logger.error(`Pandascrow payout failed: ${response.status} - ${errorText}`);
-        throw new Error(`Pandascrow payout failed: ${response.statusText}`);
+        let message = response.statusText;
+        try {
+          const errObj = JSON.parse(errorText) as { data?: { message?: string } };
+          if (errObj?.data?.message) {
+            message = errObj.data.message;
+          }
+        } catch {
+          // Ignore parsing errors and fallback to statusText
+        }
+        throw new Error(`Pandascrow payout failed: ${message}`);
       }
 
       const resData = (await response.json()) as { status?: boolean };

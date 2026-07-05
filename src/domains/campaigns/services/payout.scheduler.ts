@@ -21,14 +21,16 @@ export class PayoutScheduler {
 
   /**
    * Cron job that checks for creator payouts that are due (scheduled release date has passed).
-   * Runs daily at midnight.
+   * Runs daily at midnight. EVERY_SECOND
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_5_SECONDS)
   async processPendingPayouts() {
     this.logger.log('Starting daily payout check for creators...');
     const now = new Date();
     const pendingReleases = await this.campaignRepository.findDuePendingReleases(now);
 
+    console.log('Pending releases:', pendingReleases);
     if (pendingReleases.length === 0) {
       this.logger.log('No due pending payouts found.');
 
