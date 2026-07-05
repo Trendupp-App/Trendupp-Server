@@ -221,6 +221,37 @@ describe('ProfileService', () => {
       });
     });
 
+    it('should assign Mega Creator tier if followers is 1M or more', async () => {
+      const mockUser = {
+        id: 'u1',
+        instagramUsername: null,
+        instagramFollowers: 0,
+        tiktokUsername: null,
+        tiktokFollowers: 0,
+        youtubeUsername: null,
+        youtubeFollowers: 0,
+        twitterUsername: null,
+        twitterFollowers: 0,
+      } as unknown as User;
+
+      usersServiceMock.findOne.mockResolvedValue(mockUser);
+      usersServiceMock.update.mockResolvedValue(mockUser);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
+
+      const dto: UpdateProfileSocialsDto = {
+        youtubeUsername: 'mega_creator',
+        youtubeFollowers: 1200000,
+      };
+
+      await service.updateSocials('u1', dto);
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
+        youtubeUsername: 'mega_creator',
+        youtubeFollowers: 1200000,
+        assignedTier: 'Mega Creator',
+      });
+    });
+
     it('should disconnect social platform when username is explicitly null', async () => {
       const mockUser = {
         id: 'u1',

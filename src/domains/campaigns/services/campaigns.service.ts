@@ -20,6 +20,8 @@ import { CreateReviewDto } from '../dtos/create-review.dto';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { User } from '../../users/entities/user.entity';
+import { UsersService } from '../../users/services/users.service';
+import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 
 @Injectable()
 export class CampaignsService {
@@ -27,6 +29,8 @@ export class CampaignsService {
     private readonly campaignRepository: CampaignRepository,
     private readonly s3Service: S3Service,
     private readonly urlValidatorService: UrlValidatorService,
+    private readonly usersService: UsersService,
+    private readonly pandascrowService: PandascrowService,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -203,7 +207,7 @@ export class CampaignsService {
     brandId: string,
   ): Promise<{
     campaign: Campaign;
-    payment: { campaignId: string; amount: number; totalAmount: number; paymentStatus: string };
+    payment: Payment;
   }> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
@@ -248,61 +252,62 @@ export class CampaignsService {
       throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
     }
 
-    await campaign.update({
-      status: 'submitted',
-      currentStep: 5,
-      acceptedTerms: true,
-    });
-
-    const populated = await this.campaignRepository.findById(campaign.id);
-    const breakdown = await this.calculateBreakdown(populated!.totalBudget);
-    populated!.paymentBreakdown = breakdown;
-
-    return {
-      campaign: populated!,
-      payment: {
-        campaignId: populated!.id,
-        amount: populated!.totalBudget,
-        totalAmount: breakdown.totalToPay,
-        paymentStatus: 'unpaid',
-      },
-    };
-  }
-
-  async pay(
-    campaignId: string,
-    brandId: string,
-    paymentReference?: string,
-  ): Promise<{ campaign: Campaign; payment: Payment }> {
-    const campaign = await this.campaignRepository.findById(campaignId);
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    if (campaign.brandId !== brandId) {
-      throw new ForbiddenException(`You do not own this campaign`);
+    // Load brand profile details
+    const brand = await this.usersService.findOne(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand user profile not found');
     }
 
     const breakdown = await this.calculateBreakdown(campaign.totalBudget);
 
+    // Initialize escrow on Pandascrow
+    const deliveryDateStr = new Date(campaign.timeline!).toISOString().split('T')[0];
+    const escrow = await this.pandascrowService.initializeEscrow({
+      title: campaign.title,
+      description: campaign.campaignBrief!,
+      amount: breakdown.totalToPay,
+      currency: 'NGN', // Default to NGN as per specification
+      deliveryDate: deliveryDateStr,
+      buyerDetails: {
+        name: `${brand.firstName} ${brand.lastName}`,
+        email: brand.email,
+        phone: brand.phoneNumber || '',
+      },
+      sellerDetails: {
+        name: 'Trendupp Platform',
+        email: 'finance@trendupp.com',
+        phone: '',
+      },
+    });
+
+    await campaign.update({
+      status: 'submitted',
+      currentStep: 5,
+      acceptedTerms: true,
+      paymentStatus: 'pending',
+    });
+
+    // Create pending payment record
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
       amount: campaign.totalBudget,
       totalAmount: breakdown.totalToPay,
-      paymentStatus: 'paid',
-      paymentReference: paymentReference || `tx_${Math.random().toString(36).substring(2, 11)}`,
+      paymentStatus: 'pending',
+      paymentReference: escrow.transaction_ref,
+      escrowId: String(escrow.escrow_id),
+      paymentUrl: escrow.payment_url,
+      transactionRef: escrow.transaction_ref,
+      provider: escrow.provider,
+      escrowStatus: escrow.status,
     });
 
-    await campaign.update({
-      paymentStatus: 'paid',
-      status: 'live',
-    });
-
-    const updated = await this.campaignRepository.findById(campaign.id);
-    const populated = await this.populateBreakdown(updated!);
+    const populated = await this.campaignRepository.findById(campaign.id);
+    if (populated) {
+      populated.paymentBreakdown = breakdown;
+    }
 
     return {
-      campaign: populated,
+      campaign: populated!,
       payment,
     };
   }
@@ -684,8 +689,12 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this submission`);
     }
 
-    if (submission.status !== 'approved') {
-      throw new ForbiddenException(`You can only submit proof of posting for approved drafts`);
+    if (submission.status == 'livelink_available') {
+      throw new ForbiddenException(`livelink already sent please wait for approval`);
+    }
+
+    if (submission.status == 'done') {
+      throw new ForbiddenException(`This campaign has been completed`);
     }
 
     if (typeof liveLink !== 'object' || liveLink === null || Object.keys(liveLink).length === 0) {
@@ -727,7 +736,7 @@ export class CampaignsService {
       liveLink: processedLinks as unknown as Record<string, string>,
       urlIsLive: overallIsLive,
       urlCheckedAt: checkedAt,
-      status: 'done',
+      status: 'livelink_available',
     });
 
     // Update campaign level convenience status
@@ -741,6 +750,60 @@ export class CampaignsService {
     // if (application) {
     //   await application.update({ status: 'approved' });
     // }
+
+    const updated = await this.campaignRepository.findSubmissionById(submissionId);
+    return updated!;
+  }
+
+  async approveLivePost(
+    campaignId: string,
+    submissionId: string,
+    brandId: string,
+  ): Promise<ContentSubmission> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    if (campaign.brandId !== brandId) {
+      throw new ForbiddenException(`You do not own this campaign`);
+    }
+
+    const submission = await this.campaignRepository.findSubmissionById(submissionId);
+    if (!submission || submission.campaignId !== campaignId) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.status !== 'livelink_available') {
+      throw new ForbiddenException(`Submission live post link is not available for approval`);
+    }
+
+    // Update submission status to 'done'
+    await submission.update({ status: 'done' });
+
+    // Fetch CampaignApplication to get the fee request amount
+    const application = await this.campaignRepository.findApplicationById(submission.applicationId);
+    if (!application) {
+      throw new NotFoundException('Campaign application not found');
+    }
+
+    // Schedule creator payout in 30 days
+    const releaseDate = new Date();
+    releaseDate.setDate(releaseDate.getDate() + 30); // 30 days from now
+
+    // Fetch the campaign's payment record to carry the Pandascrow escrow ID
+    // into the payment_release row — used by the payout cron to guard the bank transfer.
+    const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+
+    await this.campaignRepository.createPaymentRelease({
+      campaignId,
+      creatorId: submission.creatorId,
+      applicationId: submission.applicationId,
+      amount: campaign.totalBudget,
+      releaseDate,
+      status: 'pending',
+      escrowId: campaignPayment?.escrowId ?? null,
+    });
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);
     return updated!;

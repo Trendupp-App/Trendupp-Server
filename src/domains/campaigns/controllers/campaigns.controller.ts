@@ -165,34 +165,16 @@ export class CampaignsController {
   @Roles('brand')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Submit a campaign draft for review (brand owner only)' })
-  @ApiResponse({ status: 200, description: 'Campaign submitted for review successfully' })
+  @ApiOperation({
+    summary: 'Submit campaign draft and initialize Pandascrow payment escrow (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaign submitted and escrow initiated successfully' })
   async submit(@Param('id') id: string, @CurrentUser() user: User) {
     const result = await this.campaignsService.submit(id, user.id);
     return {
-      message: 'Campaign submitted successfully. Please proceed to payment to finalize funding.',
+      message: 'Campaign submitted successfully. Please complete checkout to go live.',
       campaign: result.campaign,
       payment: result.payment,
-    };
-  }
-
-  @Post(':id/pay')
-  @Throttle({ default: THROTTLE_LIMITS.CAMPAIGN_CREATE })
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Process simulated payment for a campaign (brand owner only)' })
-  @ApiResponse({ status: 200, description: 'Campaign payment completed successfully' })
-  async pay(
-    @Param('id') id: string,
-    @CurrentUser() user: User,
-    @Body('paymentReference') paymentReference?: string,
-  ) {
-    const result = await this.campaignsService.pay(id, user.id, paymentReference);
-    return {
-      message: 'Campaign funded successfully. It is now awaiting admin review.',
-      ...result,
     };
   }
 
@@ -235,7 +217,7 @@ export class CampaignsController {
 
   @Get('creator-categories')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
-  @ApiOperation({ summary: 'Get all creator categories (Nano, Micro, Mid-tier, Macro)' })
+  @ApiOperation({ summary: 'Get all creator categories (Nano, Micro, Macro, Mega)' })
   @ApiResponse({ status: 200, description: 'List of creator categories' })
   getCreatorCategories() {
     return this.campaignsService.getCreatorCategories();
@@ -451,6 +433,32 @@ export class CampaignsController {
     );
     return {
       message: 'Proof of posting submitted successfully.',
+      submission,
+    };
+  }
+
+  @Patch(':id/submissions/:submissionId/approve-live')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Approve live post link/proof of posting and schedule creator payout (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Live post approved and payout scheduled successfully' })
+  async approveLivePost(
+    @Param('id') campaignId: string,
+    @Param('submissionId') submissionId: string,
+    @CurrentUser() user: User,
+  ) {
+    const submission = await this.campaignsService.approveLivePost(
+      campaignId,
+      submissionId,
+      user.id,
+    );
+    return {
+      message: 'Live proof of posting approved successfully. Creator payout scheduled in 30 days.',
       submission,
     };
   }

@@ -9,6 +9,7 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { PaymentRelease } from '../entities/payment-release.entity';
 import { paginate } from '../../../shared/utils/pagination.utils';
 import { Op } from 'sequelize';
 
@@ -37,6 +38,7 @@ describe('CampaignRepository', () => {
         { provide: getModelToken(ContentSubmission), useValue: {} },
         { provide: getModelToken(Fee), useValue: {} },
         { provide: getModelToken(CampaignReview), useValue: {} },
+        { provide: getModelToken(PaymentRelease), useValue: {} },
       ],
     }).compile();
 

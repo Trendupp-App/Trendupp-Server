@@ -15,6 +15,11 @@ import { ContentSubmission } from './entities/content-submission.entity';
 import { Fee } from './entities/fee.entity';
 import { CampaignReview } from './entities/campaign-review.entity';
 import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
+import { PaymentRelease } from './entities/payment-release.entity';
+import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
+
+import { WebhooksController } from './controllers/webhooks.controller';
+import { PayoutScheduler } from './services/payout.scheduler';
 
 @Module({
   imports: [
@@ -28,12 +33,15 @@ import { UrlValidatorModule } from '../../integration/url-validator/url-validato
       ContentSubmission,
       Fee,
       CampaignReview,
+      PaymentRelease,
     ]),
     UsersModule,
     UrlValidatorModule,
+    PandascrowModule,
   ],
-  providers: [CampaignRepository, CampaignsService, S3Service],
-  controllers: [CampaignsController],
+
+  providers: [CampaignRepository, CampaignsService, S3Service, PayoutScheduler],
+  controllers: [CampaignsController, WebhooksController],
   exports: [CampaignsService, CampaignRepository, SequelizeModule],
 })
 export class CampaignsModule {}

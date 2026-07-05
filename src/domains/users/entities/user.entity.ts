@@ -24,16 +24,16 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: false })
   declare email: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
+  @Column({ type: DataType.STRING, allowNull: false, field: 'first_name' })
   declare firstName: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
+  @Column({ type: DataType.STRING, allowNull: false, field: 'last_name' })
   declare lastName: string;
 
-  @Column({ type: DataType.STRING, allowNull: true })
+  @Column({ type: DataType.STRING, allowNull: true, field: 'phone_number' })
   declare phoneNumber: string;
 
-  @Column({ type: DataType.BOOLEAN, defaultValue: true })
+  @Column({ type: DataType.BOOLEAN, defaultValue: true, field: 'is_active' })
   declare isActive: boolean;
 
   @ForeignKey(() => Role)
