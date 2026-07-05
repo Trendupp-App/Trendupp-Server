@@ -592,12 +592,27 @@ export class CampaignRepository {
   async findDuePendingReleases(now: Date): Promise<PaymentRelease[]> {
     return this.paymentReleaseModel.findAll({
       where: {
-        status: 'pending',
+        // Include 'pending' (normal), 'escrow_pending' (awaiting escrow release),
+        // and 'failed' (allow retries on subsequent cron runs)
+        status: { [Op.in]: ['pending', 'escrow_pending', 'failed'] },
         releaseDate: {
           [Op.lte]: now,
         },
       },
     });
+  }
+
+  /**
+   * Transitions payment_release rows for a campaign from 'escrow_pending' back to 'pending',
+   * allowing the payout cron to pick them up now that the escrow has been marked complete.
+   * Called by the escrow.completed webhook handler.
+   */
+  async unblockEscrowPendingReleases(campaignId: string): Promise<number> {
+    const [count] = await this.paymentReleaseModel.update(
+      { status: 'pending' },
+      { where: { campaignId, status: 'escrow_pending' } },
+    );
+    return count;
   }
 
   async countPendingReleases(campaignId: string): Promise<number> {

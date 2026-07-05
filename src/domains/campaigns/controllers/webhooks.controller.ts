@@ -135,10 +135,22 @@ export class WebhooksController {
       return;
     }
 
-    // Update payment
+    // Mark the payment's escrow status as completed
     await payment.update({
       escrowStatus: 'completed',
     });
     this.logger.log(`Escrow ${escrowId} status updated to completed.`);
+
+    // Unblock any payment_release rows that were parked awaiting escrow release.
+    // This transitions them from 'escrow_pending' → 'pending' so the payout cron
+    // picks them up on the next run.
+    const unblocked = await this.campaignRepository.unblockEscrowPendingReleases(
+      payment.campaignId,
+    );
+    if (unblocked > 0) {
+      this.logger.log(
+        `Unblocked ${unblocked} payment release(s) for campaign ${payment.campaignId} — now queued for payout.`,
+      );
+    }
   }
 }

@@ -80,6 +80,7 @@ describe('CampaignsService', () => {
       findByIdAndBrandId: jest.fn(),
       deleteDraftById: jest.fn(),
       createPaymentRelease: jest.fn(),
+      findPaymentByCampaignId: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -788,7 +789,7 @@ describe('CampaignsService', () => {
 
   describe('approveLivePost', () => {
     it('should successfully approve live post, set status to done, and create payment release', async () => {
-      const mockCampaignVal = { id: 'c1', brandId: 'b1', status: 'active' };
+      const mockCampaignVal = { id: 'c1', brandId: 'b1', status: 'active', totalBudget: 150000 };
       const mockSubmission = {
         id: 'sub1',
         campaignId: 'c1',
@@ -803,6 +804,7 @@ describe('CampaignsService', () => {
       campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
       campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
       campaignRepoMock.createPaymentRelease.mockResolvedValue({ id: 'rel1' } as any);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue(null);
 
       const result = await service.approveLivePost('c1', 'sub1', 'b1');
 
@@ -815,6 +817,7 @@ describe('CampaignsService', () => {
           applicationId: 'app1',
           amount: 150000,
           status: 'pending',
+          escrowId: null,
           releaseDate: expect.any(Date) as Date,
         }),
       );

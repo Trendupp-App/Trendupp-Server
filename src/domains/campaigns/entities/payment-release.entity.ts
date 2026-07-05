@@ -38,7 +38,15 @@ export class PaymentRelease extends BaseEntity<PaymentRelease> {
     allowNull: false,
     defaultValue: 'pending',
   })
-  declare status: string; // 'pending' | 'released' | 'failed'
+  declare status: string; // 'pending' | 'escrow_pending' | 'released' | 'failed'
+
+  /**
+   * The Pandascrow escrow ID linked to this release.
+   * Populated from Payment.escrowId at the time the release is created.
+   * Used by the payout cron to verify escrow is completed before bank transfer.
+   */
+  @Column({ type: DataType.STRING, allowNull: true, field: 'escrow_id' })
+  declare escrowId?: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true, field: 'error_details' })
   declare errorDetails?: string | null;

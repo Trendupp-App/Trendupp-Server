@@ -59,6 +59,23 @@ export class PayoutScheduler {
           `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
         );
 
+        // Guard: only proceed with bank transfer if the Pandascrow escrow has been released.
+        // The finance admin releases the escrow via the Pandascrow dashboard, which triggers
+        // the escrow.completed webhook → updates Payment.escrowStatus → unblocks this release.
+        const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
+          release.campaignId,
+        );
+        if (campaignPayment?.escrowStatus !== 'completed') {
+          this.logger.warn(
+            `Escrow not yet released for campaign ${release.campaignId} ` +
+              `(release ID: ${release.id}). ` +
+              `Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
+              `Parking as escrow_pending — will retry after escrow.completed webhook.`,
+          );
+          await release.update({ status: 'escrow_pending', errorDetails: null });
+          continue;
+        }
+
         // Trigger payout request from Trendupp's Pandascrow wallet to creator's bank account
         const success = await this.pandascrowService.requestPayout({
           payoutRef,

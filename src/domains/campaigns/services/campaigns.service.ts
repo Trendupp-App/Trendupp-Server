@@ -791,6 +791,10 @@ export class CampaignsService {
     const releaseDate = new Date();
     releaseDate.setDate(releaseDate.getDate() + 30); // 30 days from now
 
+    // Fetch the campaign's payment record to carry the Pandascrow escrow ID
+    // into the payment_release row — used by the payout cron to guard the bank transfer.
+    const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+
     await this.campaignRepository.createPaymentRelease({
       campaignId,
       creatorId: submission.creatorId,
@@ -798,6 +802,7 @@ export class CampaignsService {
       amount: campaign.totalBudget,
       releaseDate,
       status: 'pending',
+      escrowId: campaignPayment?.escrowId ?? null,
     });
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);
