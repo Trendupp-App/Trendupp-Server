@@ -24,7 +24,7 @@ export class PayoutScheduler {
    * Runs daily at midnight. EVERY_SECOND
    */
   // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  @Cron(CronExpression.EVERY_5_SECONDS)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async processPendingPayouts() {
     this.logger.log('Starting daily payout check for creators...');
     const now = new Date();
