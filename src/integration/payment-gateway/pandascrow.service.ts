@@ -84,6 +84,7 @@ export class PandascrowService {
     const body = {
       uuid: this.accountUuid,
       escrow_type: 'onetime',
+      // initiator_role: 'seller',
       initiator_role: 'buyer',
       initiator_id: this.accountUuid,
       title: payload.title,
@@ -105,6 +106,8 @@ export class PandascrowService {
       },
     };
 
+    console.log({ check_body: body });
+
     try {
       const response = await fetch(`${this.apiUrl}/escrow/initialize`, {
         method: 'POST',
@@ -121,10 +124,12 @@ export class PandascrowService {
         throw new Error(`Pandascrow initiation failed: ${response.statusText}`);
       }
 
-      const resData = (await response.json()) as PandascrowResponse<EscrowInitData>;
+      const resData = await this.parseJsonResponse<PandascrowResponse<EscrowInitData>>(response);
       if (!resData.status || !resData.data) {
         throw new Error(resData.message || 'Failed to initialize escrow');
       }
+
+      console.log({ escrow_check: resData });
 
       return {
         escrow_id: resData.data.escrow_id,
@@ -187,12 +192,31 @@ export class PandascrowService {
         throw new Error(`Pandascrow payout failed: ${message}`);
       }
 
-      const resData = (await response.json()) as { status?: boolean };
+      const resData = await this.parseJsonResponse<{ status?: boolean }>(response);
       return !!resData.status;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Pandascrow payout request exception: ${errMsg}`);
       throw error;
+    }
+  }
+
+  /**
+   * Safely parses JSON responses from Pandascrow.
+   * Strips out any leading HTML warnings (like PHP warnings) occasionally returned by the Sandbox API.
+   */
+  private async parseJsonResponse<T>(response: Response): Promise<T> {
+    const text = await response.text();
+    const jsonStart = text.indexOf('{');
+    if (jsonStart === -1) {
+      throw new Error(`Invalid JSON response: ${text}`);
+    }
+    try {
+      const cleanJson = text.substring(jsonStart);
+      return JSON.parse(cleanJson) as T;
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to parse JSON response: ${errMsg}. Body: ${text}`);
     }
   }
 

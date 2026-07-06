@@ -270,8 +270,8 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: brand.email,
-        phone: brand.phoneNumber || '',
+        email: 'app@trendupp.com', //brand.email,
+        phone: '+234900000000', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',

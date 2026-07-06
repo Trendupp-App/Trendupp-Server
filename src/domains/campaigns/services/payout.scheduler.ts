@@ -21,9 +21,9 @@ export class PayoutScheduler {
 
   /**
    * Cron job that checks for creator payouts that are due (scheduled release date has passed).
-   * Runs daily at midnight. EVERY_SECOND
+   * Runs daily at midnight. EVERY_5_SECONDS
    */
-  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // @Cron(CronExpression.EVERY_5_SECONDS)
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async processPendingPayouts() {
     this.logger.log('Starting daily payout check for creators...');
@@ -52,8 +52,9 @@ export class PayoutScheduler {
           throw new Error('Creator payout bank details are missing or incomplete');
         }
 
-        // Generate unique reference (idempotency key) for this release payout
-        const payoutRef = `payout_${release.id.replace(/-/g, '')}`;
+        // Generate unique reference (idempotency key) for this release payout.
+        // Must be <= 25 characters (limit enforced by Pandascrow /bank/transfers).
+        const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 20)}`;
 
         this.logger.log(
           `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
