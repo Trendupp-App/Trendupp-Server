@@ -312,8 +312,27 @@ export class CampaignsService {
     };
   }
 
-  async findAll(query: FindAllCampaignsQueryDto = {}): Promise<PaginatedResult<Campaign>> {
-    const result = await this.campaignRepository.findAll(query);
+  async findAll(
+    query: FindAllCampaignsQueryDto = {},
+    user?: User,
+  ): Promise<PaginatedResult<Campaign>> {
+    // 1. Identify if the requester is a creator and has not selected explicit niche filters
+    const roleRaw: unknown = user?.role;
+    const role =
+      typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+        ? (roleRaw as { name: string }).name
+        : ((roleRaw as string | undefined) ?? '');
+
+    const isCreator = role.toLowerCase() === 'creator';
+    const hasNicheFilters =
+      (query.nicheIds && query.nicheIds.length > 0) || (query.niches && query.niches.length > 0);
+
+    let prioritizeNicheIds: string[] | undefined;
+    if (isCreator && !hasNicheFilters && user?.niches) {
+      prioritizeNicheIds = user.niches.map((n) => n.id);
+    }
+
+    const result = await this.campaignRepository.findAll(query, prioritizeNicheIds);
     result.data = await this.populateBreakdowns(result.data);
 
     // For virtual statuses, override the status field in the response so the

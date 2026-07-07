@@ -211,8 +211,8 @@ export class CampaignsController {
       },
     },
   })
-  async findAll(@Query() query: FindAllCampaignsQueryDto) {
-    return this.campaignsService.findAll(query);
+  async findAll(@Query() query: FindAllCampaignsQueryDto, @CurrentUser() user?: User) {
+    return this.campaignsService.findAll(query, user);
   }
 
   @Get('creator-categories')

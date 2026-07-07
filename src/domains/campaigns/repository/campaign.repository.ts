@@ -106,7 +106,10 @@ export class CampaignRepository {
     return campaign;
   }
 
-  findAll(query: FindAllCampaignsQueryDto): Promise<PaginatedResult<Campaign>> {
+  findAll(
+    query: FindAllCampaignsQueryDto,
+    prioritizeNicheIds?: string[],
+  ): Promise<PaginatedResult<Campaign>> {
     const { status, sortBy, platforms, niches, nicheIds, goal, page = 1, limit = 10 } = query;
 
     const where: Record<string, unknown> = {};
@@ -144,7 +147,7 @@ export class CampaignRepository {
         where['status'] = status;
       }
     } else {
-      where['status'] = { [Op.ne]: 'deleted' };
+      where['status'] = 'live';
     }
 
     // 2. Filter by Platforms
@@ -179,8 +182,22 @@ export class CampaignRepository {
     }
 
     // 5. Determine Order Sort Criteria
-    let order: Array<[string, string]> = [['createdAt', 'DESC']]; // default newest
-    if (sortBy) {
+    let order: any[] = [['createdAt', 'DESC']]; // default newest
+    if (prioritizeNicheIds && prioritizeNicheIds.length > 0 && !sortBy) {
+      const escapedIds = prioritizeNicheIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      order = [
+        [
+          Sequelize.literal(`
+            CASE 
+              WHEN "creator_niche_id" IN (${escapedIds}) THEN 1 
+              ELSE 2 
+            END
+          `),
+          'ASC',
+        ],
+        ['createdAt', 'DESC'],
+      ];
+    } else if (sortBy) {
       if (sortBy === 'highest_budget') {
         order = [['totalBudget', 'DESC']];
       } else if (sortBy === 'closing_soon') {

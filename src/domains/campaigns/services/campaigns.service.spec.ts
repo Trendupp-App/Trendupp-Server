@@ -335,7 +335,7 @@ describe('CampaignsService', () => {
   });
 
   describe('findAll', () => {
-    it('should delegate to campaignRepository.findAll', async () => {
+    it('should delegate to campaignRepository.findAll without prioritization if user is not a creator', async () => {
       const mockResult = {
         data: [mockCampaign],
         pagination: { total: 1, page: 1, limit: 10, pages: 1 },
@@ -343,10 +343,54 @@ describe('CampaignsService', () => {
       campaignRepoMock.findAll.mockResolvedValue(mockResult);
 
       const query: FindAllCampaignsQueryDto = { status: 'live', sortBy: 'highest_budget' };
-      const result = await service.findAll(query);
+      const user = { id: 'u1', role: { name: 'brand' } } as unknown as User;
+      const result = await service.findAll(query, user);
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query);
+      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, undefined);
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should delegate to campaignRepository.findAll with prioritizeNicheIds if creator has niches and no explicit filters', async () => {
+      const mockResult = {
+        data: [mockCampaign],
+        pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+      };
+      campaignRepoMock.findAll.mockResolvedValue(mockResult);
+
+      const query: FindAllCampaignsQueryDto = { status: 'live' };
+      const user = {
+        id: 'u1',
+        role: { name: 'creator' },
+        niches: [
+          { id: 'niche1', name: 'Tech' },
+          { id: 'niche2', name: 'Design' },
+        ],
+      } as unknown as User;
+      const result = await service.findAll(query, user);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, ['niche1', 'niche2']);
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should not prioritize niches if query contains explicit niche filters', async () => {
+      const mockResult = {
+        data: [mockCampaign],
+        pagination: { total: 1, page: 1, limit: 10, pages: 1 },
+      };
+      campaignRepoMock.findAll.mockResolvedValue(mockResult);
+
+      const query: FindAllCampaignsQueryDto = { status: 'live', nicheIds: ['niche1'] };
+      const user = {
+        id: 'u1',
+        role: { name: 'creator' },
+        niches: [{ id: 'niche1', name: 'Tech' }],
+      } as unknown as User;
+      const result = await service.findAll(query, user);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, undefined);
       expect(result).toEqual(mockResult);
     });
   });
