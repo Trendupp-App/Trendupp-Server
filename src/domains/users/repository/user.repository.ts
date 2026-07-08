@@ -4,6 +4,7 @@ import { Attributes, WhereOptions, Op } from 'sequelize';
 import { User } from '../entities/user.entity';
 import { Industry } from '../entities/industry.entity';
 import { Niche } from '../entities/niche.entity';
+import { Sequelize } from 'sequelize-typescript';
 
 @Injectable()
 export class UserRepository {
@@ -24,6 +25,44 @@ export class UserRepository {
       includes.push('niches');
     }
     return this.userModel.findByPk(id, { include: includes });
+  }
+
+  findTopPerformers(roleId: string): Promise<User[]> {
+    return this.userModel.findAll({
+      attributes: [
+        'id',
+        'firstName',
+        'lastName',
+        'username',
+        'instagramUsername',
+        'instagramFollowers',
+        'twitterUsername',
+        'twitterFollowers',
+        'tiktokUsername',
+        'tiktokFollowers',
+        'youtubeUsername',
+        'youtubeFollowers',
+        'avatarUrl',
+        'assignedTier',
+        'avgRating',
+        'totalReviews',
+      ],
+      where: {
+        roleId,
+        isActive: true,
+      },
+      order: [
+        [
+          Sequelize.literal(`
+            COALESCE(instagram_followers, 0) + 
+            COALESCE(tiktok_followers, 0) + 
+            COALESCE(youtube_followers, 0) + 
+            COALESCE(twitter_followers, 0)
+          `),
+          'DESC',
+        ],
+      ],
+    });
   }
 
   findProfileById(id: string): Promise<User | null> {

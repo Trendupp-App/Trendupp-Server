@@ -42,6 +42,7 @@ describe('UsersService', () => {
       remove: jest.fn(),
       findUsersByRole: jest.fn(),
       findProfileById: jest.fn(),
+      findTopPerformers: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
 
     roleRepositoryMock = {
@@ -78,6 +79,69 @@ describe('UsersService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(userRepositoryMock.findAll).toHaveBeenCalled();
       expect(result).toEqual(mockUsers);
+    });
+  });
+
+  describe('getTopPerformers', () => {
+    it('should delegate to userRepository.findTopPerformers if role creator exists', async () => {
+      const mockRole = { id: 'r1', name: 'creator' } as unknown as Role;
+      roleRepositoryMock.findByName.mockResolvedValue(mockRole);
+
+      const mockCreator = {
+        id: 'creator1',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        username: 'jane',
+        instagramUsername: 'jane_ig',
+        instagramFollowers: 1000,
+        twitterUsername: 'jane_tw',
+        twitterFollowers: 500,
+        tiktokUsername: 'jane_tt',
+        tiktokFollowers: 2000,
+        youtubeUsername: 'jane_yt',
+        youtubeFollowers: 0,
+        avatarUrl: 'http://jane.png',
+        assignedTier: 'Mega',
+        avgRating: 4.95,
+        totalReviews: 12,
+      } as unknown as User;
+
+      userRepositoryMock.findTopPerformers.mockResolvedValue([mockCreator]);
+
+      const result = await service.getTopPerformers();
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepositoryMock.findByName).toHaveBeenCalledWith('creator');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(userRepositoryMock.findTopPerformers).toHaveBeenCalledWith('r1');
+      expect(result).toEqual([
+        {
+          id: 'creator1',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          username: 'jane',
+          instagramUsername: 'jane_ig',
+          instagramFollowers: 1000,
+          twitterUsername: 'jane_tw',
+          twitterFollowers: 500,
+          tiktokUsername: 'jane_tt',
+          tiktokFollowers: 2000,
+          youtubeUsername: 'jane_yt',
+          youtubeFollowers: 0,
+          avatarUrl: 'http://jane.png',
+          assignedTier: 'Mega',
+          avgRating: 4.95,
+          totalReviews: 12,
+        },
+      ]);
+    });
+
+    it('should return empty array if role creator is not found', async () => {
+      roleRepositoryMock.findByName.mockResolvedValue(null);
+
+      const result = await service.getTopPerformers();
+
+      expect(result).toEqual([]);
     });
   });
 

@@ -4,6 +4,8 @@ import { UsersService } from '../services/users.service';
 import { User } from '../entities/user.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ExploreSearchQueryDto } from '../dtos/explore-search-query.dto';
+import { RolesGuard } from '../../../shared/guards/roles.guard';
+import { Roles } from '../../../shared/decorators/roles.decorator';
 
 @ApiTags('users')
 @Controller('users')
@@ -24,6 +26,15 @@ export class UsersController {
   @ApiResponse({ status: 200, type: [User] })
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('creators/top-performers')
+  @UseGuards(RolesGuard)
+  @Roles('brand', 'admin', 'finance_admin', 'super_admin')
+  @ApiOperation({ summary: 'Get list of top performing creators sorted by total social followers' })
+  @ApiResponse({ status: 200, type: [User] })
+  getTopPerformers() {
+    return this.usersService.getTopPerformers();
   }
 
   @Get('explore/search')

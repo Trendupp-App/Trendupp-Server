@@ -25,6 +25,31 @@ export class UsersService {
     return this.userRepository.findAll();
   }
 
+  async getTopPerformers(): Promise<any[]> {
+    const creatorRole = await this.roleRepository.findByName('creator');
+    if (!creatorRole) return [];
+    const creators = await this.userRepository.findTopPerformers(creatorRole.id);
+
+    return creators.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      instagramUsername: user.instagramUsername,
+      instagramFollowers: user.instagramFollowers,
+      twitterUsername: user.twitterUsername,
+      twitterFollowers: user.twitterFollowers,
+      tiktokUsername: user.tiktokUsername,
+      tiktokFollowers: user.tiktokFollowers,
+      youtubeUsername: user.youtubeUsername,
+      youtubeFollowers: user.youtubeFollowers,
+      avatarUrl: user.avatarUrl,
+      assignedTier: user.assignedTier,
+      avgRating: user.avgRating ? parseFloat(user.avgRating.toString()) : null,
+      totalReviews: user.totalReviews || 0,
+    }));
+  }
+
   findOne(id: string): Promise<User | null> {
     return this.userRepository.findById(id);
   }
