@@ -50,9 +50,9 @@ export class CampaignsService {
     for (const fee of fees) {
       let amount = 0;
       if (fee.type === 'percentage') {
-        amount = budget * fee.value;
+        amount = Math.round(budget * fee.value);
       } else {
-        amount = fee.value;
+        amount = Math.round(fee.value);
       }
       breakdownItems.push({
         name: fee.name,
