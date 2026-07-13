@@ -482,6 +482,23 @@ export class CampaignsService {
       throw new ForbiddenException(`Oops! You can only apply to live campaigns. Kindly refresh!`);
     }
 
+    // ── Profile completeness guard ────────────────────────────────────────────
+    // Creators must have at least one social account connected before they can
+    // apply to any campaign. Load with niches so onboardingStepsCompleted
+    // computes correctly.
+    const creator = await this.usersService.findOneWithNiches(creatorId);
+    if (!creator) {
+      throw new NotFoundException('Creator profile not found');
+    }
+
+    const hasSocials = Object.values(creator.socialsConnected).some((connected) => connected);
+    if (!hasSocials) {
+      throw new ForbiddenException(
+        'Your profile is incomplete. Please connect at least one social account (Instagram, TikTok, YouTube, or Twitter) before applying to campaigns.',
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const existingApp = await this.campaignRepository.findApplication(campaignId, creatorId);
     if (existingApp) {
       throw new ForbiddenException(`You have already applied to this campaign`);

@@ -313,7 +313,7 @@ describe('AuthService', () => {
       expect(result.user.id).toBe('u1');
     });
 
-    it('should reactivate account if deactivated within 30 days', async () => {
+    it('should reactivate account if deactivated within 90 days', async () => {
       const recentDate = new Date();
       recentDate.setDate(recentDate.getDate() - 5); // 5 days ago
 
@@ -347,9 +347,9 @@ describe('AuthService', () => {
       expect(result.accessToken).toBeDefined();
     });
 
-    it('should throw UnauthorizedException if deactivated more than 30 days ago', async () => {
+    it('should throw UnauthorizedException if deactivated more than 90 days ago', async () => {
       const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 35); // 35 days ago
+      oldDate.setDate(oldDate.getDate() - 95); // 95 days ago
 
       const mockUser = {
         id: 'u1',

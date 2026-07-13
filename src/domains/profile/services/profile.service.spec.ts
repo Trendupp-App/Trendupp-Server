@@ -104,6 +104,8 @@ describe('ProfileService', () => {
         username: 'newuser',
         email: 'new@example.com',
         bio: 'New bio description',
+        dateOfBirth: '1998-04-20',
+        gender: 'female',
       };
 
       const result = await service.updatePersonalInfo('u1', dto);
@@ -117,6 +119,8 @@ describe('ProfileService', () => {
         username: 'newuser',
         email: 'new@example.com',
         bio: 'New bio description',
+        dateOfBirth: '1998-04-20',
+        gender: 'female',
       });
       expect(result.username).toBe('newuser');
     });

@@ -96,6 +96,7 @@ describe('CampaignsService', () => {
 
     usersServiceMock = {
       findOne: jest.fn(),
+      findOneWithNiches: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
     pandascrowServiceMock = {
@@ -625,11 +626,16 @@ describe('CampaignsService', () => {
       comments: 'Looking forward to this!',
     };
 
-    it('should successfully submit an application for a live campaign', async () => {
+    it('should successfully submit an application for a live campaign when creator has at least one social connected', async () => {
       const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
       const mockApplication = { id: 'app1', ...mockAppDto };
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+      };
 
       campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
       campaignRepoMock.findApplication.mockResolvedValue(null);
       campaignRepoMock.createApplication.mockResolvedValue(mockApplication as any);
       campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
@@ -654,9 +660,40 @@ describe('CampaignsService', () => {
       );
     });
 
-    it('should throw ForbiddenException if creator has already applied', async () => {
+    it('should throw NotFoundException if creator profile is not found', async () => {
       const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
       campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(null);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ForbiddenException if creator has no socials connected', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: false, tiktok: false, youtube: false, twitter: false },
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw ForbiddenException if creator has already applied', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
       campaignRepoMock.findApplication.mockResolvedValue({ id: 'app1' } as any);
 
       await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(

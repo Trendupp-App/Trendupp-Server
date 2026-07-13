@@ -99,6 +99,22 @@ export class ProfileService {
       }
     }
 
+    if (dto.dateOfBirth !== undefined) {
+      if (dto.dateOfBirth === null) {
+        updates.dateOfBirth = null;
+      } else if (dto.dateOfBirth.trim() !== '') {
+        updates.dateOfBirth = dto.dateOfBirth;
+      }
+    }
+
+    if (dto.gender !== undefined) {
+      if (dto.gender === null) {
+        updates.gender = null;
+      } else if (dto.gender.trim() !== '') {
+        updates.gender = dto.gender;
+      }
+    }
+
     if (avatarFile) {
       const avatarUrl = await this.s3Service.uploadFile(avatarFile, 'avatars');
       updates.avatarUrl = avatarUrl;
