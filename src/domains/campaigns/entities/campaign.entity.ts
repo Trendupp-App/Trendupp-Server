@@ -92,6 +92,13 @@ export class Campaign extends BaseEntity<Campaign> {
   })
   declare paymentStatus: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'USD',
+  })
+  declare currency: string;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
 

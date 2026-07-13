@@ -40,6 +40,9 @@ export class Payment extends BaseEntity<Payment> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'provider' })
   declare provider?: string;
 
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'USD' })
+  declare currency: string;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'escrow_status' })
   declare escrowStatus?: string;
 }

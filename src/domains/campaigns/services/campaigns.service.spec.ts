@@ -34,6 +34,7 @@ describe('CampaignsService', () => {
     status: 'draft',
     currentStep: 1,
     paymentStatus: 'unpaid',
+    currency: 'USD',
     approvedAt: null,
     update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
@@ -95,7 +96,13 @@ describe('CampaignsService', () => {
     } as unknown as jest.Mocked<UrlValidatorService>;
 
     usersServiceMock = {
-      findOne: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'b1',
+        email: 'brand@example.com',
+        firstName: 'Brand',
+        lastName: 'User',
+        country: { currency: 'USD', isAfrican: false },
+      }),
       findOneWithNiches: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -164,6 +171,7 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
@@ -206,6 +214,7 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
     });
   });

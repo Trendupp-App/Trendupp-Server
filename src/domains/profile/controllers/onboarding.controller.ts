@@ -98,9 +98,19 @@ export class OnboardingController {
   @ApiOperation({
     summary: 'Get all countries (operating-country options — same dataset as nationalities)',
   })
+  @ApiQuery({
+    name: 'isAfrican',
+    required: false,
+    type: Boolean,
+    description: 'Filter only African countries if true',
+  })
   @ApiResponse({ status: 200, description: 'List of countries retrieved' })
-  async getCountries() {
-    return this.onboardingService.getAllNationalities();
+  async getCountries(@Query('isAfrican') isAfrican?: string) {
+    const filters: { isAfrican?: boolean } = {};
+    if (isAfrican !== undefined) {
+      filters.isAfrican = isAfrican === 'true';
+    }
+    return this.onboardingService.getAllNationalities(filters);
   }
 
   @Get('countries/:countryId/states')

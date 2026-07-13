@@ -10,6 +10,12 @@ export class Nationality extends BaseEntity<Nationality> {
   @Column({ type: DataType.STRING, allowNull: false, unique: true })
   declare code: string;
 
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'USD' })
+  declare currency: string;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_african' })
+  declare isAfrican: boolean;
+
   @HasMany(() => State)
   declare states: State[];
 }

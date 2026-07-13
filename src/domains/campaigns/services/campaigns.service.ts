@@ -119,6 +119,12 @@ export class CampaignsService {
       coverImage = await this.s3Service.uploadFile(file);
     }
 
+    const brand = await this.usersService.findOne(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand user profile not found');
+    }
+    const currency = brand.country?.currency || 'USD';
+
     const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const campaign = await this.campaignRepository.create({
@@ -129,6 +135,7 @@ export class CampaignsService {
       status: 'draft',
       currentStep: 1,
       paymentStatus: 'unpaid',
+      currency,
     });
 
     if (preferredPlatformIds && preferredPlatformIds.length > 0) {
@@ -287,7 +294,7 @@ export class CampaignsService {
       title: campaign.title,
       description: campaign.campaignBrief!,
       amount: breakdown.totalToPay,
-      currency: 'NGN', // Default to NGN as per specification
+      currency: campaign.currency, // Nigeria -> NGN, other countries -> USD
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
@@ -314,6 +321,7 @@ export class CampaignsService {
       amount: campaign.totalBudget,
       totalAmount: breakdown.totalToPay,
       paymentStatus: 'pending',
+      currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
       escrowId: String(escrow.escrow_id),
       paymentUrl: escrow.payment_url,
@@ -860,6 +868,7 @@ export class CampaignsService {
       releaseDate,
       status: 'pending',
       escrowId: campaignPayment?.escrowId ?? null,
+      currency: campaign.currency,
     });
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);

@@ -82,7 +82,7 @@ export class PayoutScheduler {
           payoutRef,
           walletId: this.walletId,
           amount: release.amount,
-          currency: 'NGN', // Default to NGN as per onboarding spec
+          currency: release.currency || 'USD',
           bankCode: creator.bank.code,
           accountNumber: creator.bankAccountNumber,
           accountName: creator.bankAccountName || `${creator.firstName} ${creator.lastName}`,
