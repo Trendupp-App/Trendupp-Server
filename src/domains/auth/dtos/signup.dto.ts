@@ -8,7 +8,12 @@ import {
   Equals,
   IsBoolean,
   Length,
+  Matches,
 } from 'class-validator';
+import {
+  PASSWORD_REGEX,
+  PASSWORD_REGEX_MESSAGE,
+} from '../../../shared/validators/password.validator';
 
 export class SignupDto {
   @ApiProperty({
@@ -20,12 +25,14 @@ export class SignupDto {
   email: string;
 
   @ApiProperty({
-    description: 'The password (minimum 8 characters)',
+    description:
+      'The password — min 8 characters, must include uppercase, lowercase, digit, and special character',
     example: 'P@ssword123',
     minLength: 8,
   })
   @IsString()
   @MinLength(8)
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_REGEX_MESSAGE })
   @IsNotEmpty()
   password: string;
 

@@ -81,6 +81,7 @@ describe('CampaignsService', () => {
       deleteDraftById: jest.fn(),
       createPaymentRelease: jest.fn(),
       findPaymentByCampaignId: jest.fn(),
+      updatePayment: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -321,7 +322,7 @@ describe('CampaignsService', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(completeCampaign.update).toHaveBeenCalledWith({
-        status: 'submitted',
+        status: 'pending_payment',
         currentStep: 5,
         acceptedTerms: true,
         paymentStatus: 'pending',
@@ -331,6 +332,83 @@ describe('CampaignsService', () => {
         campaign: completeCampaign,
         payment: mockPayment,
       });
+    });
+
+    it('should allow re-submission (retry) when status is pending_payment and payment is pending', async () => {
+      const pendingPaymentCampaign = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'pending_payment',
+        paymentStatus: 'pending',
+        title: 'complete campaign',
+        goal: 'Amplify Content',
+        totalBudget: 3000000,
+        creatorCategoryId: 'cc1',
+        creatorNicheId: 'n1',
+        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        preferredPlatforms: [{ id: 'p1' }],
+        deliverables: ['1x post'],
+        contentDirection: ['d1'],
+        contentGuidelines: { dos: ['do1'], donts: [] },
+        usageRights: 'full rights',
+        successLooksLike: 'very good',
+        campaignBrief: 'our brand guidelines brief',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Campaign;
+
+      const stalePayment = { id: 'pay-old', paymentStatus: 'pending' } as any;
+
+      campaignRepoMock.findById.mockResolvedValue(pendingPaymentCampaign);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue(stalePayment);
+      usersServiceMock.findOne.mockResolvedValue({
+        firstName: 'Brand',
+        lastName: 'Owner',
+        email: 'brand@owner.com',
+        phoneNumber: '+2348000000000',
+      } as any);
+
+      pandascrowServiceMock.initializeEscrow.mockResolvedValue({
+        escrow_id: 99999,
+        payment_url: 'https://sandbox.pandascrow.io/checkout/99999',
+        transaction_ref: 'tx_ref_retry',
+        provider: 'paystack',
+        status: 'pending',
+      });
+
+      const mockNewPayment = { id: 'pay-new', campaignId: 'c1' } as any;
+      campaignRepoMock.createPayment.mockResolvedValue(mockNewPayment);
+
+      const result = await service.submit('c1', 'b1');
+
+      // Old payment should be cancelled
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.updatePayment).toHaveBeenCalledWith('pay-old', {
+        paymentStatus: 'cancelled',
+      });
+
+      // Campaign should be updated to pending_payment again with fresh escrow
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(pendingPaymentCampaign.update).toHaveBeenCalledWith({
+        status: 'pending_payment',
+        currentStep: 5,
+        acceptedTerms: true,
+        paymentStatus: 'pending',
+      });
+
+      expect(result.payment).toEqual(mockNewPayment);
+    });
+
+    it('should throw ForbiddenException when status is pending_payment but payment is already paid', async () => {
+      const paidCampaign = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'pending_payment',
+        paymentStatus: 'paid',
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(paidCampaign);
+
+      await expect(service.submit('c1', 'b1')).rejects.toThrow(ForbiddenException);
     });
   });
 

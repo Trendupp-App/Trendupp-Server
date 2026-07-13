@@ -113,15 +113,22 @@ export class WebhooksController {
       escrowStatus: 'funded',
     });
 
-    // Update campaign status directly to live (as per user specifications)
+    // Transition campaign: pending_payment → live
     const campaign = await this.campaignRepository.findById(payment.campaignId);
     if (campaign) {
+      if (campaign.status !== 'pending_payment') {
+        this.logger.warn(
+          `Escrow paid for campaign ${campaign.id} but status is '${campaign.status}' (expected 'pending_payment'). Proceeding to set live anyway.`,
+        );
+      }
       await campaign.update({
         paymentStatus: 'paid',
         status: 'live',
         approvedAt: new Date(),
       });
-      this.logger.log(`Campaign ${campaign.id} is now LIVE following payment confirmation.`);
+      this.logger.log(
+        `Campaign ${campaign.id} transitioned pending_payment → live after payment confirmation.`,
+      );
     }
   }
 

@@ -12,6 +12,9 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
@@ -65,7 +68,19 @@ export class CampaignsController {
   async create(
     @CurrentUser() user: User,
     @Body() dto: CreateCampaignDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 5 * 1024 * 1024,
+            message: 'Cover image is too large. Max allowed size is 5MB.',
+          }),
+          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     let contentGuidelines = dto.contentGuidelines;
     if (typeof contentGuidelines === 'string') {
@@ -112,7 +127,19 @@ export class CampaignsController {
     @Param('id') id: string,
     @CurrentUser() user: User,
     @Body() dto: UpdateCampaignDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 5 * 1024 * 1024,
+            message: 'Cover image is too large. Max allowed size is 5MB.',
+          }),
+          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     let contentGuidelines = dto.contentGuidelines;
     if (typeof contentGuidelines === 'string') {
