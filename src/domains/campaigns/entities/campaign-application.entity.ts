@@ -24,8 +24,8 @@ export class CampaignApplication extends BaseEntity<CampaignApplication> {
   @Column({ type: DataType.TEXT, allowNull: false, field: 'content_idea' })
   declare contentIdea: string;
 
-  @Column({ type: DataType.STRING, allowNull: true, field: 'past_work_link' })
-  declare pastWorkLink?: string;
+  @Column({ type: DataType.JSONB, allowNull: true, field: 'past_work_link' })
+  declare pastWorkLink?: string[];
 
   @ForeignKey(() => Platform)
   @Column({ type: DataType.UUID, allowNull: false, field: 'primary_platform_id' })

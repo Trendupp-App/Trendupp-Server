@@ -466,7 +466,7 @@ export class CampaignsService {
     creatorId: string,
     data: {
       contentIdea: string;
-      pastWorkLink?: string;
+      pastWorkLink?: string[];
       primaryPlatformId: string;
       secondaryPlatformId?: string;
       feeRequest: number;
