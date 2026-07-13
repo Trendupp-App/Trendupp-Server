@@ -171,6 +171,12 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'avatar_url' })
   declare avatarUrl?: string;
 
+  @Column({ type: DataType.DATEONLY, allowNull: true, field: 'date_of_birth' })
+  declare dateOfBirth?: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'gender' })
+  declare gender?: string | null;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'verification_video_url' })
   declare verificationVideoUrl?: string;
 

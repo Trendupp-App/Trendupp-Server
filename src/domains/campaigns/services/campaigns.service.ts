@@ -218,38 +218,59 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    if (campaign.status !== 'draft') {
-      throw new ForbiddenException(`Campaign is already submitted`);
+    // Allow re-submission when payment is still pending (retry / refresh checkout URL)
+    const isPaymentRetry =
+      campaign.status === 'pending_payment' && campaign.paymentStatus === 'pending';
+
+    if (campaign.status !== 'draft' && !isPaymentRetry) {
+      throw new ForbiddenException(
+        `Campaign cannot be submitted in its current state (status: ${campaign.status})`,
+      );
     }
 
-    const errors: string[] = [];
-    if (!campaign.title) errors.push('title is required');
-    if (!campaign.goal) errors.push('goal is required');
-    if (!campaign.totalBudget) errors.push('totalBudget is required');
-    if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
-    if (!campaign.timeline) errors.push('timeline is required');
-    if (!campaign.creatorNicheId) errors.push('creatorNiche is required');
-    if (!campaign.preferredPlatforms || campaign.preferredPlatforms.length === 0) {
-      errors.push('at least one preferred platform is required');
-    }
-    if (!campaign.deliverables || campaign.deliverables.length === 0) {
-      errors.push('deliverables list is required');
-    }
-    if (!campaign.contentDirection || campaign.contentDirection.length === 0) {
-      errors.push('contentDirection is required');
-    }
-    if (
-      !campaign.contentGuidelines ||
-      (!campaign.contentGuidelines.dos && !campaign.contentGuidelines.donts)
-    ) {
-      errors.push('contentGuidelines are required');
-    }
-    if (!campaign.usageRights) errors.push('usageRights text is required');
-    if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
-    if (!campaign.campaignBrief) errors.push('campaignBrief is required');
+    // Only run completeness validation on fresh submissions from 'draft'.
+    // On retry (pending_payment), the campaign data is frozen — updateDraft() blocks
+    // edits once the campaign leaves draft, so we know it was already validated.
+    if (!isPaymentRetry) {
+      const errors: string[] = [];
+      if (!campaign.title) errors.push('title is required');
+      if (!campaign.goal) errors.push('goal is required');
+      if (!campaign.totalBudget) errors.push('totalBudget is required');
+      if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
+      if (!campaign.timeline) errors.push('timeline is required');
+      if (!campaign.creatorNicheId) errors.push('creatorNiche is required');
+      if (!campaign.preferredPlatforms || campaign.preferredPlatforms.length === 0) {
+        errors.push('at least one preferred platform is required');
+      }
+      if (!campaign.deliverables || campaign.deliverables.length === 0) {
+        errors.push('deliverables list is required');
+      }
+      if (!campaign.contentDirection || campaign.contentDirection.length === 0) {
+        errors.push('contentDirection is required');
+      }
+      if (
+        !campaign.contentGuidelines ||
+        (!campaign.contentGuidelines.dos && !campaign.contentGuidelines.donts)
+      ) {
+        errors.push('contentGuidelines are required');
+      }
+      if (!campaign.usageRights) errors.push('usageRights text is required');
+      if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
+      if (!campaign.campaignBrief) errors.push('campaignBrief is required');
 
-    if (errors.length > 0) {
-      throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
+      if (errors.length > 0) {
+        throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
+      }
+    }
+
+    // Retry path: cancel the existing stale pending payment so we get a clean slate
+    if (isPaymentRetry) {
+      const existingPayment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+      if (existingPayment && existingPayment.paymentStatus === 'pending') {
+        await this.campaignRepository.updatePayment(existingPayment.id, {
+          paymentStatus: 'cancelled',
+        });
+      }
     }
 
     // Load brand profile details
@@ -281,7 +302,7 @@ export class CampaignsService {
     });
 
     await campaign.update({
-      status: 'submitted',
+      status: 'pending_payment',
       currentStep: 5,
       acceptedTerms: true,
       paymentStatus: 'pending',
@@ -460,6 +481,23 @@ export class CampaignsService {
     if (campaign.status !== 'live') {
       throw new ForbiddenException(`Oops! You can only apply to live campaigns. Kindly refresh!`);
     }
+
+    // ── Profile completeness guard ────────────────────────────────────────────
+    // Creators must have at least one social account connected before they can
+    // apply to any campaign. Load with niches so onboardingStepsCompleted
+    // computes correctly.
+    const creator = await this.usersService.findOneWithNiches(creatorId);
+    if (!creator) {
+      throw new NotFoundException('Creator profile not found');
+    }
+
+    const hasSocials = Object.values(creator.socialsConnected).some((connected) => connected);
+    if (!hasSocials) {
+      throw new ForbiddenException(
+        'Your profile is incomplete. Please connect at least one social account (Instagram, TikTok, YouTube, or Twitter) before applying to campaigns.',
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const existingApp = await this.campaignRepository.findApplication(campaignId, creatorId);
     if (existingApp) {

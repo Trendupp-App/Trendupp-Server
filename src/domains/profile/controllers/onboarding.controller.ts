@@ -205,6 +205,8 @@ export class OnboardingController {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.websiteUrl !== undefined) updates.websiteUrl = dto.websiteUrl;
     if (dto.monthlyBudget !== undefined) updates.monthlyBudget = dto.monthlyBudget;
+    if (dto.dateOfBirth !== undefined) updates.dateOfBirth = dto.dateOfBirth;
+    if (dto.gender !== undefined) updates.gender = dto.gender;
 
     if (avatar) {
       const avatarUrl = await this.s3Service.uploadFile(avatar, 'avatars');

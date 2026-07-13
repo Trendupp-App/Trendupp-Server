@@ -96,4 +96,88 @@ export class EmailService {
       throw error;
     }
   }
+
+  async sendAccountDeletionWarning(to: string, firstName: string): Promise<void> {
+    const subject = 'Your Trendupp Account Will Be Deleted in 30 Days';
+
+    try {
+      const templatePath = join(this.templateDir, 'account-deletion-warning.ejs');
+      const htmlBody = await ejs.renderFile(templatePath, { firstName });
+
+      if (this.sesClient) {
+        try {
+          const command = new SendEmailCommand({
+            Destination: { ToAddresses: [to] },
+            Message: {
+              Body: { Html: { Data: htmlBody } },
+              Subject: { Data: subject },
+            },
+            Source: this.fromEmail,
+          });
+          await this.sesClient.send(command);
+          this.logger.log(`Account deletion warning sent to ${to}`);
+        } catch (sesError) {
+          const message = sesError instanceof Error ? sesError.message : String(sesError);
+          this.logger.warn(
+            `AWS SES could not deliver deletion warning to ${to} (falling back to mock): ${message}`,
+          );
+          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
+          this.logger.log(`To: ${to}`);
+          this.logger.log(`Subject: ${subject}`);
+          this.logger.log('-----------------------------');
+        }
+      } else {
+        this.logger.log('--- [MOCK EMAIL SENT] ---');
+        this.logger.log(`To: ${to}`);
+        this.logger.log(`Subject: ${subject}`);
+        this.logger.log('--------------------------');
+      }
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to render deletion warning template for ${to}`, stack);
+      throw error;
+    }
+  }
+
+  async sendAccountDeletionTomorrowWarning(to: string, firstName: string): Promise<void> {
+    const subject = 'Your Trendupp Account Will Be Deleted Tomorrow';
+
+    try {
+      const templatePath = join(this.templateDir, 'account-deletion-tomorrow.ejs');
+      const htmlBody = await ejs.renderFile(templatePath, { firstName });
+
+      if (this.sesClient) {
+        try {
+          const command = new SendEmailCommand({
+            Destination: { ToAddresses: [to] },
+            Message: {
+              Body: { Html: { Data: htmlBody } },
+              Subject: { Data: subject },
+            },
+            Source: this.fromEmail,
+          });
+          await this.sesClient.send(command);
+          this.logger.log(`Account deletion tomorrow warning sent to ${to}`);
+        } catch (sesError) {
+          const message = sesError instanceof Error ? sesError.message : String(sesError);
+          this.logger.warn(
+            `AWS SES could not deliver deletion tomorrow warning to ${to} (falling back to mock): ${message}`,
+          );
+          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
+          this.logger.log(`To: ${to}`);
+          this.logger.log(`Subject: ${subject}`);
+          this.logger.log('-----------------------------');
+        }
+      } else {
+        this.logger.log('--- [MOCK EMAIL SENT] ---');
+        this.logger.log(`To: ${to}`);
+        this.logger.log(`Subject: ${subject}`);
+        this.logger.log('--------------------------');
+      }
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to render deletion tomorrow warning template for ${to}`, stack);
+      throw error;
+    }
+  }
 }

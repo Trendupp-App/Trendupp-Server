@@ -97,7 +97,16 @@ export class Campaign extends BaseEntity<Campaign> {
 
   /**
    * Campaign lifecycle status.
-   * Possible values: 'draft' | 'pending_approval' | 'live' | 'active' | 'completed' | 'cancelled'
+   *
+   * Flow: 'draft' → 'pending_payment' → 'live' → 'active' → 'completed' | 'cancelled'
+   *
+   * - draft:           Brand is building the campaign wizard (editable).
+   * - pending_payment: Brand has submitted; escrow checkout URL generated but payment not yet confirmed.
+   *                    Brand can re-hit submit to get a fresh checkout URL (retry path).
+   * - live:            Pandascrow escrow.paid webhook confirmed payment. Campaign is visible to creators.
+   * - active:          A creator application has been accepted by the brand.
+   * - completed:       All deliverables done and creator paid out.
+   * - cancelled:       Campaign was cancelled before completion.
    */
   @Column({
     type: DataType.STRING,
