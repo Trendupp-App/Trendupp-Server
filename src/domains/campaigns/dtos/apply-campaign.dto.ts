@@ -8,6 +8,7 @@ import {
   IsUrl,
   Min,
   MinLength,
+  IsArray,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -22,13 +23,15 @@ export class ApplyCampaignDto {
   contentIdea: string;
 
   @ApiPropertyOptional({
-    description: "An optional link to the creator's past work",
-    example: 'https://instagram.com/p/example',
+    description: "An optional array of links to the creator's past work",
+    type: [String],
+    example: ['https://instagram.com/p/example'],
   })
-  @IsUrl({}, { message: 'pastWorkLink must be a valid URL' })
-  @IsString()
+  @IsArray()
+  @IsUrl({}, { each: true, message: 'Each link in pastWorkLink must be a valid URL' })
+  @IsString({ each: true })
   @IsOptional()
-  pastWorkLink?: string;
+  pastWorkLink?: string[];
 
   @ApiProperty({
     description: 'The ID of the primary platform selected',

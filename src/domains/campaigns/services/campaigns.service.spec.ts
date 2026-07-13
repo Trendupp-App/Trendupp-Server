@@ -619,7 +619,7 @@ describe('CampaignsService', () => {
   describe('applyToCampaign', () => {
     const mockAppDto = {
       contentIdea: 'I will write a morning skincare styling tutorial video concept.',
-      pastWorkLink: 'https://instagram.com/p/example',
+      pastWorkLink: ['https://instagram.com/p/example'],
       primaryPlatformId: 'p1',
       secondaryPlatformId: 'p2',
       feeRequest: 150000,
