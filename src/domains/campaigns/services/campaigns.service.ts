@@ -35,6 +35,7 @@ export class CampaignsService {
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async calculateBreakdown(budget: number): Promise<{
     campaignBudget: number;
     trenduppFee: number;
@@ -42,42 +43,32 @@ export class CampaignsService {
     totalToPay: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
-    const fees = await this.campaignRepository.findFees();
-    let trenduppFee = 0;
-    let vat = 0;
-    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [];
+    // Under the new billing system, the input budget is the exact total paid by the advertiser.
+    // Deductions: 15% Trendupp Fee and 7.5% VAT (Option B on total funded) are deducted from this total.
+    const trenduppFee = Math.round(budget * 0.15);
+    const vat = Math.round(budget * 0.075);
+    const campaignBudget = budget - (trenduppFee + vat);
 
-    for (const fee of fees) {
-      let amount = 0;
-      if (fee.type === 'percentage') {
-        amount = Math.round(budget * fee.value);
-      } else {
-        amount = Math.round(fee.value);
-      }
-      breakdownItems.push({
-        name: fee.name,
-        type: fee.type,
-        value: fee.value,
-        amount,
-      });
-
-      const nameLower = fee.name.toLowerCase();
-      if (
-        nameLower.includes('fee') ||
-        nameLower.includes('percentage') ||
-        nameLower.includes('commission')
-      ) {
-        trenduppFee += amount;
-      } else if (nameLower.includes('vat') || nameLower.includes('tax')) {
-        vat += amount;
-      }
-    }
+    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
+      {
+        name: 'Trendupp Fee',
+        type: 'percentage',
+        value: 0.15,
+        amount: trenduppFee,
+      },
+      {
+        name: 'VAT',
+        type: 'percentage',
+        value: 0.075,
+        amount: vat,
+      },
+    ];
 
     return {
-      campaignBudget: budget,
+      campaignBudget,
       trenduppFee,
       vat,
-      totalToPay: budget + trenduppFee + vat,
+      totalToPay: budget,
       breakdownItems,
     };
   }
@@ -327,7 +318,7 @@ export class CampaignsService {
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
         email: 'app@trendupp.com', //brand.email,
-        phone: '+234900000000', //brand.phoneNumber || '',
+        phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
@@ -343,11 +334,26 @@ export class CampaignsService {
       paymentStatus: 'pending',
     });
 
+    // Calculate expected gateway fee
+    let gatewayFee = 0;
+    if (campaign.currency === 'NGN') {
+      gatewayFee = Math.round(breakdown.totalToPay * 0.015);
+      if (breakdown.totalToPay >= 2500) {
+        gatewayFee += 100;
+      }
+      if (gatewayFee > 2000) {
+        gatewayFee = 2000;
+      }
+    } else {
+      gatewayFee = Math.round(breakdown.totalToPay * 0.039);
+    }
+
     // Create pending payment record
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
-      amount: campaign.totalBudget,
+      amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
+      gatewayFee,
       paymentStatus: 'pending',
       currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
@@ -673,6 +679,13 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
+    if (status === 'accepted') {
+      const validation = await this.validateCreatorSelection(campaignId, applicationIds);
+      if (!validation.isValid) {
+        throw new BadRequestException(validation.message);
+      }
+    }
+
     const results: CampaignApplication[] = [];
 
     for (const appId of applicationIds) {
@@ -724,6 +737,58 @@ export class CampaignsService {
     }
 
     return results;
+  }
+
+  async validateCreatorSelection(
+    campaignId: string,
+    applicationIds: string[],
+  ): Promise<{
+    isValid: boolean;
+    amountAvailable: number;
+    selectedTotal: number;
+    shortfall: number;
+    currency: string;
+    message: string;
+  }> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+    // If not paid yet, calculate the expected available pool from totalBudget dynamically.
+    // Creator Pool = totalBudget - (15% commission + 7.5% VAT) = totalBudget * 0.775
+    const amountAvailable =
+      payment && payment.paymentStatus === 'paid'
+        ? payment.amount
+        : Math.round(campaign.totalBudget * 0.775);
+
+    let selectedTotal = 0;
+    for (const appId of applicationIds) {
+      const app = await this.campaignRepository.findApplicationById(appId);
+      if (app && app.campaignId === campaignId) {
+        selectedTotal += app.feeRequest || 0;
+      }
+    }
+
+    const shortfall = Math.max(0, selectedTotal - amountAvailable);
+    const isValid = shortfall === 0;
+
+    const currencySymbol = campaign.currency === 'NGN' ? '₦' : '$';
+    let message = `Selection is valid. The selected creators' total fee of ${currencySymbol}${selectedTotal.toLocaleString()} fits inside the available budget pool of ${currencySymbol}${amountAvailable.toLocaleString()}.`;
+
+    if (!isValid) {
+      message = `Selected creators' total of ${currencySymbol}${selectedTotal.toLocaleString()} exceeds the available campaign budget of ${currencySymbol}${amountAvailable.toLocaleString()} by ${currencySymbol}${shortfall.toLocaleString()}. Please swap creators or fund a new campaign for the extra creators.`;
+    }
+
+    return {
+      isValid,
+      amountAvailable,
+      selectedTotal,
+      shortfall,
+      currency: campaign.currency,
+      message,
+    };
   }
 
   async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
