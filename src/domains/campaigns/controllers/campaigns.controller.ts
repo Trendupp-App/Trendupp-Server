@@ -1,5 +1,6 @@
 import {
   Controller,
+  BadRequestException,
   Get,
   Post,
   Patch,
@@ -11,12 +12,9 @@ import {
   HttpStatus,
   Query,
   UseInterceptors,
-  UploadedFile,
-  ParseFilePipe,
-  MaxFileSizeValidator,
-  FileTypeValidator,
+  UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -34,6 +32,7 @@ import { CreateCampaignDto } from '../dtos/create-campaign.dto';
 import { UpdateCampaignDto } from '../dtos/update-campaign.dto';
 import { ApplyCampaignDto } from '../dtos/apply-campaign.dto';
 import { ReviewApplicationDto } from '../dtos/review-application.dto';
+import { ReviewApplicationsBatchDto } from '../dtos/review-applications-batch.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
@@ -59,7 +58,12 @@ export class CampaignsController {
   @Roles('brand')
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('coverImage'))
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'coverImage', maxCount: 1 },
+      { name: 'amplificationAssetFile', maxCount: 1 },
+    ]),
+  )
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new campaign (brand only)' })
   @ApiResponse({ status: 201, description: 'Campaign created successfully' })
@@ -68,20 +72,32 @@ export class CampaignsController {
   async create(
     @CurrentUser() user: User,
     @Body() dto: CreateCampaignDto,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({
-            maxSize: 5 * 1024 * 1024,
-            message: 'Cover image is too large. Max allowed size is 5MB.',
-          }),
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
-        ],
-        fileIsRequired: false,
-      }),
-    )
-    file?: Express.Multer.File,
+    @UploadedFiles()
+    files?: {
+      coverImage?: Express.Multer.File[];
+      amplificationAssetFile?: Express.Multer.File[];
+    },
   ) {
+    const coverImageFile = files?.coverImage?.[0];
+    const amplificationAssetFile = files?.amplificationAssetFile?.[0];
+
+    if (coverImageFile) {
+      if (coverImageFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestException('Cover image is too large. Max allowed size is 5MB.');
+      }
+      if (!/(jpeg|jpg|png|webp)$/i.test(coverImageFile.mimetype)) {
+        throw new BadRequestException('Invalid cover image file type.');
+      }
+    }
+
+    if (amplificationAssetFile) {
+      if (amplificationAssetFile.size > 50 * 1024 * 1024) {
+        throw new BadRequestException(
+          'Amplification asset file is too large. Max allowed size is 50MB.',
+        );
+      }
+    }
+
     let contentGuidelines = dto.contentGuidelines;
     if (typeof contentGuidelines === 'string') {
       try {
@@ -103,8 +119,12 @@ export class CampaignsController {
         creatorNicheId: dto.creatorNicheId,
         campaignBrief: dto.campaignBrief,
         contentGuidelines,
+        amplificationAsset: dto.amplificationAsset,
       },
-      file,
+      {
+        coverImage: coverImageFile,
+        amplificationAssetFile,
+      },
     );
 
     return {
@@ -119,7 +139,12 @@ export class CampaignsController {
   @Roles('brand')
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('coverImage'))
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'coverImage', maxCount: 1 },
+      { name: 'amplificationAssetFile', maxCount: 1 },
+    ]),
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a campaign draft or Step 2-4 edits (brand owner only)' })
   @ApiResponse({ status: 200, description: 'Campaign draft updated successfully' })
@@ -127,20 +152,32 @@ export class CampaignsController {
     @Param('id') id: string,
     @CurrentUser() user: User,
     @Body() dto: UpdateCampaignDto,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({
-            maxSize: 5 * 1024 * 1024,
-            message: 'Cover image is too large. Max allowed size is 5MB.',
-          }),
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
-        ],
-        fileIsRequired: false,
-      }),
-    )
-    file?: Express.Multer.File,
+    @UploadedFiles()
+    files?: {
+      coverImage?: Express.Multer.File[];
+      amplificationAssetFile?: Express.Multer.File[];
+    },
   ) {
+    const coverImageFile = files?.coverImage?.[0];
+    const amplificationAssetFile = files?.amplificationAssetFile?.[0];
+
+    if (coverImageFile) {
+      if (coverImageFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestException('Cover image is too large. Max allowed size is 5MB.');
+      }
+      if (!/(jpeg|jpg|png|webp)$/i.test(coverImageFile.mimetype)) {
+        throw new BadRequestException('Invalid cover image file type.');
+      }
+    }
+
+    if (amplificationAssetFile) {
+      if (amplificationAssetFile.size > 50 * 1024 * 1024) {
+        throw new BadRequestException(
+          'Amplification asset file is too large. Max allowed size is 50MB.',
+        );
+      }
+    }
+
     let contentGuidelines = dto.contentGuidelines;
     if (typeof contentGuidelines === 'string') {
       try {
@@ -177,7 +214,10 @@ export class CampaignsController {
         deliverables,
         contentDirection,
       },
-      file,
+      {
+        coverImage: coverImageFile,
+        amplificationAssetFile,
+      },
     );
 
     return {
@@ -353,6 +393,34 @@ export class CampaignsController {
   async getApplications(@Param('id') campaignId: string, @CurrentUser() user: User) {
     const applications = await this.campaignsService.getCampaignApplications(campaignId, user.id);
     return {
+      applications,
+    };
+  }
+
+  @Patch(':id/applications')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand', 'admin', 'superadmin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Batch review (accept/reject) creator campaign applications (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Applications reviewed successfully' })
+  async reviewApplicationsBatch(
+    @Param('id') campaignId: string,
+    @CurrentUser() user: User,
+    @Body() dto: ReviewApplicationsBatchDto,
+  ) {
+    const callerRole = user.role?.name ?? (user.role as unknown as string) ?? 'brand';
+    const applications = await this.campaignsService.reviewCampaignApplicationsBatch(
+      campaignId,
+      dto.applicationIds,
+      user.id,
+      dto.status,
+      callerRole,
+    );
+    return {
+      message: `Applications have been ${dto.status} successfully.`,
       applications,
     };
   }

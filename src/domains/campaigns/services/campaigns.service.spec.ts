@@ -34,6 +34,7 @@ describe('CampaignsService', () => {
     status: 'draft',
     currentStep: 1,
     paymentStatus: 'unpaid',
+    currency: 'USD',
     approvedAt: null,
     update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
@@ -82,6 +83,7 @@ describe('CampaignsService', () => {
       createPaymentRelease: jest.fn(),
       findPaymentByCampaignId: jest.fn(),
       updatePayment: jest.fn().mockResolvedValue(undefined),
+      findCreatorCategoryById: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -95,7 +97,13 @@ describe('CampaignsService', () => {
     } as unknown as jest.Mocked<UrlValidatorService>;
 
     usersServiceMock = {
-      findOne: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'b1',
+        email: 'brand@example.com',
+        firstName: 'Brand',
+        lastName: 'User',
+        country: { currency: 'USD', isAfrican: false },
+      }),
       findOneWithNiches: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -164,6 +172,7 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
@@ -189,7 +198,7 @@ describe('CampaignsService', () => {
       campaignRepoMock.create.mockResolvedValue(mockCampaign);
       campaignRepoMock.findById.mockResolvedValue(mockCampaign);
 
-      await service.create('b1', createData, mockFile);
+      await service.create('b1', createData, { coverImage: mockFile });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(s3ServiceMock.uploadFile).toHaveBeenCalledWith(mockFile);
@@ -201,11 +210,13 @@ describe('CampaignsService', () => {
         creatorCategoryId: 'cc1',
         brandId: 'b1',
         coverImage: 'https://mock-s3-url.com/image.jpg',
+        amplificationAsset: undefined,
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
     });
   });
@@ -285,10 +296,19 @@ describe('CampaignsService', () => {
         usageRights: 'full rights',
         successLooksLike: 'very good',
         campaignBrief: 'our brand guidelines brief',
+        amplificationAsset: 'https://hosted.link',
         update: jest.fn().mockResolvedValue(undefined),
       } as unknown as Campaign;
 
       campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+      campaignRepoMock.findCreatorCategoryById.mockResolvedValue({
+        id: 'cc1',
+        name: 'Nano',
+        minCostCreateNaira: 50000,
+        minCostCreateUsd: 50,
+        minCostAmplifyNaira: 20000,
+        minCostAmplifyUsd: 20,
+      } as any);
       usersServiceMock.findOne.mockResolvedValue({
         firstName: 'Brand',
         lastName: 'Owner',
@@ -740,6 +760,86 @@ describe('CampaignsService', () => {
       await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'accepted');
 
       expect(mockApp.update).toHaveBeenCalledWith({ status: 'accepted' });
+    });
+  });
+
+  describe('reviewCampaignApplicationsBatch', () => {
+    it('should successfully update status to accepted in batch and auto-reject others', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp2 = {
+        id: 'app2',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp3 = {
+        id: 'app3',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById
+        .mockResolvedValueOnce(mockApp1 as any)
+        .mockResolvedValueOnce(mockApp1 as any)
+        .mockResolvedValueOnce(mockApp2 as any)
+        .mockResolvedValueOnce(mockApp2 as any);
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue([
+        mockApp1,
+        mockApp2,
+        mockApp3,
+      ] as any);
+
+      const results = await service.reviewCampaignApplicationsBatch(
+        'c1',
+        ['app1', 'app2'],
+        'brand1',
+        'accepted',
+      );
+
+      expect(mockApp1.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp2.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp3.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(results.length).toBe(2);
+    });
+
+    it('should successfully reject selected in batch without affecting others', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp2 = {
+        id: 'app2',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById
+        .mockResolvedValueOnce(mockApp1 as any)
+        .mockResolvedValueOnce(mockApp1 as any);
+
+      const results = await service.reviewCampaignApplicationsBatch(
+        'c1',
+        ['app1'],
+        'brand1',
+        'rejected',
+      );
+
+      expect(mockApp1.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(mockApp2.update).not.toHaveBeenCalled();
+      expect(results.length).toBe(1);
     });
   });
 

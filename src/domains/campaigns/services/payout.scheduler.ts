@@ -31,83 +31,200 @@ export class PayoutScheduler {
     const pendingReleases = await this.campaignRepository.findDuePendingReleases(now);
 
     console.log('Pending releases:', pendingReleases);
-    if (pendingReleases.length === 0) {
-      this.logger.log('No due pending payouts found.');
+    if (pendingReleases.length > 0) {
+      this.logger.log(`Found ${pendingReleases.length} due payouts to process.`);
 
-      // I should send email after getting clarity from stakeholders
-      return;
+      for (const release of pendingReleases) {
+        try {
+          // Fetch creator details
+          const creator = await this.usersService.findOne(release.creatorId);
+          if (!creator) {
+            throw new Error('Creator profile not found');
+          }
+
+          if (!creator.bankAccountNumber || !creator.bank?.code) {
+            throw new Error('Creator payout bank details are missing or incomplete');
+          }
+
+          // Generate unique reference (idempotency key) for this release payout.
+          // Must be <= 25 characters (limit enforced by Pandascrow /bank/transfers).
+          const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 20)}`;
+
+          this.logger.log(
+            `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
+          );
+
+          // Guard: only proceed with bank transfer if the Pandascrow escrow has been released.
+          // The finance admin releases the escrow via the Pandascrow dashboard, which triggers
+          // the escrow.completed webhook → updates Payment.escrowStatus → unblocks this release.
+          const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
+            release.campaignId,
+          );
+          if (campaignPayment?.escrowStatus !== 'completed') {
+            this.logger.warn(
+              `Escrow not yet released for campaign ${release.campaignId} ` +
+                `(release ID: ${release.id}). ` +
+                `Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
+                `Parking as escrow_pending — will retry after escrow.completed webhook.`,
+            );
+            await release.update({ status: 'escrow_pending', errorDetails: null });
+            continue;
+          }
+
+          // Trigger payout request from Trendupp's Pandascrow wallet to creator's bank account
+          const success = await this.pandascrowService.requestPayout({
+            payoutRef,
+            walletId: this.walletId,
+            amount: release.amount,
+            currency: release.currency || 'USD',
+            bankCode: creator.bank.code,
+            accountNumber: creator.bankAccountNumber,
+            accountName: creator.bankAccountName || `${creator.firstName} ${creator.lastName}`,
+          });
+
+          if (success) {
+            await release.update({
+              status: 'released',
+              errorDetails: null,
+            });
+            this.logger.log(`Successfully completed payout for release ID: ${release.id}`);
+
+            // Check if the campaign can be completed
+            await this.checkAndCompleteCampaign(release.campaignId);
+          } else {
+            throw new Error('Pandascrow payout failed without explicit error');
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Payout failed for release ID ${release.id}: ${message}`);
+          await release.update({
+            status: 'failed',
+            errorDetails: message,
+          });
+        }
+      }
+    } else {
+      this.logger.log('No due pending payouts found.');
     }
 
-    this.logger.log(`Found ${pendingReleases.length} due payouts to process.`);
+    // Scan for any ended campaigns with remaining budget to refund
+    await this.scanAndQueueRefunds();
 
-    for (const release of pendingReleases) {
-      try {
-        // Fetch creator details
-        const creator = await this.usersService.findOne(release.creatorId);
-        if (!creator) {
-          throw new Error('Creator profile not found');
-        }
+    // Process brand refund transfers from wallet
+    await this.processPendingRefunds();
+  }
 
-        if (!creator.bankAccountNumber || !creator.bank?.code) {
-          throw new Error('Creator payout bank details are missing or incomplete');
-        }
-
-        // Generate unique reference (idempotency key) for this release payout.
-        // Must be <= 25 characters (limit enforced by Pandascrow /bank/transfers).
-        const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 20)}`;
-
-        this.logger.log(
-          `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
-        );
-
-        // Guard: only proceed with bank transfer if the Pandascrow escrow has been released.
-        // The finance admin releases the escrow via the Pandascrow dashboard, which triggers
-        // the escrow.completed webhook → updates Payment.escrowStatus → unblocks this release.
-        const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
-          release.campaignId,
-        );
-        if (campaignPayment?.escrowStatus !== 'completed') {
-          this.logger.warn(
-            `Escrow not yet released for campaign ${release.campaignId} ` +
-              `(release ID: ${release.id}). ` +
-              `Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
-              `Parking as escrow_pending — will retry after escrow.completed webhook.`,
+  async scanAndQueueRefunds(): Promise<void> {
+    this.logger.log('Scanning for ended campaigns with remaining budget to refund...');
+    try {
+      const endedCampaigns = await this.campaignRepository.findEndedCampaignsWithoutRefund();
+      for (const campaign of endedCampaigns) {
+        const totalReleasesAmount = await this.campaignRepository.sumPaymentReleases(campaign.id);
+        const refundAmount = campaign.totalBudget - totalReleasesAmount;
+        if (refundAmount > 0) {
+          this.logger.log(
+            `Queueing refund of ${refundAmount} for campaign ${campaign.id} ` +
+              `(budget: ${campaign.totalBudget}, payouts: ${totalReleasesAmount})`,
           );
-          await release.update({ status: 'escrow_pending', errorDetails: null });
-          continue;
-        }
-
-        // Trigger payout request from Trendupp's Pandascrow wallet to creator's bank account
-        const success = await this.pandascrowService.requestPayout({
-          payoutRef,
-          walletId: this.walletId,
-          amount: release.amount,
-          currency: 'NGN', // Default to NGN as per onboarding spec
-          bankCode: creator.bank.code,
-          accountNumber: creator.bankAccountNumber,
-          accountName: creator.bankAccountName || `${creator.firstName} ${creator.lastName}`,
-        });
-
-        if (success) {
-          await release.update({
-            status: 'released',
-            errorDetails: null,
+          await this.campaignRepository.createRefund({
+            campaignId: campaign.id,
+            brandId: campaign.brandId,
+            amount: refundAmount,
+            status: 'pending',
+            currency: campaign.currency,
           });
-          this.logger.log(`Successfully completed payout for release ID: ${release.id}`);
-
-          // Check if the campaign can be completed
-          await this.checkAndCompleteCampaign(release.campaignId);
         } else {
-          throw new Error('Pandascrow payout failed without explicit error');
+          // Record a completed refund of 0 to mark this ended campaign as fully processed
+          await this.campaignRepository.createRefund({
+            campaignId: campaign.id,
+            brandId: campaign.brandId,
+            amount: 0,
+            status: 'completed',
+            currency: campaign.currency,
+          });
         }
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Payout failed for release ID ${release.id}: ${message}`);
-        await release.update({
-          status: 'failed',
-          errorDetails: message,
-        });
       }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error scanning and queueing refunds: ${message}`);
+    }
+  }
+
+  async processPendingRefunds(): Promise<void> {
+    this.logger.log('Starting brand refunds processing and transfers...');
+    try {
+      const pendingRefunds = await this.campaignRepository.findPendingRefunds();
+      if (pendingRefunds.length === 0) {
+        this.logger.log('No pending refunds found.');
+        return;
+      }
+
+      this.logger.log(`Found ${pendingRefunds.length} pending refunds to process.`);
+
+      for (const refund of pendingRefunds) {
+        try {
+          const brand = await this.usersService.findOne(refund.brandId);
+          if (!brand) {
+            throw new Error('Brand user profile not found');
+          }
+
+          if (!brand.bankAccountNumber || !brand.bank?.code) {
+            this.logger.warn(
+              `Brand payout bank details are missing for refund ID ${refund.id}. ` +
+                `Parking as pending_bank_details.`,
+            );
+            await refund.update({ status: 'pending_bank_details' });
+            continue;
+          }
+
+          const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
+            refund.campaignId,
+          );
+          if (campaignPayment?.escrowStatus !== 'completed') {
+            this.logger.warn(
+              `Escrow not yet released/completed for campaign ${refund.campaignId} ` +
+                `(refund ID: ${refund.id}). Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
+                `Parking refund as pending_escrow.`,
+            );
+            continue;
+          }
+
+          const refundRef = `ref_${refund.id.replace(/-/g, '').substring(0, 20)}`;
+
+          this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
+
+          const success = await this.pandascrowService.requestPayout({
+            payoutRef: refundRef,
+            walletId: this.walletId,
+            amount: refund.amount,
+            currency: refund.currency || 'USD',
+            bankCode: brand.bank.code,
+            accountNumber: brand.bankAccountNumber,
+            accountName: brand.bankAccountName || `${brand.firstName} ${brand.lastName}`,
+          });
+
+          if (success) {
+            await refund.update({
+              status: 'completed',
+              refundReference: refundRef,
+              errorDetails: null,
+            });
+            this.logger.log(`Successfully completed refund transfer for refund ID: ${refund.id}`);
+          } else {
+            throw new Error('Pandascrow bank transfer returned failure');
+          }
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          this.logger.error(`Refund failed for refund ID ${refund.id}: ${errMsg}`);
+          await refund.update({
+            status: 'failed',
+            errorDetails: errMsg,
+          });
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error processing pending refunds: ${message}`);
     }
   }
 

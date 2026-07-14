@@ -92,8 +92,18 @@ export class Campaign extends BaseEntity<Campaign> {
   })
   declare paymentStatus: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'USD',
+  })
+  declare currency: string;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'amplification_asset' })
+  declare amplificationAsset?: string;
 
   /**
    * Campaign lifecycle status.
