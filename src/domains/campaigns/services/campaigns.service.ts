@@ -996,7 +996,7 @@ export class CampaignsService {
       campaignId,
       creatorId: submission.creatorId,
       applicationId: submission.applicationId,
-      amount: campaign.totalBudget,
+      amount: application.feeRequest,
       releaseDate,
       status: 'pending',
       escrowId: campaignPayment?.escrowId ?? null,
