@@ -17,6 +17,7 @@ import { CampaignReview } from './entities/campaign-review.entity';
 import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
 import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
+import { Dispute } from '../disputes/entities/dispute.entity';
 import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
 
 import { WebhooksController } from './controllers/webhooks.controller';
@@ -36,6 +37,7 @@ import { PayoutScheduler } from './services/payout.scheduler';
       CampaignReview,
       PaymentRelease,
       CampaignRefund,
+      Dispute,
     ]),
     UsersModule,
     UrlValidatorModule,

@@ -84,6 +84,7 @@ describe('CampaignsService', () => {
       findPaymentByCampaignId: jest.fn(),
       updatePayment: jest.fn().mockResolvedValue(undefined),
       findCreatorCategoryById: jest.fn(),
+      raiseDispute: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -989,6 +990,22 @@ describe('CampaignsService', () => {
       });
     });
 
+    it('should throw BadRequestException if brand tries to reject a draft on first submission', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        status: 'pending_approval',
+        update: jest.fn(),
+      };
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+
+      await expect(
+        service.vetDraft('c1', 'sub1', 'brand1', 'rejected', "don't like it"),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should throw ForbiddenException if brand tries to request revision on revision-sent submission', async () => {
       const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
       const mockSubmission = { id: 'sub1', campaignId: 'c1', status: 'revision-sent' };
@@ -998,6 +1015,34 @@ describe('CampaignsService', () => {
       await expect(
         service.vetDraft('c1', 'sub1', 'brand1', 'request_revision', 'More revisions'),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow brand to reject a revised submission and raise a dispute', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        creatorId: 'creator-1',
+        status: 'revision-sent',
+        update: jest.fn(),
+      };
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.raiseDispute.mockResolvedValue({ id: 'disp1' } as any);
+
+      await service.vetDraft('c1', 'sub1', 'brand1', 'rejected', 'Still bad quality content');
+
+      expect(mockSubmission.update).toHaveBeenCalledWith({
+        status: 'disputeraised',
+        brandFeedback: 'Still bad quality content',
+      });
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.raiseDispute).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        creatorId: 'creator-1',
+        brandId: 'brand1',
+        reason: 'Still bad quality content',
+      });
     });
   });
 

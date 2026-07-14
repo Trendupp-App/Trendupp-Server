@@ -14,6 +14,7 @@ import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
 import { CampaignRefund } from '../entities/campaign-refund.entity';
+import { Dispute } from '../../disputes/entities/dispute.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
@@ -50,6 +51,8 @@ export class CampaignRepository {
     private readonly paymentReleaseModel: typeof PaymentRelease,
     @InjectModel(CampaignRefund)
     private readonly campaignRefundModel: typeof CampaignRefund,
+    @InjectModel(Dispute)
+    private readonly disputeModel: typeof Dispute,
   ) {}
 
   private readonly fullIncludes = [
@@ -721,5 +724,21 @@ export class CampaignRepository {
         },
       },
     });
+  }
+
+  async raiseDispute(data: {
+    campaignId: string;
+    creatorId: string;
+    brandId: string;
+    reason: string;
+  }): Promise<Dispute> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    return (this.disputeModel as any).create({
+      campaignId: data.campaignId,
+      creatorId: data.creatorId,
+      brandId: data.brandId,
+      reason: data.reason,
+      status: 'raised',
+    }) as Promise<Dispute>;
   }
 }

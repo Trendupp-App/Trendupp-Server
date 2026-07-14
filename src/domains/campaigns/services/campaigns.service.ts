@@ -898,7 +898,7 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     brandId: string,
-    decision: 'approved' | 'request_revision',
+    decision: 'approved' | 'request_revision' | 'rejected',
     brandFeedback?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
@@ -915,21 +915,52 @@ export class CampaignsService {
       throw new NotFoundException('Submission not found');
     }
 
-    if (submission.status !== 'pending_approval' && submission.status !== 'revision-sent') {
-      throw new ForbiddenException(`Submission is not in a state awaiting review`);
+    // Rules for first submission (pending_approval or request_revision/revision-sent)
+    if (submission.status === 'pending_approval') {
+      if (decision === 'rejected') {
+        throw new BadRequestException(
+          'You cannot reject a draft on its first submission. You must either approve it or request a revision.',
+        );
+      }
     }
 
-    if (decision === 'request_revision' && submission.status === 'revision-sent') {
-      throw new ForbiddenException(
-        `Revision has already been requested once. You must approve this revised draft or file a dispute.`,
-      );
-    }
-
-    const updates: Record<string, unknown> = { status: decision };
-    if (decision === 'request_revision') {
-      updates.brandFeedback = brandFeedback || 'Revision requested by brand';
+    // Rules for revised submission (revision-sent)
+    if (submission.status === 'revision-sent') {
+      if (decision === 'request_revision') {
+        throw new ForbiddenException(
+          `Revision has already been requested once. You must approve this revised draft or reject it to raise a dispute.`,
+        );
+      }
     } else {
+      // If it's not pending_approval and not revision-sent, it's not in a state awaiting review
+      if (submission.status !== 'pending_approval') {
+        throw new ForbiddenException(`Submission is not in a state awaiting review`);
+      }
+    }
+
+    // Process decision
+    const updates: Record<string, unknown> = {};
+
+    if (decision === 'approved') {
+      updates.status = 'approved';
       updates.brandFeedback = null;
+    } else if (decision === 'request_revision') {
+      updates.status = 'request_revision';
+      updates.brandFeedback = brandFeedback || 'Revision requested by brand';
+    } else if (decision === 'rejected') {
+      if (!brandFeedback || !brandFeedback.trim()) {
+        throw new BadRequestException('A reason is required when rejecting a draft submission');
+      }
+      updates.status = 'disputeraised';
+      updates.brandFeedback = brandFeedback;
+
+      // Raise the dispute in the disputes table
+      await this.campaignRepository.raiseDispute({
+        campaignId,
+        creatorId: submission.creatorId,
+        brandId: campaign.brandId,
+        reason: brandFeedback,
+      });
     }
 
     await submission.update(updates);
