@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 import { Test, TestingModule } from '@nestjs/testing';
 import { CampaignsService } from './campaigns.service';
 import { CampaignRepository } from '../repository/campaign.repository';
@@ -294,7 +294,6 @@ describe('CampaignsService', () => {
         contentDirection: ['d1'],
         contentGuidelines: { dos: ['do1'], donts: [] },
         usageRights: 'full rights',
-        successLooksLike: 'very good',
         campaignBrief: 'our brand guidelines brief',
         amplificationAsset: 'https://hosted.link',
         update: jest.fn().mockResolvedValue(undefined),
@@ -373,7 +372,6 @@ describe('CampaignsService', () => {
         contentDirection: ['d1'],
         contentGuidelines: { dos: ['do1'], donts: [] },
         usageRights: 'full rights',
-        successLooksLike: 'very good',
         campaignBrief: 'our brand guidelines brief',
         update: jest.fn().mockResolvedValue(undefined),
       } as unknown as Campaign;
@@ -1333,6 +1331,93 @@ describe('CampaignsService', () => {
       await expect(
         service.reviewCampaignApplicationsBatch('c1', ['app1'], 'b1', 'accepted'),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('populateBreakdown brand owner visibility', () => {
+    it('should NOT mask amplificationAsset if the requestingUserId is the brandId of the campaign', async () => {
+      const campaign = {
+        id: 'c1',
+        brandId: 'brand-owner-1',
+        totalBudget: 100000,
+        amplificationAsset: 'https://protected.link/file.mp4',
+        setDataValue: jest.fn(),
+      } as any;
+
+      await service.populateBreakdown(campaign, 'brand-owner-1');
+
+      // setDataValue('amplificationAsset', null) should NOT have been called
+      expect(campaign.setDataValue).not.toHaveBeenCalledWith('amplificationAsset', null);
+    });
+
+    it('should mask amplificationAsset if the requestingUserId is undefined or different from brandId', async () => {
+      const campaign = {
+        id: 'c1',
+        brandId: 'brand-owner-1',
+        totalBudget: 100000,
+        amplificationAsset: 'https://protected.link/file.mp4',
+        setDataValue: jest.fn(),
+      } as any;
+
+      await service.populateBreakdown(campaign, 'creator-user-2');
+
+      // setDataValue('amplificationAsset', null) SHOULD have been called
+      expect(campaign.setDataValue).toHaveBeenCalledWith('amplificationAsset', null);
+    });
+  });
+
+  describe('submitLivePost for Amplify Content goal', () => {
+    it('should dynamically create a pre-approved submission and save the live link when none exists yet', async () => {
+      const mockApplication = {
+        id: 'app1',
+        campaignId: 'c1',
+        creatorId: 'creator1',
+        status: 'accepted',
+      } as any;
+
+      const mockCampaignWithGoal = {
+        id: 'c1',
+        goal: 'Amplify Content',
+        amplificationAsset: 'https://protected.link/file.mp4',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      const mockNewSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        status: 'approved',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      campaignRepoMock.findSubmissionById.mockResolvedValueOnce(null);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication);
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignWithGoal);
+      campaignRepoMock.createSubmission.mockResolvedValue(mockNewSubmission);
+      campaignRepoMock.findSubmissionById.mockResolvedValueOnce(mockNewSubmission);
+
+      urlValidatorMock.validateUrl.mockResolvedValue({ isLive: true, checkedAt: new Date() });
+
+      const result = await service.submitLivePost('c1', 'app1', 'creator1', {
+        instagram: 'https://instagram.com/p/123',
+      });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createSubmission).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        applicationId: 'app1',
+        creatorId: 'creator1',
+        draftLink: 'https://protected.link/file.mp4',
+        status: 'approved',
+      });
+
+      expect(mockNewSubmission.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'livelink_available',
+        }),
+      );
+      expect(result).toBeDefined();
     });
   });
 });

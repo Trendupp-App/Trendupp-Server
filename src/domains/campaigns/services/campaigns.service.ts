@@ -73,7 +73,7 @@ export class CampaignsService {
     };
   }
 
-  async populateBreakdown(campaign: Campaign): Promise<Campaign> {
+  async populateBreakdown(campaign: Campaign, requestingUserId?: string): Promise<Campaign> {
     if (campaign) {
       const breakdown = await this.calculateBreakdown(campaign.totalBudget);
       campaign.paymentBreakdown = breakdown;
@@ -82,14 +82,17 @@ export class CampaignsService {
       const total = await this.campaignRepository.countApplications(campaign.id);
       campaign.setDataValue('applicationsCount' as any, { total });
 
-      // Mask amplification asset link by default to protect it in list views
-      campaign.setDataValue('amplificationAsset' as any, null);
+      // Mask amplification asset link by default to protect it,
+      // EXCEPT if the requester is the brand owner who created the campaign
+      if (!requestingUserId || requestingUserId !== campaign.brandId) {
+        campaign.setDataValue('amplificationAsset' as any, null);
+      }
     }
     return campaign;
   }
 
-  async populateBreakdowns(campaigns: Campaign[]): Promise<Campaign[]> {
-    await Promise.all(campaigns.map((c) => this.populateBreakdown(c)));
+  async populateBreakdowns(campaigns: Campaign[], requestingUserId?: string): Promise<Campaign[]> {
+    await Promise.all(campaigns.map((c) => this.populateBreakdown(c, requestingUserId)));
     return campaigns;
   }
 
@@ -147,7 +150,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return this.populateBreakdown(populated!);
+    return this.populateBreakdown(populated!, brandId);
   }
 
   async updateDraft(
@@ -222,7 +225,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return this.populateBreakdown(populated!);
+    return this.populateBreakdown(populated!, brandId);
   }
 
   async submit(
@@ -278,7 +281,6 @@ export class CampaignsService {
         errors.push('contentGuidelines are required');
       }
       if (!campaign.usageRights) errors.push('usageRights text is required');
-      if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
       if (!campaign.campaignBrief) errors.push('campaignBrief is required');
 
       if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
@@ -396,7 +398,7 @@ export class CampaignsService {
     }
 
     const result = await this.campaignRepository.findAll(query, prioritizeNicheIds);
-    result.data = await this.populateBreakdowns(result.data);
+    result.data = await this.populateBreakdowns(result.data, user?.id);
 
     // For virtual statuses, override the status field in the response so the
     // frontend receives the filter name it sent, not the raw DB value.
@@ -440,7 +442,7 @@ export class CampaignsService {
 
     const rawAsset = campaign.amplificationAsset;
 
-    await this.populateBreakdown(campaign);
+    await this.populateBreakdown(campaign, requestingUser?.id);
 
     // If authorized, restore the real asset link. Otherwise, it remains masked (null).
     if (isAuthorized && rawAsset) {
@@ -479,7 +481,7 @@ export class CampaignsService {
 
   async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
     const campaigns = await this.campaignRepository.findByBrandId(brandId, status);
-    return this.populateBreakdowns(campaigns);
+    return this.populateBreakdowns(campaigns, brandId);
   }
 
   async findLive(pagination?: {
@@ -941,7 +943,35 @@ export class CampaignsService {
     creatorId: string,
     liveLink: Record<string, string>,
   ): Promise<ContentSubmission> {
-    const submission = await this.campaignRepository.findSubmissionById(submissionId);
+    let submission = await this.campaignRepository.findSubmissionById(submissionId);
+
+    // Dynamic support for Amplify Content campaigns which skip the draft creation phase
+    if (!submission) {
+      const application = await this.campaignRepository.findApplicationById(submissionId);
+      if (application && application.campaignId === campaignId) {
+        const campaign =
+          application.campaign || (await this.campaignRepository.findById(campaignId));
+        if (campaign && campaign.goal === 'Amplify Content') {
+          if (application.creatorId !== creatorId) {
+            throw new ForbiddenException(`You do not own this application`);
+          }
+          if (application.status !== 'accepted') {
+            throw new ForbiddenException(
+              `You can only submit live posts for accepted applications`,
+            );
+          }
+          // Dynamically create a pre-approved ContentSubmission
+          submission = await this.campaignRepository.createSubmission({
+            campaignId,
+            applicationId: application.id,
+            creatorId,
+            draftLink: campaign.amplificationAsset || '',
+            status: 'approved',
+          });
+        }
+      }
+    }
+
     if (!submission || submission.campaignId !== campaignId) {
       throw new NotFoundException('Submission not found');
     }

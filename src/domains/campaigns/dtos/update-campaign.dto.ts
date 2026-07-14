@@ -224,20 +224,6 @@ export class UpdateCampaignDto {
   usageRights?: string;
 
   @ApiPropertyOptional({
-    description: 'Success looks like description',
-    example: 'We are looking for authentic, visually appealing content.',
-  })
-  @Transform(({ value }: { value: unknown }): string | undefined => {
-    if (value === '' || value === null || value === undefined) return undefined;
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-    return undefined;
-  })
-  @IsString()
-  @IsOptional()
-  successLooksLike?: string;
-
-  @ApiPropertyOptional({
     description: 'Timeline date for the campaign (ISO string)',
     example: '2026-07-31T23:59:59.999Z',
   })
