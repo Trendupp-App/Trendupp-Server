@@ -92,7 +92,7 @@ export class PandascrowService {
       description: payload.description,
       inspection_period: '7', // default 7 days
       delivery_date: payload.deliveryDate,
-      who_pay_fees: 'buyer', // brand pays fees
+      who_pay_fees: 'seller', // Trendupp pays fees
       amount: payload.amount,
       buyer_details: {
         name: payload.buyerDetails.name,

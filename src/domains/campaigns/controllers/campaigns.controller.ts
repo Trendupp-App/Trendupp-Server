@@ -33,6 +33,7 @@ import { UpdateCampaignDto } from '../dtos/update-campaign.dto';
 import { ApplyCampaignDto } from '../dtos/apply-campaign.dto';
 import { ReviewApplicationDto } from '../dtos/review-application.dto';
 import { ReviewApplicationsBatchDto } from '../dtos/review-applications-batch.dto';
+import { ValidateSelectionDto } from '../dtos/validate-selection.dto';
 import { SubmitDraftDto } from '../dtos/submit-draft.dto';
 import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
@@ -395,6 +396,19 @@ export class CampaignsController {
     return {
       applications,
     };
+  }
+
+  @Post(':id/validate-selection')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand', 'admin', 'superadmin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Validate selected creators total fees against available campaign pool budget',
+  })
+  @ApiResponse({ status: 200, description: 'Creator selection budget validation check completed' })
+  validateSelection(@Param('id') campaignId: string, @Body() dto: ValidateSelectionDto) {
+    return this.campaignsService.validateCreatorSelection(campaignId, dto.applicationIds);
   }
 
   @Patch(':id/applications')
