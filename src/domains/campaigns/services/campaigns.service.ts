@@ -293,7 +293,6 @@ export class CampaignsService {
       if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
         errors.push('amplificationAsset is required for Content Amplification campaigns');
       }
-
       if (errors.length > 0) {
         throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
       }

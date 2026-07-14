@@ -17,6 +17,16 @@ import { CampaignRefund } from '../entities/campaign-refund.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
+export interface CreateRefundInput {
+  campaignId: string;
+  brandId: string;
+  amount: number;
+  currency?: string;
+  status?: string;
+  refundReference?: string | null;
+  errorDetails?: string | null;
+}
+
 @Injectable()
 export class CampaignRepository {
   constructor(
@@ -271,6 +281,10 @@ export class CampaignRepository {
     return this.creatorCategoryModel.findAll({
       order: [['minFollowers', 'ASC']],
     });
+  }
+
+  findCreatorCategoryById(id: string): Promise<CreatorCategory | null> {
+    return this.creatorCategoryModel.findByPk(id);
   }
 
   findAllPlatforms(): Promise<Platform[]> {
@@ -679,8 +693,9 @@ export class CampaignRepository {
     return sum || 0;
   }
 
-  async createRefund(data: Partial<Attributes<CampaignRefund>>): Promise<CampaignRefund> {
-    return this.campaignRefundModel.create(data);
+  async createRefund(data: CreateRefundInput): Promise<CampaignRefund> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    return this.campaignRefundModel.create(data as any);
   }
 
   async findRefundByCampaignId(campaignId: string): Promise<CampaignRefund | null> {

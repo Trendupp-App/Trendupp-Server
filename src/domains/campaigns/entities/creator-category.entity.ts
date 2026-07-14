@@ -13,6 +13,38 @@ export class CreatorCategory extends BaseEntity<CreatorCategory> {
   @Column({ type: DataType.INTEGER, allowNull: true, field: 'max_followers' })
   declare maxFollowers?: number;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'min_cost_create_naira',
+  })
+  declare minCostCreateNaira: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'min_cost_create_usd',
+  })
+  declare minCostCreateUsd: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'min_cost_amplify_naira',
+  })
+  declare minCostAmplifyNaira: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'min_cost_amplify_usd',
+  })
+  declare minCostAmplifyUsd: number;
+
   @HasMany(() => Campaign)
   declare campaigns?: Campaign[];
 }

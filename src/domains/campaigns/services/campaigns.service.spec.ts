@@ -83,6 +83,7 @@ describe('CampaignsService', () => {
       createPaymentRelease: jest.fn(),
       findPaymentByCampaignId: jest.fn(),
       updatePayment: jest.fn().mockResolvedValue(undefined),
+      findCreatorCategoryById: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -300,6 +301,14 @@ describe('CampaignsService', () => {
       } as unknown as Campaign;
 
       campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+      campaignRepoMock.findCreatorCategoryById.mockResolvedValue({
+        id: 'cc1',
+        name: 'Nano',
+        minCostCreateNaira: 50000,
+        minCostCreateUsd: 50,
+        minCostAmplifyNaira: 20000,
+        minCostAmplifyUsd: 20,
+      } as any);
       usersServiceMock.findOne.mockResolvedValue({
         firstName: 'Brand',
         lastName: 'Owner',
