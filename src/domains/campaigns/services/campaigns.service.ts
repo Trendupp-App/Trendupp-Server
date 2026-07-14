@@ -90,6 +90,9 @@ export class CampaignsService {
       // Attach application count
       const total = await this.campaignRepository.countApplications(campaign.id);
       campaign.setDataValue('applicationsCount' as any, { total });
+
+      // Mask amplification asset link by default to protect it in list views
+      campaign.setDataValue('amplificationAsset' as any, null);
     }
     return campaign;
   }
@@ -111,12 +114,21 @@ export class CampaignsService {
       creatorNicheId: string;
       campaignBrief?: string;
       contentGuidelines?: { dos: string[]; donts: string[] };
+      amplificationAsset?: string;
     },
-    file?: Express.Multer.File,
+    files?: {
+      coverImage?: Express.Multer.File;
+      amplificationAssetFile?: Express.Multer.File;
+    },
   ): Promise<Campaign> {
     let coverImage: string | undefined;
-    if (file) {
-      coverImage = await this.s3Service.uploadFile(file);
+    if (files?.coverImage) {
+      coverImage = await this.s3Service.uploadFile(files.coverImage);
+    }
+
+    let amplificationAsset = data.amplificationAsset;
+    if (files?.amplificationAssetFile) {
+      amplificationAsset = await this.s3Service.uploadFile(files.amplificationAssetFile);
     }
 
     const brand = await this.usersService.findOne(brandId);
@@ -132,6 +144,7 @@ export class CampaignsService {
       timeline: timeline ? new Date(timeline) : undefined,
       brandId,
       coverImage,
+      amplificationAsset,
       status: 'draft',
       currentStep: 1,
       paymentStatus: 'unpaid',
@@ -164,8 +177,12 @@ export class CampaignsService {
       usageRights?: string;
       successLooksLike?: string;
       campaignBrief?: string;
+      amplificationAsset?: string;
     },
-    file?: Express.Multer.File,
+    files?: {
+      coverImage?: Express.Multer.File;
+      amplificationAssetFile?: Express.Multer.File;
+    },
   ): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
@@ -183,19 +200,27 @@ export class CampaignsService {
     }
 
     let coverImage = campaign.coverImage;
-    if (file) {
-      coverImage = await this.s3Service.uploadFile(file);
+    if (files?.coverImage) {
+      coverImage = await this.s3Service.uploadFile(files.coverImage);
+    }
+
+    let amplificationAsset = campaign.amplificationAsset;
+    if (files?.amplificationAssetFile) {
+      amplificationAsset = await this.s3Service.uploadFile(files.amplificationAssetFile);
+    } else if (data.amplificationAsset !== undefined) {
+      amplificationAsset = data.amplificationAsset;
     }
 
     const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
+      amplificationAsset,
     };
     if (timeline !== undefined) {
       updates.timeline = timeline ? new Date(timeline) : null;
     }
-    if (file) {
+    if (files?.coverImage) {
       updates.coverImage = coverImage;
     }
 
@@ -264,6 +289,10 @@ export class CampaignsService {
       if (!campaign.usageRights) errors.push('usageRights text is required');
       if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
       if (!campaign.campaignBrief) errors.push('campaignBrief is required');
+
+      if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
+        errors.push('amplificationAsset is required for Content Amplification campaigns');
+      }
 
       if (errors.length > 0) {
         throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
@@ -380,7 +409,38 @@ export class CampaignsService {
       throw new NotFoundException('Campaign not found');
     }
 
+    // Determine authorization to view the amplification asset before it is masked
+    let isAuthorized = false;
+    if (requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      const isAdmin = ['admin', 'superadmin', 'finance_admin'].includes(role);
+      const isBrandOwner = campaign.brandId === requestingUser.id;
+
+      if (isAdmin || isBrandOwner) {
+        isAuthorized = true;
+      } else if (role === 'creator') {
+        const hasAcceptedApp = campaign.applications?.some(
+          (app) => app.creatorId === requestingUser.id && app.status === 'accepted',
+        );
+        if (hasAcceptedApp) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    const rawAsset = campaign.amplificationAsset;
+
     await this.populateBreakdown(campaign);
+
+    // If authorized, restore the real asset link. Otherwise, it remains masked (null).
+    if (isAuthorized && rawAsset) {
+      campaign.setDataValue('amplificationAsset' as any, rawAsset);
+    }
 
     // Filter applications based on requester role
     if (campaign.applications && requestingUser) {
@@ -593,6 +653,78 @@ export class CampaignsService {
       await this.populateBreakdown(updated.campaign);
     }
     return updated!;
+  }
+
+  async reviewCampaignApplicationsBatch(
+    campaignId: string,
+    applicationIds: string[],
+    callerId: string,
+    status: string,
+    callerRole: string = 'brand',
+  ): Promise<CampaignApplication[]> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const isAdmin = ['admin', 'superadmin'].includes(callerRole);
+
+    // Brands must own the campaign; admins can act on any campaign
+    if (!isAdmin && campaign.brandId !== callerId) {
+      throw new ForbiddenException(`You do not own this campaign`);
+    }
+
+    const results: CampaignApplication[] = [];
+
+    for (const appId of applicationIds) {
+      const application = await this.campaignRepository.findApplicationById(appId);
+      if (!application || application.campaignId !== campaignId) {
+        throw new NotFoundException(
+          `Application ${appId} not found or does not belong to this campaign`,
+        );
+      }
+
+      // Attempting to undo an already-accepted application
+      if (application.status === 'accepted' && status === 'rejected') {
+        if (!isAdmin) {
+          throw new ForbiddenException(
+            `You do not have sufficient access to undo an accepted application. Please contact support.`,
+          );
+        }
+        // Admin undo: revert application + campaign back to live
+        await application.update({ status: 'rejected' });
+        await campaign.update({ status: 'live' });
+      } else {
+        // Normal path: update application status
+        await application.update({ status });
+
+        // When a brand accepts an application, promote the campaign to active
+        if (status === 'accepted') {
+          await campaign.update({ status: 'active' });
+        }
+      }
+
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated) {
+        if (updated.campaign) {
+          await this.populateBreakdown(updated.campaign);
+        }
+        results.push(updated);
+      }
+    }
+
+    // If accepting a batch of creators, auto-reject all other applications that were not chosen
+    if (status === 'accepted') {
+      const allApplications =
+        await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+      for (const app of allApplications) {
+        if (!applicationIds.includes(app.id) && app.status !== 'rejected') {
+          await app.update({ status: 'rejected' });
+        }
+      }
+    }
+
+    return results;
   }
 
   async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {

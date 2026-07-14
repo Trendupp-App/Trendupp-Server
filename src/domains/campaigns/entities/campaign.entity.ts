@@ -102,6 +102,9 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
 
+  @Column({ type: DataType.STRING, allowNull: true, field: 'amplification_asset' })
+  declare amplificationAsset?: string;
+
   /**
    * Campaign lifecycle status.
    *
