@@ -5,6 +5,23 @@ import * as ejs from 'ejs';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+export interface SendEmailOptions {
+  to: string;
+  subject: string;
+  /** Template name (without extension) in integration/email/templates */
+  template: string;
+  data: Record<string, unknown>;
+  /**
+   * When true, SES delivery failures are thrown to the caller (used by the
+   * notification queue worker so failures are recorded/retryable). Defaults
+   * to false: the legacy behavior of falling back to a console mock so
+   * request-path flows (signup OTP) are never blocked by SES.
+   */
+  throwOnFailure?: boolean;
+}
+
+export type SendEmailResult = 'sent' | 'mocked';
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -48,136 +65,94 @@ export class EmailService {
     }
   }
 
-  async sendOtpEmail(to: string, otp: string): Promise<void> {
-    const subject = 'Your Trendupp Verification Code';
+  /**
+   * Generic templated send — the single render/SES/mock-fallback path every
+   * email goes through. Only template rendering errors are always thrown;
+   * SES delivery errors throw only when `throwOnFailure` is set.
+   */
+  async send(options: SendEmailOptions): Promise<SendEmailResult> {
+    const { to, subject, template, data, throwOnFailure = false } = options;
+
+    // Rendering errors always bubble up: a missing/broken template is a bug.
+    const templatePath = join(this.templateDir, `${template}.ejs`);
+    let htmlBody: string;
+    try {
+      htmlBody = await ejs.renderFile(templatePath, data);
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to render email template "${template}" for ${to}`, stack);
+      throw error;
+    }
+
+    if (!this.sesClient) {
+      // No SES credentials — pure mock mode
+      this.logMockEmail(to, subject);
+      return 'mocked';
+    }
 
     try {
-      // Render the template
-      const templatePath = join(this.templateDir, 'otp.ejs');
-      const htmlBody = await ejs.renderFile(templatePath, { otp });
-
-      if (this.sesClient) {
-        try {
-          const command = new SendEmailCommand({
-            Destination: { ToAddresses: [to] },
-            Message: {
-              Body: { Html: { Data: htmlBody } },
-              Subject: { Data: subject },
-            },
-            Source: this.fromEmail,
-          });
-          await this.sesClient.send(command);
-          this.logger.log(`OTP Email sent successfully to ${to}`);
-        } catch (sesError) {
-          // SES rejected the send (e.g. sandbox mode — recipient not verified).
-          // Fall back to console logging so the signup flow is not blocked.
-          const message = sesError instanceof Error ? sesError.message : String(sesError);
-          this.logger.warn(
-            `AWS SES could not deliver email to ${to} (falling back to mock mode): ${message}`,
-          );
-          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
-          this.logger.log(`To: ${to}`);
-          this.logger.log(`Subject: ${subject}`);
-          this.logger.log(`OTP Code: ${otp}`);
-          this.logger.log('-----------------------------');
-        }
-      } else {
-        // No SES credentials — pure mock mode
-        this.logger.log('--- [MOCK EMAIL SENT] ---');
-        this.logger.log(`To: ${to}`);
-        this.logger.log(`Subject: ${subject}`);
-        this.logger.log(`OTP Code: ${otp}`);
-        this.logger.log('--------------------------');
+      const command = new SendEmailCommand({
+        Destination: { ToAddresses: [to] },
+        Message: {
+          Body: { Html: { Data: htmlBody } },
+          Subject: { Data: subject },
+        },
+        Source: this.fromEmail,
+      });
+      await this.sesClient.send(command);
+      this.logger.log(`Email "${subject}" sent successfully to ${to}`);
+      return 'sent';
+    } catch (sesError) {
+      const message = sesError instanceof Error ? sesError.message : String(sesError);
+      if (throwOnFailure) {
+        this.logger.error(`AWS SES could not deliver email to ${to}: ${message}`);
+        throw sesError;
       }
-    } catch (error) {
-      // Only template rendering errors bubble up as a 500 here
-      const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to render OTP email template for ${to}`, stack);
-      throw error;
+      // SES rejected the send (e.g. sandbox mode — recipient not verified).
+      // Fall back to console logging so request-path flows are not blocked.
+      this.logger.warn(
+        `AWS SES could not deliver email to ${to} (falling back to mock mode): ${message}`,
+      );
+      this.logMockEmail(to, subject);
+      return 'mocked';
+    }
+  }
+
+  private logMockEmail(to: string, subject: string): void {
+    this.logger.log('--- [MOCK EMAIL SENT] ---');
+    this.logger.log(`To: ${to}`);
+    this.logger.log(`Subject: ${subject}`);
+    this.logger.log('--------------------------');
+  }
+
+  async sendOtpEmail(to: string, otp: string): Promise<void> {
+    const result = await this.send({
+      to,
+      subject: 'Your Trendupp Verification Code',
+      template: 'otp',
+      data: { otp },
+    });
+    if (result === 'mocked') {
+      // Dev environments without SES rely on this log to complete signup/login.
+      this.logger.log(`OTP Code for ${to}: ${otp}`);
     }
   }
 
   async sendAccountDeletionWarning(to: string, firstName: string): Promise<void> {
-    const subject = 'Your Trendupp Account Will Be Deleted in 30 Days';
-
-    try {
-      const templatePath = join(this.templateDir, 'account-deletion-warning.ejs');
-      const htmlBody = await ejs.renderFile(templatePath, { firstName });
-
-      if (this.sesClient) {
-        try {
-          const command = new SendEmailCommand({
-            Destination: { ToAddresses: [to] },
-            Message: {
-              Body: { Html: { Data: htmlBody } },
-              Subject: { Data: subject },
-            },
-            Source: this.fromEmail,
-          });
-          await this.sesClient.send(command);
-          this.logger.log(`Account deletion warning sent to ${to}`);
-        } catch (sesError) {
-          const message = sesError instanceof Error ? sesError.message : String(sesError);
-          this.logger.warn(
-            `AWS SES could not deliver deletion warning to ${to} (falling back to mock): ${message}`,
-          );
-          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
-          this.logger.log(`To: ${to}`);
-          this.logger.log(`Subject: ${subject}`);
-          this.logger.log('-----------------------------');
-        }
-      } else {
-        this.logger.log('--- [MOCK EMAIL SENT] ---');
-        this.logger.log(`To: ${to}`);
-        this.logger.log(`Subject: ${subject}`);
-        this.logger.log('--------------------------');
-      }
-    } catch (error) {
-      const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to render deletion warning template for ${to}`, stack);
-      throw error;
-    }
+    await this.send({
+      to,
+      subject: 'Your Trendupp Account Will Be Deleted in 30 Days',
+      template: 'account-deletion-warning',
+      data: { firstName },
+    });
   }
 
   async sendAccountDeletionTomorrowWarning(to: string, firstName: string): Promise<void> {
-    const subject = 'Your Trendupp Account Will Be Deleted Tomorrow';
-
-    try {
-      const templatePath = join(this.templateDir, 'account-deletion-tomorrow.ejs');
-      const htmlBody = await ejs.renderFile(templatePath, { firstName });
-
-      if (this.sesClient) {
-        try {
-          const command = new SendEmailCommand({
-            Destination: { ToAddresses: [to] },
-            Message: {
-              Body: { Html: { Data: htmlBody } },
-              Subject: { Data: subject },
-            },
-            Source: this.fromEmail,
-          });
-          await this.sesClient.send(command);
-          this.logger.log(`Account deletion tomorrow warning sent to ${to}`);
-        } catch (sesError) {
-          const message = sesError instanceof Error ? sesError.message : String(sesError);
-          this.logger.warn(
-            `AWS SES could not deliver deletion tomorrow warning to ${to} (falling back to mock): ${message}`,
-          );
-          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
-          this.logger.log(`To: ${to}`);
-          this.logger.log(`Subject: ${subject}`);
-          this.logger.log('-----------------------------');
-        }
-      } else {
-        this.logger.log('--- [MOCK EMAIL SENT] ---');
-        this.logger.log(`To: ${to}`);
-        this.logger.log(`Subject: ${subject}`);
-        this.logger.log('--------------------------');
-      }
-    } catch (error) {
-      const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to render deletion tomorrow warning template for ${to}`, stack);
-      throw error;
-    }
+    await this.send({
+      to,
+      subject: 'Your Trendupp Account Will Be Deleted Tomorrow',
+      template: 'account-deletion-tomorrow',
+      data: { firstName },
+    });
   }
 }

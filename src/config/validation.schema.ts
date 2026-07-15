@@ -6,6 +6,9 @@ export const validationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(3000),
 
+  // Web client base URL (deep links in notification emails)
+  WEB_APP_URL: Joi.string().uri().default('https://trendupp.com'),
+
   // Database
   DB_HOST: Joi.string().required(),
   DB_PORT: Joi.number().default(5432),

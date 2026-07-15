@@ -6,12 +6,14 @@ import { StreamService } from '../../../integration/stream/stream.service';
 import { DisputeRepository } from '../repository/dispute.repository';
 import { CampaignRepository } from '../../campaigns/repository/campaign.repository';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 describe('DisputesService', () => {
   let service: DisputesService;
   let disputeRepoMock: jest.Mocked<DisputeRepository>;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let streamServiceMock: jest.Mocked<StreamService>;
+  let notificationsServiceMock: jest.Mocked<NotificationsService>;
 
   beforeEach(async () => {
     disputeRepoMock = {
@@ -37,12 +39,17 @@ describe('DisputesService', () => {
       upsertUsers: jest.fn(),
     } as unknown as jest.Mocked<StreamService>;
 
+    notificationsServiceMock = {
+      notify: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<NotificationsService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DisputesService,
         { provide: DisputeRepository, useValue: disputeRepoMock },
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: StreamService, useValue: streamServiceMock },
+        { provide: NotificationsService, useValue: notificationsServiceMock },
       ],
     }).compile();
 
