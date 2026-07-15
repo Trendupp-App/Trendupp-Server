@@ -13,6 +13,7 @@ import { CampaignReview } from '../entities/campaign-review.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -21,6 +22,7 @@ describe('CampaignsService', () => {
   let urlValidatorMock: jest.Mocked<UrlValidatorService>;
   let usersServiceMock: jest.Mocked<UsersService>;
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
+  let notificationsServiceMock: jest.Mocked<NotificationsService>;
 
   const mockCampaign = {
     id: 'c1',
@@ -113,6 +115,10 @@ describe('CampaignsService', () => {
       requestPayout: jest.fn(),
     } as unknown as jest.Mocked<PandascrowService>;
 
+    notificationsServiceMock = {
+      notify: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<NotificationsService>;
+
     Object.defineProperty(User, 'sequelize', {
       value: {
         transaction: jest.fn().mockResolvedValue({
@@ -133,6 +139,7 @@ describe('CampaignsService', () => {
         { provide: UrlValidatorService, useValue: urlValidatorMock },
         { provide: UsersService, useValue: usersServiceMock },
         { provide: PandascrowService, useValue: pandascrowServiceMock },
+        { provide: NotificationsService, useValue: notificationsServiceMock },
       ],
     }).compile();
 

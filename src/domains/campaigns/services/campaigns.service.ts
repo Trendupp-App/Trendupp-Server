@@ -22,6 +22,7 @@ import { CampaignReview } from '../entities/campaign-review.entity';
 import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 @Injectable()
 export class CampaignsService {
@@ -31,6 +32,7 @@ export class CampaignsService {
     private readonly urlValidatorService: UrlValidatorService,
     private readonly usersService: UsersService,
     private readonly pandascrowService: PandascrowService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -585,6 +587,18 @@ export class CampaignsService {
       ...data,
     });
 
+    await this.notificationsService.notify({
+      type: 'application.submitted',
+      recipientId: campaign.brandId,
+      actorId: creatorId,
+      data: {
+        campaignId,
+        campaignTitle: campaign.title,
+        applicationId: application.id,
+        creatorName: `${creator.firstName} ${creator.lastName}`.trim(),
+      },
+    });
+
     const populated = await this.campaignRepository.findApplicationById(application.id);
     if (populated && populated.campaign) {
       await this.populateBreakdown(populated.campaign);
@@ -642,6 +656,14 @@ export class CampaignsService {
       // Admin undo: revert application + campaign back to live
       await application.update({ status: 'rejected' });
       await campaign.update({ status: 'live' });
+
+      await this.notificationsService.notify({
+        type: 'application.acceptance_undone',
+        recipientId: [application.creatorId, campaign.brandId],
+        actorId: callerId,
+        data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
+      });
+
       const updated = await this.campaignRepository.findApplicationById(appId);
       if (updated?.campaign) await this.populateBreakdown(updated.campaign);
       return updated!;
@@ -653,6 +675,15 @@ export class CampaignsService {
     // When a brand accepts an application, promote the campaign to active
     if (status === 'accepted') {
       await campaign.update({ status: 'active' });
+    }
+
+    if (status === 'accepted' || status === 'rejected') {
+      await this.notificationsService.notify({
+        type: status === 'accepted' ? 'application.accepted' : 'application.rejected',
+        recipientId: application.creatorId,
+        actorId: callerId,
+        data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
+      });
     }
 
     const updated = await this.campaignRepository.findApplicationById(appId);
@@ -875,6 +906,17 @@ export class CampaignsService {
         status: 'revision-sent',
         brandFeedback: null,
       });
+
+      const campaign = application.campaign ?? (await this.campaignRepository.findById(campaignId));
+      if (campaign) {
+        await this.notificationsService.notify({
+          type: 'submission.revision_resubmitted',
+          recipientId: campaign.brandId,
+          actorId: creatorId,
+          data: { campaignId, campaignTitle: campaign.title, submissionId: previousSub.id },
+        });
+      }
+
       const updated = await this.campaignRepository.findSubmissionById(previousSub.id);
       return updated!;
     } else {
@@ -889,6 +931,17 @@ export class CampaignsService {
         draftLink,
         status: 'pending_approval',
       });
+
+      const campaign = application.campaign ?? (await this.campaignRepository.findById(campaignId));
+      if (campaign) {
+        await this.notificationsService.notify({
+          type: 'submission.draft_submitted',
+          recipientId: campaign.brandId,
+          actorId: creatorId,
+          data: { campaignId, campaignTitle: campaign.title, submissionId: submission.id },
+        });
+      }
+
       const populated = await this.campaignRepository.findSubmissionById(submission.id);
       return populated!;
     }
@@ -964,6 +1017,19 @@ export class CampaignsService {
     }
 
     await submission.update(updates);
+
+    await this.notificationsService.notify({
+      type: decision === 'approved' ? 'submission.draft_approved' : 'submission.revision_requested',
+      recipientId: submission.creatorId,
+      actorId: brandId,
+      data: {
+        campaignId,
+        campaignTitle: campaign.title,
+        submissionId,
+        ...(decision === 'request_revision' ? { feedback: brandFeedback } : {}),
+      },
+    });
+
     const updated = await this.campaignRepository.findSubmissionById(submissionId);
     return updated!;
   }
@@ -1065,6 +1131,13 @@ export class CampaignsService {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (campaign) {
       await campaign.update({ urlIsLive: overallIsLive });
+
+      await this.notificationsService.notify({
+        type: 'submission.live_posted',
+        recipientId: campaign.brandId,
+        actorId: creatorId,
+        data: { campaignId, campaignTitle: campaign.title, submissionId },
+      });
     }
 
     // Update application status to approved
@@ -1126,6 +1199,20 @@ export class CampaignsService {
       status: 'pending',
       escrowId: campaignPayment?.escrowId ?? null,
       currency: campaign.currency,
+    });
+
+    await this.notificationsService.notify({
+      type: 'submission.live_approved',
+      recipientId: submission.creatorId,
+      actorId: brandId,
+      data: {
+        campaignId,
+        campaignTitle: campaign.title,
+        submissionId,
+        amount: application.feeRequest,
+        currency: campaign.currency,
+        releaseDate: releaseDate.toDateString(),
+      },
     });
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);

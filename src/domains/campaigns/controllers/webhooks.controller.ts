@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 interface PandascrowWebhookPayload {
   event: string;
@@ -31,6 +32,7 @@ export class WebhooksController {
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly pandascrowService: PandascrowService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Post('pandascrow')
@@ -129,6 +131,19 @@ export class WebhooksController {
       this.logger.log(
         `Campaign ${campaign.id} transitioned pending_payment → live after payment confirmation.`,
       );
+
+      // dedupeKey: Pandascrow may redeliver webhooks — notify the brand once.
+      await this.notificationsService.notify({
+        type: 'campaign.payment_confirmed',
+        recipientId: campaign.brandId,
+        data: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          amount: Number(payment.totalAmount ?? payment.amount),
+          currency: campaign.currency,
+        },
+        dedupeKey: `${campaign.id}:live`,
+      });
     }
   }
 
