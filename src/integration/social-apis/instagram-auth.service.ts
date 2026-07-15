@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface InstagramTokenResponse {
@@ -22,53 +27,34 @@ export class InstagramAuthService {
   private readonly logger = new Logger(InstagramAuthService.name);
   private readonly appId: string | undefined;
   private readonly appSecret: string | undefined;
-  private readonly isMockMode: boolean;
-  /** Mock codes/tokens are honored only without real credentials or outside production. */
-  private readonly allowMockAuth: boolean;
+  private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.appId = this.configService.get<string>('instagram.appId');
     this.appSecret = this.configService.get<string>('instagram.appSecret');
 
-    this.isMockMode = !this.appId || !this.appSecret;
-    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
+    this.isConfigured = Boolean(this.appId && this.appSecret);
 
-    if (this.isMockMode) {
+    if (!this.isConfigured) {
       this.logger.warn(
-        'Instagram credentials (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET) are missing. Instagram Auth will run in MOCK mode.',
+        'Instagram credentials (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET) are missing. Instagram requests will fail until they are set.',
       );
     } else {
       this.logger.log('Instagram Auth Service initialized successfully.');
     }
   }
 
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<InstagramTokenResponse> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
-    ) {
-      this.logger.warn(`MOCK mode: Simulating token exchange for code: ${code}`);
-
-      let userId = 'mock-instagram-user-id-123456789';
-      if (code.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(code) as Record<string, unknown>;
-          const idVal = parsed.id ?? parsed.userId ?? parsed.sub;
-          if (typeof idVal === 'string' || typeof idVal === 'number') {
-            userId = String(idVal);
-          }
-        } catch {
-          // Fallback
-        }
-      } else if (code.startsWith('mock_')) {
-        userId = `mock-instagram-user-id-${code.replace('mock_', '')}`;
-      }
-
-      return {
-        accessToken: `mock-instagram-access-token-${userId}`,
-        userId,
-      };
+  /** No mock mode: every call requires real platform credentials. */
+  private assertConfigured(): void {
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'Instagram integration is not configured on this server (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET)',
+      );
     }
+  }
+
+  async exchangeCodeForToken(code: string, redirectUri: string): Promise<InstagramTokenResponse> {
+    this.assertConfigured();
 
     try {
       const tokenUrl = 'https://api.instagram.com/oauth/access_token';
@@ -123,23 +109,7 @@ export class InstagramAuthService {
   }
 
   async getUserProfile(accessToken: string): Promise<InstagramUserProfile> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && accessToken.startsWith('mock-instagram-access-token-'))
-    ) {
-      this.logger.warn('MOCK mode: Simulating user profile fetch.');
-
-      let id = 'mock-instagram-user-id-123456789';
-      let username = 'mock_instagram_user';
-
-      const parts = accessToken.split('mock-instagram-access-token-');
-      if (parts.length > 1 && parts[1]) {
-        id = parts[1];
-        username = `mock_instagram_user_${id}`;
-      }
-
-      return { id, username };
-    }
+    this.assertConfigured();
 
     try {
       const fields = 'id,username';
@@ -183,19 +153,10 @@ export class InstagramAuthService {
    * Fetch follower count + handle to *verify* an Instagram connection.
    * `followers_count` is only returned for Professional (Business/Creator)
    * accounts on the Instagram Graph API; for personal accounts it is absent
-   * and we default to 0. Falls back to mock data without credentials.
+   * and we default to 0.
    */
   async getFollowerStats(accessToken: string): Promise<InstagramFollowerStats> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && accessToken.startsWith('mock-instagram-access-token-'))
-    ) {
-      this.logger.warn('MOCK mode: Simulating Instagram follower stats fetch.');
-      let id = 'mock-instagram-user-id-123456789';
-      const parts = accessToken.split('mock-instagram-access-token-');
-      if (parts.length > 1 && parts[1]) id = parts[1];
-      return { id, username: 'mock_instagram_user', followerCount: 12400 };
-    }
+    this.assertConfigured();
 
     try {
       const fields = 'user_id,username,followers_count,account_type';

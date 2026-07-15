@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface TwitterTokenResponse {
@@ -19,30 +24,35 @@ export interface TwitterUserStats {
  *
  * Uses OAuth 2.0 (PKCE, confidential client) to exchange an auth code, then
  * reads `public_metrics.followers_count` from the v2 `/users/me` endpoint.
- * NOTE: follower metrics require a paid X API tier — without credentials this
- * runs in MOCK mode so the flow is still exercisable.
+ * NOTE: follower metrics require a paid X API tier.
  */
 @Injectable()
 export class TwitterAuthService {
   private readonly logger = new Logger(TwitterAuthService.name);
   private readonly clientId: string | undefined;
   private readonly clientSecret: string | undefined;
-  private readonly isMockMode: boolean;
-  /** Mock codes/tokens are honored only without real credentials or outside production. */
-  private readonly allowMockAuth: boolean;
+  private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.clientId = this.configService.get<string>('twitter.clientId');
     this.clientSecret = this.configService.get<string>('twitter.clientSecret');
-    this.isMockMode = !this.clientId || !this.clientSecret;
-    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
+    this.isConfigured = Boolean(this.clientId && this.clientSecret);
 
-    if (this.isMockMode) {
+    if (!this.isConfigured) {
       this.logger.warn(
-        'Twitter/X credentials (TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET) are missing. X connect will run in MOCK mode.',
+        'X / Twitter credentials (TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET) are missing. X / Twitter requests will fail until they are set.',
       );
     } else {
       this.logger.log('Twitter/X Auth Service initialized successfully.');
+    }
+  }
+
+  /** No mock mode: every call requires real platform credentials. */
+  private assertConfigured(): void {
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'X / Twitter integration is not configured on this server (TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET)',
+      );
     }
   }
 
@@ -51,13 +61,7 @@ export class TwitterAuthService {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<TwitterTokenResponse> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
-    ) {
-      this.logger.warn(`MOCK mode: Simulating X token exchange for code: ${code}`);
-      return { accessToken: 'mock-twitter-access-token-123456789', expiresIn: 7200 };
-    }
+    this.assertConfigured();
 
     try {
       const params: Record<string, string> = {
@@ -109,18 +113,7 @@ export class TwitterAuthService {
   }
 
   async getUserStats(accessToken: string): Promise<TwitterUserStats> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && accessToken.startsWith('mock-twitter-access-token-'))
-    ) {
-      this.logger.warn('MOCK mode: Simulating X user stats fetch.');
-      return {
-        userId: 'mock-twitter-user-id-123456789',
-        username: 'mock_x_user',
-        followerCount: 1800,
-        avatarUrl: 'https://placehold.co/150x150.png',
-      };
-    }
+    this.assertConfigured();
 
     try {
       const url =

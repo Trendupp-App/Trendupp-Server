@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface YoutubeTokenResponse {
@@ -26,22 +31,28 @@ export class YoutubeAuthService {
   private readonly logger = new Logger(YoutubeAuthService.name);
   private readonly clientId: string | undefined;
   private readonly clientSecret: string | undefined;
-  private readonly isMockMode: boolean;
-  /** Mock codes/tokens are honored only without real credentials or outside production. */
-  private readonly allowMockAuth: boolean;
+  private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.clientId = this.configService.get<string>('youtube.clientId');
     this.clientSecret = this.configService.get<string>('youtube.clientSecret');
-    this.isMockMode = !this.clientId || !this.clientSecret;
-    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
+    this.isConfigured = Boolean(this.clientId && this.clientSecret);
 
-    if (this.isMockMode) {
+    if (!this.isConfigured) {
       this.logger.warn(
-        'YouTube credentials (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET) are missing. YouTube connect will run in MOCK mode.',
+        'YouTube credentials (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET) are missing. YouTube requests will fail until they are set.',
       );
     } else {
       this.logger.log('YouTube Auth Service initialized successfully.');
+    }
+  }
+
+  /** No mock mode: every call requires real platform credentials. */
+  private assertConfigured(): void {
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'YouTube integration is not configured on this server (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET)',
+      );
     }
   }
 
@@ -50,13 +61,7 @@ export class YoutubeAuthService {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<YoutubeTokenResponse> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
-    ) {
-      this.logger.warn(`MOCK mode: Simulating YouTube token exchange for code: ${code}`);
-      return { accessToken: 'mock-youtube-access-token-123456789', expiresIn: 3600 };
-    }
+    this.assertConfigured();
 
     try {
       const params: Record<string, string> = {
@@ -104,18 +109,7 @@ export class YoutubeAuthService {
   }
 
   async getChannelStats(accessToken: string): Promise<YoutubeChannelStats> {
-    if (
-      this.isMockMode ||
-      (this.allowMockAuth && accessToken.startsWith('mock-youtube-access-token-'))
-    ) {
-      this.logger.warn('MOCK mode: Simulating YouTube channel stats fetch.');
-      return {
-        channelId: 'mock-youtube-channel-id-123456789',
-        username: 'Mock YouTube Channel',
-        followerCount: 2300,
-        avatarUrl: 'https://placehold.co/150x150.png',
-      };
-    }
+    this.assertConfigured();
 
     try {
       const url =
