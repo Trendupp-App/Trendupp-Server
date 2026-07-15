@@ -5,6 +5,7 @@ import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../../integration/email/email.service';
 
 @Injectable()
 export class PayoutScheduler {
@@ -17,6 +18,7 @@ export class PayoutScheduler {
     private readonly pandascrowService: PandascrowService,
     private readonly configService: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService,
   ) {
     this.walletId = this.configService.get<number>('pandascrow.walletId') || 1;
   }
@@ -93,7 +95,7 @@ export class PayoutScheduler {
             payoutRef,
             walletId: this.walletId,
             amount: release.amount,
-            currency: release.currency || 'USD',
+            currency: release.currency,
             bankCode: creator.bank.code,
             accountNumber: creator.bankAccountNumber,
             accountName: creator.bankAccountName || `${creator.firstName} ${creator.lastName}`,
@@ -176,6 +178,48 @@ export class PayoutScheduler {
     try {
       const endedCampaigns = await this.campaignRepository.findEndedCampaignsWithoutRefund();
       for (const campaign of endedCampaigns) {
+        // Strike Calculation for no-show creators:
+        // Get all accepted creators on this campaign, find if they had a release payout.
+        // If not, they failed to go live and receive a strike.
+        const releases = await this.campaignRepository.findReleasesByCampaignId(campaign.id);
+        const paidCreatorIds = new Set(releases.map((r) => r.creatorId));
+
+        const allApplications = await this.campaignRepository.findApplicationsByCampaignId(
+          campaign.id,
+        );
+        const acceptedApps = allApplications.filter((app) => app.status === 'accepted');
+
+        for (const app of acceptedApps) {
+          if (!paidCreatorIds.has(app.creatorId)) {
+            const creator = await this.usersService.findOne(app.creatorId);
+            if (creator) {
+              const currentStrikes = creator.creatorStrikes || [];
+              if (!currentStrikes.includes(campaign.brandId)) {
+                const updatedStrikes = [...currentStrikes, campaign.brandId];
+                creator.creatorStrikes = updatedStrikes;
+                if (updatedStrikes.length >= 3) {
+                  creator.isActive = false;
+                  creator.flaggedReason = `Blocked: Received 3 strikes from different advertisers: [${updatedStrikes.join(', ')}]`;
+                  if (typeof creator.save === 'function') {
+                    await creator.save();
+                  }
+                  await this.emailService.sendCreatorBlockEmail(creator.email, creator.firstName);
+                } else {
+                  creator.flaggedReason = `Warning: Received ${updatedStrikes.length} strike(s) from different advertisers: [${updatedStrikes.join(', ')}]`;
+                  if (typeof creator.save === 'function') {
+                    await creator.save();
+                  }
+                  await this.emailService.sendStrikeWarningEmail(
+                    creator.email,
+                    creator.firstName,
+                    updatedStrikes.length,
+                  );
+                }
+              }
+            }
+          }
+        }
+
         const totalReleasesAmount = await this.campaignRepository.sumPaymentReleases(campaign.id);
         const refundAmount = campaign.totalBudget - totalReleasesAmount;
         if (refundAmount > 0) {

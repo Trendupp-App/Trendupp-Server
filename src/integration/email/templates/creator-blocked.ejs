@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Blocked — Trendupp</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: #f4f4f7;
+        color: #333;
+      }
+      .container {
+        max-width: 580px;
+        margin: 40px auto;
+        background: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      .header {
+        background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+        padding: 36px 40px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+      }
+      .body {
+        padding: 36px 40px;
+      }
+      .body p {
+        font-size: 15px;
+        line-height: 1.7;
+        margin: 0 0 16px;
+        color: #555;
+      }
+      .body p strong {
+        color: #333;
+      }
+      .block-box {
+        background: #fef2f2;
+        border-left: 4px solid #ef4444;
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin: 24px 0;
+      }
+      .block-box p {
+        margin: 0;
+        color: #991b1b;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .footer {
+        background: #f9f9fb;
+        padding: 24px 40px;
+        text-align: center;
+        border-top: 1px solid #ebebf0;
+      }
+      .footer p {
+        font-size: 12px;
+        color: #aaa;
+        margin: 0;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🚫 Account Blocked</h1>
+      </div>
+
+      <div class="body">
+        <p>Hi <strong><%= firstName || 'there' %></strong>,</p>
+
+        <p>
+          We regret to inform you that your Trendupp Creator account has been blocked.
+        </p>
+
+        <div class="block-box">
+          <p>Reason: <strong>Repeated Campaign Violations (Reached 3 strikes from different advertisers)</strong>.</p>
+        </div>
+
+        <p>
+          Per our platform quality policy, creators who receive 3 strikes from different advertisers due to rejected revised draft content or failing to publish live links are suspended from the platform.
+        </p>
+
+        <p>
+          You will no longer be able to log in, apply to campaigns, or receive new payments. If you have outstanding funds in escrow, an administrator will contact you regarding mediation.
+        </p>
+
+        <p>
+          If you wish to appeal this decision, please reply to this email or contact support at
+          <a href="mailto:support@trendupp.com">support@trendupp.com</a>.
+        </p>
+
+        <p>— The Trendupp Team</p>
+      </div>
+
+      <div class="footer">
+        <p>
+          You are receiving this email because your account at
+          <strong>trendupp.com</strong> has been deactivated.<br />
+          © <%= new Date().getFullYear() %> Trendupp. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

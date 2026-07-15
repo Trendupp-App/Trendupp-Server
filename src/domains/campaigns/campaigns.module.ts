@@ -20,6 +20,7 @@ import { CampaignRefund } from './entities/campaign-refund.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
 import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../../integration/email/email.module';
 
 import { WebhooksController } from './controllers/webhooks.controller';
 import { PayoutScheduler } from './services/payout.scheduler';
@@ -44,6 +45,7 @@ import { PayoutScheduler } from './services/payout.scheduler';
     UrlValidatorModule,
     PandascrowModule,
     NotificationsModule,
+    EmailModule,
   ],
 
   providers: [CampaignRepository, CampaignsService, S3Service, PayoutScheduler],

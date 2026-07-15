@@ -23,6 +23,7 @@ import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../../integration/email/email.service';
 
 @Injectable()
 export class CampaignsService {
@@ -33,6 +34,7 @@ export class CampaignsService {
     private readonly usersService: UsersService,
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -1014,6 +1016,52 @@ export class CampaignsService {
         brandId: campaign.brandId,
         reason: brandFeedback,
       });
+
+      // Creator Strike Check
+      const creator = await this.usersService.findOne(submission.creatorId);
+      if (creator) {
+        const currentStrikes = creator.creatorStrikes || [];
+        if (!currentStrikes.includes(campaign.brandId)) {
+          const updatedStrikes = [...currentStrikes, campaign.brandId];
+          creator.creatorStrikes = updatedStrikes;
+          if (updatedStrikes.length >= 3) {
+            creator.isActive = false;
+            creator.flaggedReason = `Blocked: Received 3 strikes from different advertisers: [${updatedStrikes.join(', ')}]`;
+            if (typeof creator.save === 'function') {
+              await creator.save();
+            }
+            await this.emailService.sendCreatorBlockEmail(creator.email, creator.firstName);
+          } else {
+            creator.flaggedReason = `Warning: Received ${updatedStrikes.length} strike(s) from different advertisers: [${updatedStrikes.join(', ')}]`;
+            if (typeof creator.save === 'function') {
+              await creator.save();
+            }
+            await this.emailService.sendStrikeWarningEmail(
+              creator.email,
+              creator.firstName,
+              updatedStrikes.length,
+            );
+          }
+        }
+      }
+
+      // Advertiser Flag Check
+      const brand = await this.usersService.findOne(campaign.brandId);
+      if (brand) {
+        const C = await this.campaignRepository.countCampaignsByBrand(campaign.brandId);
+        const D = await this.campaignRepository.countDisputedCampaignsByBrand(campaign.brandId);
+        if (C >= 3 && D / C > 0.5) {
+          brand.isFlagged = true;
+          const rate = Math.round((D / C) * 1000) / 10;
+          brand.flaggedReason = `Flagged: High dispute rate of ${rate}% (${D} disputes raised out of ${C} campaigns)`;
+        } else {
+          brand.isFlagged = false;
+          brand.flaggedReason = null;
+        }
+        if (typeof brand.save === 'function') {
+          await brand.save();
+        }
+      }
     }
 
     await submission.update(updates);

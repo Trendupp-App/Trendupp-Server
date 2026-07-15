@@ -14,6 +14,7 @@ import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../../integration/email/email.service';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -23,6 +24,7 @@ describe('CampaignsService', () => {
   let usersServiceMock: jest.Mocked<UsersService>;
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
+  let emailServiceMock: jest.Mocked<EmailService>;
 
   const mockCampaign = {
     id: 'c1',
@@ -87,6 +89,8 @@ describe('CampaignsService', () => {
       updatePayment: jest.fn().mockResolvedValue(undefined),
       findCreatorCategoryById: jest.fn(),
       raiseDispute: jest.fn(),
+      countCampaignsByBrand: jest.fn().mockResolvedValue(0),
+      countDisputedCampaignsByBrand: jest.fn().mockResolvedValue(0),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -119,6 +123,11 @@ describe('CampaignsService', () => {
       notify: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<NotificationsService>;
 
+    emailServiceMock = {
+      sendStrikeWarningEmail: jest.fn(),
+      sendCreatorBlockEmail: jest.fn(),
+    } as unknown as jest.Mocked<EmailService>;
+
     Object.defineProperty(User, 'sequelize', {
       value: {
         transaction: jest.fn().mockResolvedValue({
@@ -140,6 +149,7 @@ describe('CampaignsService', () => {
         { provide: UsersService, useValue: usersServiceMock },
         { provide: PandascrowService, useValue: pandascrowServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
+        { provide: EmailService, useValue: emailServiceMock },
       ],
     }).compile();
 
@@ -1051,6 +1061,109 @@ describe('CampaignsService', () => {
         reason: 'Still bad quality content',
       });
     });
+
+    it('should register a strike for the creator on rejection, send warning email, and update brand flagging metrics', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand1' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        creatorId: 'creator-1',
+        status: 'revision-sent',
+        update: jest.fn(),
+      };
+      const mockCreator = {
+        id: 'creator-1',
+        email: 'creator@example.com',
+        firstName: 'Creator',
+        creatorStrikes: [],
+        save: jest.fn(),
+      };
+      const mockBrand = {
+        id: 'brand1',
+        email: 'brand@example.com',
+        firstName: 'Brand',
+        isFlagged: false,
+        flaggedReason: null,
+        save: jest.fn(),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.raiseDispute.mockResolvedValue({ id: 'disp1' } as any);
+      usersServiceMock.findOne.mockImplementation((id: string) => {
+        if (id === 'creator-1') return Promise.resolve(mockCreator as unknown as User);
+        if (id === 'brand1') return Promise.resolve(mockBrand as unknown as User);
+        return Promise.resolve(null);
+      });
+
+      // Mock brand stats: 3 campaigns, 2 disputes (dispute rate = 66.7% > 50%)
+      campaignRepoMock.countCampaignsByBrand.mockResolvedValue(3);
+      campaignRepoMock.countDisputedCampaignsByBrand.mockResolvedValue(2);
+
+      await service.vetDraft('c1', 'sub1', 'brand1', 'rejected', 'Still bad quality content');
+
+      expect(mockCreator.creatorStrikes).toContain('brand1');
+      expect(mockCreator.save).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(emailServiceMock.sendStrikeWarningEmail).toHaveBeenCalledWith(
+        'creator@example.com',
+        'Creator',
+        1,
+      );
+
+      expect(mockBrand.isFlagged).toBe(true);
+      expect(mockBrand.flaggedReason).toContain('High dispute rate of 66.7%');
+      expect(mockBrand.save).toHaveBeenCalled();
+    });
+
+    it('should block the creator when strikes reach 3 and send block notification email', async () => {
+      const mockCampaignVal = { id: 'c1', brandId: 'brand3' };
+      const mockSubmission = {
+        id: 'sub1',
+        campaignId: 'c1',
+        creatorId: 'creator-1',
+        status: 'revision-sent',
+        update: jest.fn(),
+      };
+      const mockCreator = {
+        id: 'creator-1',
+        email: 'creator@example.com',
+        firstName: 'Creator',
+        creatorStrikes: ['brand1', 'brand2'],
+        isActive: true,
+        flaggedReason: null,
+        save: jest.fn(),
+      };
+      const mockBrand = {
+        id: 'brand3',
+        email: 'brand@example.com',
+        firstName: 'Brand',
+        isFlagged: false,
+        flaggedReason: null,
+        save: jest.fn(),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(mockCampaignVal as any);
+      campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
+      campaignRepoMock.raiseDispute.mockResolvedValue({ id: 'disp1' } as any);
+      usersServiceMock.findOne.mockImplementation((id: string) => {
+        if (id === 'creator-1') return Promise.resolve(mockCreator as unknown as User);
+        if (id === 'brand3') return Promise.resolve(mockBrand as unknown as User);
+        return Promise.resolve(null);
+      });
+
+      await service.vetDraft('c1', 'sub1', 'brand3', 'rejected', 'Still bad quality content');
+
+      expect(mockCreator.creatorStrikes).toContain('brand3');
+      expect(mockCreator.isActive).toBe(false);
+      expect(mockCreator.flaggedReason).toContain('Blocked: Received 3 strikes');
+      expect(mockCreator.save).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(emailServiceMock.sendCreatorBlockEmail).toHaveBeenCalledWith(
+        'creator@example.com',
+        'Creator',
+      );
+    });
   });
 
   describe('submitLivePost', () => {
@@ -1449,7 +1562,11 @@ describe('CampaignsService', () => {
       campaignRepoMock.createSubmission.mockResolvedValue(mockNewSubmission);
       campaignRepoMock.findSubmissionById.mockResolvedValueOnce(mockNewSubmission);
 
-      urlValidatorMock.validateUrl.mockResolvedValue({ isLive: true, checkedAt: new Date() });
+      urlValidatorMock.validateUrl.mockResolvedValue({
+        isLive: true,
+        platform: 'Instagram',
+        checkedAt: new Date(),
+      });
 
       const result = await service.submitLivePost('c1', 'app1', 'creator1', {
         instagram: 'https://instagram.com/p/123',

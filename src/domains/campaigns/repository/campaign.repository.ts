@@ -696,6 +696,12 @@ export class CampaignRepository {
     return sum || 0;
   }
 
+  async findReleasesByCampaignId(campaignId: string): Promise<PaymentRelease[]> {
+    return this.paymentReleaseModel.findAll({
+      where: { campaignId },
+    });
+  }
+
   async createRefund(data: CreateRefundInput): Promise<CampaignRefund> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return this.campaignRefundModel.create(data as any);
@@ -723,6 +729,20 @@ export class CampaignRepository {
           [Op.notIn]: Sequelize.literal(`(SELECT campaign_id FROM campaign_refunds)`),
         },
       },
+    });
+  }
+
+  async countCampaignsByBrand(brandId: string): Promise<number> {
+    return this.campaignModel.count({
+      where: { brandId },
+    });
+  }
+
+  async countDisputedCampaignsByBrand(brandId: string): Promise<number> {
+    return this.disputeModel.count({
+      where: { brandId },
+      distinct: true,
+      col: 'campaignId',
     });
   }
 
