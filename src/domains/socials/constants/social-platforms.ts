@@ -46,18 +46,20 @@ export const MIN_FOLLOWERS: Record<SocialPlatform, number> = {
 export const CREATOR_TIERS = {
   NANO: 'Nano Creator',
   MICRO: 'Micro Creator',
-  MID: 'Mid-tier Creator',
   MACRO: 'Macro Creator',
+  MEGA: 'Mega Creator',
 } as const;
 
 /**
- * Derive a creator tier from the highest verified follower count across all
- * connected platforms. Centralised so the legacy onboarding controller and
- * the new socials service stay in lock-step.
+ * Derive a creator tier from the highest follower count across all connected
+ * platforms. This is THE tier ladder — the onboarding controller, profile
+ * service, and socials service all call this so a user's tier can never
+ * differ by endpoint. Thresholds match the ladder live in production
+ * (users.assigned_tier was populated with these values).
  */
 export function computeTier(maxFollowers: number): string {
-  if (maxFollowers >= 500_000) return CREATOR_TIERS.MACRO;
-  if (maxFollowers >= 100_000) return CREATOR_TIERS.MID;
+  if (maxFollowers >= 1_000_000) return CREATOR_TIERS.MEGA;
+  if (maxFollowers >= 200_000) return CREATOR_TIERS.MACRO;
   if (maxFollowers >= 10_000) return CREATOR_TIERS.MICRO;
   return CREATOR_TIERS.NANO;
 }
