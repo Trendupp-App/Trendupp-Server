@@ -14,6 +14,7 @@ import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
 import { CampaignRefund } from '../entities/campaign-refund.entity';
+import { Dispute } from '../../disputes/entities/dispute.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
@@ -50,6 +51,8 @@ export class CampaignRepository {
     private readonly paymentReleaseModel: typeof PaymentRelease,
     @InjectModel(CampaignRefund)
     private readonly campaignRefundModel: typeof CampaignRefund,
+    @InjectModel(Dispute)
+    private readonly disputeModel: typeof Dispute,
   ) {}
 
   private readonly fullIncludes = [
@@ -693,6 +696,12 @@ export class CampaignRepository {
     return sum || 0;
   }
 
+  async findReleasesByCampaignId(campaignId: string): Promise<PaymentRelease[]> {
+    return this.paymentReleaseModel.findAll({
+      where: { campaignId },
+    });
+  }
+
   async createRefund(data: CreateRefundInput): Promise<CampaignRefund> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return this.campaignRefundModel.create(data as any);
@@ -721,5 +730,35 @@ export class CampaignRepository {
         },
       },
     });
+  }
+
+  async countCampaignsByBrand(brandId: string): Promise<number> {
+    return this.campaignModel.count({
+      where: { brandId },
+    });
+  }
+
+  async countDisputedCampaignsByBrand(brandId: string): Promise<number> {
+    return this.disputeModel.count({
+      where: { brandId },
+      distinct: true,
+      col: 'campaignId',
+    });
+  }
+
+  async raiseDispute(data: {
+    campaignId: string;
+    creatorId: string;
+    brandId: string;
+    reason: string;
+  }): Promise<Dispute> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    return (this.disputeModel as any).create({
+      campaignId: data.campaignId,
+      creatorId: data.creatorId,
+      brandId: data.brandId,
+      reason: data.reason,
+      status: 'raised',
+    }) as Promise<Dispute>;
   }
 }

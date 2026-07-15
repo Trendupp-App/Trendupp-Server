@@ -113,6 +113,29 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true })
   declare username?: string;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: [],
+    field: 'creator_strikes',
+  })
+  declare creatorStrikes: string[];
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_flagged',
+  })
+  declare isFlagged: boolean;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'flagged_reason',
+  })
+  declare flaggedReason: string | null;
+
   @ForeignKey(() => Nationality)
   @Column({ type: DataType.UUID, allowNull: true, field: 'nationality_id' })
   declare nationalityId?: string;

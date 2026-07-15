@@ -155,4 +155,86 @@ export class EmailService {
       data: { firstName },
     });
   }
+
+  async sendStrikeWarningEmail(to: string, firstName: string, strikesCount: number): Promise<void> {
+    const subject = `Trendupp Strike Warning: ${strikesCount} strike(s) recorded`;
+
+    try {
+      const templatePath = join(this.templateDir, 'strike-warning.ejs');
+      const htmlBody = await ejs.renderFile(templatePath, { firstName, strikesCount });
+
+      if (this.sesClient) {
+        try {
+          const command = new SendEmailCommand({
+            Destination: { ToAddresses: [to] },
+            Message: {
+              Body: { Html: { Data: htmlBody } },
+              Subject: { Data: subject },
+            },
+            Source: this.fromEmail,
+          });
+          await this.sesClient.send(command);
+          this.logger.log(`Strike warning email sent to ${to}`);
+        } catch (sesError) {
+          const message = sesError instanceof Error ? sesError.message : String(sesError);
+          this.logger.warn(
+            `AWS SES could not deliver strike warning to ${to} (falling back to mock): ${message}`,
+          );
+          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
+          this.logger.log(`To: ${to}`);
+          this.logger.log(`Subject: ${subject}`);
+          this.logger.log('-----------------------------');
+        }
+      } else {
+        this.logger.log('--- [MOCK EMAIL SENT] ---');
+        this.logger.log(`To: ${to}`);
+        this.logger.log(`Subject: ${subject}`);
+        this.logger.log('--------------------------');
+      }
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to render strike warning template for ${to}`, stack);
+    }
+  }
+
+  async sendCreatorBlockEmail(to: string, firstName: string): Promise<void> {
+    const subject = 'Your Trendupp Account Has Been Blocked';
+
+    try {
+      const templatePath = join(this.templateDir, 'creator-blocked.ejs');
+      const htmlBody = await ejs.renderFile(templatePath, { firstName });
+
+      if (this.sesClient) {
+        try {
+          const command = new SendEmailCommand({
+            Destination: { ToAddresses: [to] },
+            Message: {
+              Body: { Html: { Data: htmlBody } },
+              Subject: { Data: subject },
+            },
+            Source: this.fromEmail,
+          });
+          await this.sesClient.send(command);
+          this.logger.log(`Creator blocked email sent to ${to}`);
+        } catch (sesError) {
+          const message = sesError instanceof Error ? sesError.message : String(sesError);
+          this.logger.warn(
+            `AWS SES could not deliver creator block email to ${to} (falling back to mock): ${message}`,
+          );
+          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
+          this.logger.log(`To: ${to}`);
+          this.logger.log(`Subject: ${subject}`);
+          this.logger.log('-----------------------------');
+        }
+      } else {
+        this.logger.log('--- [MOCK EMAIL SENT] ---');
+        this.logger.log(`To: ${to}`);
+        this.logger.log(`Subject: ${subject}`);
+        this.logger.log('--------------------------');
+      }
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : '';
+      this.logger.error(`Failed to render creator block template for ${to}`, stack);
+    }
+  }
 }

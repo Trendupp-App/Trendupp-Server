@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Strike Warning — Trendupp</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: #f4f4f7;
+        color: #333;
+      }
+      .container {
+        max-width: 580px;
+        margin: 40px auto;
+        background: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      .header {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        padding: 36px 40px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+      }
+      .body {
+        padding: 36px 40px;
+      }
+      .body p {
+        font-size: 15px;
+        line-height: 1.7;
+        margin: 0 0 16px;
+        color: #555;
+      }
+      .body p strong {
+        color: #333;
+      }
+      .warning-box {
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin: 24px 0;
+      }
+      .warning-box p {
+        margin: 0;
+        color: #92400e;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .cta {
+        text-align: center;
+        margin: 32px 0;
+      }
+      .cta a {
+        display: inline-block;
+        background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+        color: #ffffff;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 14px 36px;
+        border-radius: 8px;
+        letter-spacing: 0.3px;
+      }
+      .footer {
+        background: #f9f9fb;
+        padding: 24px 40px;
+        text-align: center;
+        border-top: 1px solid #ebebf0;
+      }
+      .footer p {
+        font-size: 12px;
+        color: #aaa;
+        margin: 0;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>⚠️ Strike Warning Notice</h1>
+      </div>
+
+      <div class="body">
+        <p>Hi <strong><%= firstName || 'there' %></strong>,</p>
+
+        <p>
+          We are writing to let you know that a strike has been recorded against your Trendupp Creator account.
+        </p>
+
+        <div class="warning-box">
+          <p>📊 Current Strike Status: <strong><%= strikesCount %> out of 3 strikes</strong>.</p>
+        </div>
+
+        <p>
+          Strikes are issued when content submissions are rejected by advertisers due to non-compliance or if accepted campaigns end without content going live.
+        </p>
+
+        <p style="color: #b45309; font-weight: 600;">
+          IMPORTANT: Receiving 3 strikes from different advertisers will result in your Trendupp account being automatically blocked.
+        </p>
+
+        <p>
+          Please review your pending campaigns and ensure all drafts and live link submissions follow campaign briefs and guidelines carefully.
+        </p>
+
+        <div class="cta">
+          <a href="https://trendupp.com/dashboard">View My Campaigns Dashboard</a>
+        </div>
+
+        <p>
+          If you have any questions or feel this strike was added in error, please reach out to our support team at
+          <a href="mailto:support@trendupp.com">support@trendupp.com</a>.
+        </p>
+
+        <p>— The Trendupp Team</p>
+      </div>
+
+      <div class="footer">
+        <p>
+          You are receiving this email because a strike has been registered to your account at
+          <strong>trendupp.com</strong>.<br />
+          © <%= new Date().getFullYear() %> Trendupp. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -4,15 +4,15 @@ import { IsNotEmpty, IsString, IsIn, IsOptional } from 'class-validator';
 export class VetDraftDto {
   @ApiProperty({
     description: 'Vetting decision on the draft content',
-    enum: ['approved', 'request_revision'],
+    enum: ['approved', 'request_revision', 'rejected'],
     example: 'approved',
   })
-  @IsIn(['approved', 'request_revision'], {
-    message: 'decision must be either approved or request_revision',
+  @IsIn(['approved', 'request_revision', 'rejected'], {
+    message: 'decision must be either approved, request_revision, or rejected',
   })
   @IsString()
   @IsNotEmpty()
-  decision: 'approved' | 'request_revision';
+  decision: 'approved' | 'request_revision' | 'rejected';
 
   @ApiPropertyOptional({
     description: 'Feedback for the creator, required if requesting a revision',

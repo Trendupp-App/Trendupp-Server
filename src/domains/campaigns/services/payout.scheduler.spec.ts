@@ -6,6 +6,7 @@ import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../../integration/email/email.service';
 
 describe('PayoutScheduler', () => {
   let scheduler: PayoutScheduler;
@@ -14,6 +15,7 @@ describe('PayoutScheduler', () => {
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let configServiceMock: jest.Mocked<ConfigService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
+  let emailServiceMock: jest.Mocked<EmailService>;
 
   beforeEach(async () => {
     campaignRepoMock = {
@@ -27,6 +29,8 @@ describe('PayoutScheduler', () => {
       findRefundByCampaignId: jest.fn(),
       findPendingRefunds: jest.fn(),
       findEndedCampaignsWithoutRefund: jest.fn(),
+      findReleasesByCampaignId: jest.fn().mockResolvedValue([]),
+      findApplicationsByCampaignId: jest.fn().mockResolvedValue([]),
     } as any;
 
     usersServiceMock = {
@@ -45,6 +49,11 @@ describe('PayoutScheduler', () => {
       notify: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    emailServiceMock = {
+      sendStrikeWarningEmail: jest.fn(),
+      sendCreatorBlockEmail: jest.fn(),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PayoutScheduler,
@@ -53,6 +62,7 @@ describe('PayoutScheduler', () => {
         { provide: PandascrowService, useValue: pandascrowServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
+        { provide: EmailService, useValue: emailServiceMock },
       ],
     }).compile();
 
@@ -106,6 +116,44 @@ describe('PayoutScheduler', () => {
         status: 'completed',
         currency: 'NGN',
       });
+    });
+
+    it('should register a strike for no-show creators when scanning ended campaigns', async () => {
+      const mockCampaign = {
+        id: 'c1',
+        brandId: 'brand1',
+        totalBudget: 1000000,
+        currency: 'NGN',
+      };
+      const mockApp = {
+        id: 'app1',
+        creatorId: 'creator1',
+        status: 'accepted',
+      };
+      const mockCreator = {
+        id: 'creator1',
+        email: 'creator@example.com',
+        firstName: 'Creator',
+        creatorStrikes: [],
+        save: jest.fn(),
+      };
+
+      campaignRepoMock.findEndedCampaignsWithoutRefund.mockResolvedValue([mockCampaign as any]);
+      campaignRepoMock.sumPaymentReleases.mockResolvedValue(1000000);
+      campaignRepoMock.findReleasesByCampaignId.mockResolvedValue([]); // No payout releases (no-show!)
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue([mockApp as any]);
+      usersServiceMock.findOne.mockResolvedValue(mockCreator as any);
+
+      await scheduler.scanAndQueueRefunds();
+
+      expect(mockCreator.creatorStrikes).toContain('brand1');
+      expect(mockCreator.save).toHaveBeenCalled();
+
+      expect(emailServiceMock.sendStrikeWarningEmail).toHaveBeenCalledWith(
+        'creator@example.com',
+        'Creator',
+        1,
+      );
     });
   });
 

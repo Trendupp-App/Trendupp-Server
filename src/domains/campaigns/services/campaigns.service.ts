@@ -23,6 +23,7 @@ import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../../integration/email/email.service';
 
 @Injectable()
 export class CampaignsService {
@@ -33,6 +34,7 @@ export class CampaignsService {
     private readonly usersService: UsersService,
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -75,7 +77,7 @@ export class CampaignsService {
     };
   }
 
-  async populateBreakdown(campaign: Campaign): Promise<Campaign> {
+  async populateBreakdown(campaign: Campaign, requestingUserId?: string): Promise<Campaign> {
     if (campaign) {
       const breakdown = await this.calculateBreakdown(campaign.totalBudget);
       campaign.paymentBreakdown = breakdown;
@@ -84,14 +86,17 @@ export class CampaignsService {
       const total = await this.campaignRepository.countApplications(campaign.id);
       campaign.setDataValue('applicationsCount' as any, { total });
 
-      // Mask amplification asset link by default to protect it in list views
-      campaign.setDataValue('amplificationAsset' as any, null);
+      // Mask amplification asset link by default to protect it,
+      // EXCEPT if the requester is the brand owner who created the campaign
+      if (!requestingUserId || requestingUserId !== campaign.brandId) {
+        campaign.setDataValue('amplificationAsset' as any, null);
+      }
     }
     return campaign;
   }
 
-  async populateBreakdowns(campaigns: Campaign[]): Promise<Campaign[]> {
-    await Promise.all(campaigns.map((c) => this.populateBreakdown(c)));
+  async populateBreakdowns(campaigns: Campaign[], requestingUserId?: string): Promise<Campaign[]> {
+    await Promise.all(campaigns.map((c) => this.populateBreakdown(c, requestingUserId)));
     return campaigns;
   }
 
@@ -149,7 +154,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return this.populateBreakdown(populated!);
+    return this.populateBreakdown(populated!, brandId);
   }
 
   async updateDraft(
@@ -224,7 +229,7 @@ export class CampaignsService {
     }
 
     const populated = await this.campaignRepository.findById(campaign.id);
-    return this.populateBreakdown(populated!);
+    return this.populateBreakdown(populated!, brandId);
   }
 
   async submit(
@@ -280,7 +285,6 @@ export class CampaignsService {
         errors.push('contentGuidelines are required');
       }
       if (!campaign.usageRights) errors.push('usageRights text is required');
-      if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
       if (!campaign.campaignBrief) errors.push('campaignBrief is required');
 
       if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
@@ -398,7 +402,7 @@ export class CampaignsService {
     }
 
     const result = await this.campaignRepository.findAll(query, prioritizeNicheIds);
-    result.data = await this.populateBreakdowns(result.data);
+    result.data = await this.populateBreakdowns(result.data, user?.id);
 
     // For virtual statuses, override the status field in the response so the
     // frontend receives the filter name it sent, not the raw DB value.
@@ -442,7 +446,7 @@ export class CampaignsService {
 
     const rawAsset = campaign.amplificationAsset;
 
-    await this.populateBreakdown(campaign);
+    await this.populateBreakdown(campaign, requestingUser?.id);
 
     // If authorized, restore the real asset link. Otherwise, it remains masked (null).
     if (isAuthorized && rawAsset) {
@@ -481,7 +485,7 @@ export class CampaignsService {
 
   async findByBrandId(brandId: string, status?: string): Promise<Campaign[]> {
     const campaigns = await this.campaignRepository.findByBrandId(brandId, status);
-    return this.populateBreakdowns(campaigns);
+    return this.populateBreakdowns(campaigns, brandId);
   }
 
   async findLive(pagination?: {
@@ -949,7 +953,7 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     brandId: string,
-    decision: 'approved' | 'request_revision',
+    decision: 'approved' | 'request_revision' | 'rejected',
     brandFeedback?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
@@ -966,21 +970,98 @@ export class CampaignsService {
       throw new NotFoundException('Submission not found');
     }
 
-    if (submission.status !== 'pending_approval' && submission.status !== 'revision-sent') {
-      throw new ForbiddenException(`Submission is not in a state awaiting review`);
+    // Rules for first submission (pending_approval or request_revision/revision-sent)
+    if (submission.status === 'pending_approval') {
+      if (decision === 'rejected') {
+        throw new BadRequestException(
+          'You cannot reject a draft on its first submission. You must either approve it or request a revision.',
+        );
+      }
     }
 
-    if (decision === 'request_revision' && submission.status === 'revision-sent') {
-      throw new ForbiddenException(
-        `Revision has already been requested once. You must approve this revised draft or file a dispute.`,
-      );
-    }
-
-    const updates: Record<string, unknown> = { status: decision };
-    if (decision === 'request_revision') {
-      updates.brandFeedback = brandFeedback || 'Revision requested by brand';
+    // Rules for revised submission (revision-sent)
+    if (submission.status === 'revision-sent') {
+      if (decision === 'request_revision') {
+        throw new ForbiddenException(
+          `Revision has already been requested once. You must approve this revised draft or reject it to raise a dispute.`,
+        );
+      }
     } else {
+      // If it's not pending_approval and not revision-sent, it's not in a state awaiting review
+      if (submission.status !== 'pending_approval') {
+        throw new ForbiddenException(`Submission is not in a state awaiting review`);
+      }
+    }
+
+    // Process decision
+    const updates: Record<string, unknown> = {};
+
+    if (decision === 'approved') {
+      updates.status = 'approved';
       updates.brandFeedback = null;
+    } else if (decision === 'request_revision') {
+      updates.status = 'request_revision';
+      updates.brandFeedback = brandFeedback || 'Revision requested by brand';
+    } else if (decision === 'rejected') {
+      if (!brandFeedback || !brandFeedback.trim()) {
+        throw new BadRequestException('A reason is required when rejecting a draft submission');
+      }
+      updates.status = 'disputeraised';
+      updates.brandFeedback = brandFeedback;
+
+      // Raise the dispute in the disputes table
+      await this.campaignRepository.raiseDispute({
+        campaignId,
+        creatorId: submission.creatorId,
+        brandId: campaign.brandId,
+        reason: brandFeedback,
+      });
+
+      // Creator Strike Check
+      const creator = await this.usersService.findOne(submission.creatorId);
+      if (creator) {
+        const currentStrikes = creator.creatorStrikes || [];
+        if (!currentStrikes.includes(campaign.brandId)) {
+          const updatedStrikes = [...currentStrikes, campaign.brandId];
+          creator.creatorStrikes = updatedStrikes;
+          if (updatedStrikes.length >= 3) {
+            creator.isActive = false;
+            creator.flaggedReason = `Blocked: Received 3 strikes from different advertisers: [${updatedStrikes.join(', ')}]`;
+            if (typeof creator.save === 'function') {
+              await creator.save();
+            }
+            await this.emailService.sendCreatorBlockEmail(creator.email, creator.firstName);
+          } else {
+            creator.flaggedReason = `Warning: Received ${updatedStrikes.length} strike(s) from different advertisers: [${updatedStrikes.join(', ')}]`;
+            if (typeof creator.save === 'function') {
+              await creator.save();
+            }
+            await this.emailService.sendStrikeWarningEmail(
+              creator.email,
+              creator.firstName,
+              updatedStrikes.length,
+            );
+          }
+        }
+      }
+
+      // Advertiser Flag Check
+      const brand = await this.usersService.findOne(campaign.brandId);
+      if (brand) {
+        const C = await this.campaignRepository.countCampaignsByBrand(campaign.brandId);
+        const D = await this.campaignRepository.countDisputedCampaignsByBrand(campaign.brandId);
+        if (C >= 3 && D / C > 0.5) {
+          brand.isFlagged = true;
+          const rate = Math.round((D / C) * 1000) / 10;
+          brand.flaggedReason = `Flagged: High dispute rate of ${rate}% (${D} disputes raised out of ${C} campaigns)`;
+        } else {
+          brand.isFlagged = false;
+          brand.flaggedReason = null;
+        }
+        if (typeof brand.save === 'function') {
+          await brand.save();
+        }
+      }
     }
 
     await submission.update(updates);
@@ -1007,7 +1088,35 @@ export class CampaignsService {
     creatorId: string,
     liveLink: Record<string, string>,
   ): Promise<ContentSubmission> {
-    const submission = await this.campaignRepository.findSubmissionById(submissionId);
+    let submission = await this.campaignRepository.findSubmissionById(submissionId);
+
+    // Dynamic support for Amplify Content campaigns which skip the draft creation phase
+    if (!submission) {
+      const application = await this.campaignRepository.findApplicationById(submissionId);
+      if (application && application.campaignId === campaignId) {
+        const campaign =
+          application.campaign || (await this.campaignRepository.findById(campaignId));
+        if (campaign && campaign.goal === 'Amplify Content') {
+          if (application.creatorId !== creatorId) {
+            throw new ForbiddenException(`You do not own this application`);
+          }
+          if (application.status !== 'accepted') {
+            throw new ForbiddenException(
+              `You can only submit live posts for accepted applications`,
+            );
+          }
+          // Dynamically create a pre-approved ContentSubmission
+          submission = await this.campaignRepository.createSubmission({
+            campaignId,
+            applicationId: application.id,
+            creatorId,
+            draftLink: campaign.amplificationAsset || '',
+            status: 'approved',
+          });
+        }
+      }
+    }
+
     if (!submission || submission.campaignId !== campaignId) {
       throw new NotFoundException('Submission not found');
     }
