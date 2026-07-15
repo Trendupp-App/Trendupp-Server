@@ -91,6 +91,9 @@ describe('CampaignsService', () => {
       raiseDispute: jest.fn(),
       countCampaignsByBrand: jest.fn().mockResolvedValue(0),
       countDisputedCampaignsByBrand: jest.fn().mockResolvedValue(0),
+      findReleaseByCampaignAndCreator: jest.fn(),
+      findSubmissionByCampaignAndCreator: jest.fn(),
+      findApplicationByCampaignAndCreator: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {

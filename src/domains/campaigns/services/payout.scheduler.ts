@@ -254,7 +254,8 @@ export class PayoutScheduler {
   async processPendingRefunds(): Promise<void> {
     this.logger.log('Starting brand refunds processing and transfers...');
     try {
-      const pendingRefunds = await this.campaignRepository.findPendingRefunds();
+      const now = new Date();
+      const pendingRefunds = await this.campaignRepository.findPendingRefunds(now);
       if (pendingRefunds.length === 0) {
         this.logger.log('No pending refunds found.');
         return;

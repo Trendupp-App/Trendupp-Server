@@ -26,6 +26,7 @@ export interface CreateRefundInput {
   status?: string;
   refundReference?: string | null;
   errorDetails?: string | null;
+  releaseDate?: Date;
 }
 
 @Injectable()
@@ -713,9 +714,14 @@ export class CampaignRepository {
     });
   }
 
-  async findPendingRefunds(): Promise<CampaignRefund[]> {
+  async findPendingRefunds(now: Date = new Date()): Promise<CampaignRefund[]> {
     return this.campaignRefundModel.findAll({
-      where: { status: 'pending' },
+      where: {
+        status: 'pending',
+        releaseDate: {
+          [Op.lte]: now,
+        },
+      },
     });
   }
 
@@ -760,5 +766,33 @@ export class CampaignRepository {
       reason: data.reason,
       status: 'raised',
     }) as Promise<Dispute>;
+  }
+
+  async findReleaseByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<PaymentRelease | null> {
+    return this.paymentReleaseModel.findOne({
+      where: { campaignId, creatorId },
+    });
+  }
+
+  async findSubmissionByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<ContentSubmission | null> {
+    return this.contentSubmissionModel.findOne({
+      where: { campaignId, creatorId },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  async findApplicationByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<CampaignApplication | null> {
+    return this.campaignApplicationModel.findOne({
+      where: { campaignId, creatorId },
+    });
   }
 }

@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DisputesService } from './disputes.service';
 import { Dispute } from '../entities/dispute.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
+import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity';
 import { StreamService } from '../../../integration/stream/stream.service';
 import { DisputeRepository } from '../repository/dispute.repository';
 import { CampaignRepository } from '../../campaigns/repository/campaign.repository';
@@ -28,6 +30,12 @@ describe('DisputesService', () => {
 
     campaignRepoMock = {
       findById: jest.fn(),
+      findReleaseByCampaignAndCreator: jest.fn(),
+      findSubmissionByCampaignAndCreator: jest.fn(),
+      findApplicationByCampaignAndCreator: jest.fn(),
+      createPaymentRelease: jest.fn(),
+      createRefund: jest.fn(),
+      findPaymentByCampaignId: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     streamServiceMock = {
@@ -97,6 +105,11 @@ describe('DisputesService', () => {
       disputeRepoMock.create.mockImplementation((data: any) =>
         Promise.resolve({ id: 'disp1', ...data } as Dispute),
       );
+      const mockRelease = {
+        id: 'rel1',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PaymentRelease;
+      campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
 
       const result = await service.raiseDispute('creator1', 'creator', dto);
 
@@ -110,6 +123,11 @@ describe('DisputesService', () => {
         status: 'raised',
         reason: 'poor quality',
       });
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockRelease.update).toHaveBeenCalledWith({
+        status: 'disputed',
+        errorDetails: 'Creator raised a dispute: poor quality',
+      });
       expect(result.status).toBe('raised');
     });
 
@@ -122,6 +140,11 @@ describe('DisputesService', () => {
       disputeRepoMock.create.mockImplementation((data: any) =>
         Promise.resolve({ id: 'disp1', ...data } as Dispute),
       );
+      const mockRelease = {
+        id: 'rel1',
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PaymentRelease;
+      campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
 
       const result = await service.raiseDispute('brand1', 'brand', dto);
 
@@ -132,6 +155,11 @@ describe('DisputesService', () => {
         brandId: 'brand1',
         status: 'raised',
         reason: 'empty submission',
+      });
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockRelease.update).toHaveBeenCalledWith({
+        status: 'disputed',
+        errorDetails: 'Brand raised a dispute: empty submission',
       });
       expect(result.status).toBe('raised');
     });
@@ -209,32 +237,168 @@ describe('DisputesService', () => {
   });
 
   describe('resolveDispute', () => {
-    it('should resolve under_review dispute and freeze GetStream channel', async () => {
+    it('should resolve under_review dispute, freeze GetStream channel, and release to creator if release exists', async () => {
+      const originalReleaseDate = new Date();
       const dispute = {
         id: 'disp1',
+        campaignId: 'camp1',
+        creatorId: 'creator1',
+        brandId: 'brand1',
         status: 'under_review',
         streamChannelId: 'dispute_disp1',
         save: jest.fn().mockResolvedValue(undefined),
       } as unknown as Dispute;
 
+      const mockRelease = {
+        id: 'rel1',
+        amount: 100000,
+        releaseDate: originalReleaseDate,
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PaymentRelease;
+
       disputeRepoMock.findById.mockResolvedValue(dispute);
       streamServiceMock.freezeChannel.mockResolvedValue(undefined);
 
+      campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
+
       const result = await service.resolveDispute('disp1', 'admin1', {
         action: 'release_to_creator',
-        resolutionNotes: 'Release escrow',
+        resolutionNotes: 'Release escrow to creator',
+      });
+
+      expect(dispute.status).toBe('resolved');
+      expect(dispute.escrowAction).toBe('release_to_creator');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockRelease.update).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const updateMock1 = mockRelease.update as jest.Mock;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const firstCallArg1 = updateMock1.mock.calls[0][0] as {
+        status: string;
+        errorDetails: string;
+      };
+      expect(firstCallArg1.status).toBe('pending');
+      expect(firstCallArg1.errorDetails).toContain('Dispute resolved in favor of Creator');
+      expect(result).toBe(dispute);
+    });
+
+    it('should resolve dispute and refund to brand using creator original release date if release exists', async () => {
+      const originalReleaseDate = new Date();
+      const dispute = {
+        id: 'disp1',
+        campaignId: 'camp1',
+        creatorId: 'creator1',
+        brandId: 'brand1',
+        status: 'under_review',
+        streamChannelId: 'dispute_disp1',
+        save: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Dispute;
+
+      const mockRelease = {
+        id: 'rel1',
+        amount: 100000,
+        releaseDate: originalReleaseDate,
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PaymentRelease;
+
+      const mockCampaign = {
+        id: 'camp1',
+        currency: 'NGN',
+      } as unknown as Campaign;
+
+      disputeRepoMock.findById.mockResolvedValue(dispute);
+      streamServiceMock.freezeChannel.mockResolvedValue(undefined);
+
+      campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
+      campaignRepoMock.findById.mockResolvedValue(mockCampaign);
+      campaignRepoMock.createRefund.mockResolvedValue({} as any as CampaignRefund);
+
+      await service.resolveDispute('disp1', 'admin1', {
+        action: 'refund_to_brand',
+        resolutionNotes: 'Refund to brand',
       });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(streamServiceMock.freezeChannel).toHaveBeenCalledWith('dispute', 'dispute_disp1');
-      expect(dispute.status).toBe('resolved');
-      expect(dispute.escrowAction).toBe('release_to_creator');
-      expect(dispute.resolvedById).toBe('admin1');
-      expect(dispute.resolutionNotes).toBe('Release escrow');
+      expect(mockRelease.update).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const updateMock2 = mockRelease.update as jest.Mock;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const firstCallArg2 = updateMock2.mock.calls[0][0] as {
+        status: string;
+        errorDetails: string;
+      };
+      expect(firstCallArg2.status).toBe('cancelled');
+      expect(firstCallArg2.errorDetails).toContain('Dispute resolved in favor of Brand');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createRefund).toHaveBeenCalledWith({
+        campaignId: 'camp1',
+        brandId: 'brand1',
+        amount: 100000,
+        status: 'pending',
+        currency: 'NGN',
+        releaseDate: originalReleaseDate,
+      });
+    });
+
+    it('should resolve dispute and split escrow 50/50 using creator original release date if release exists', async () => {
+      const originalReleaseDate = new Date();
+      const dispute = {
+        id: 'disp1',
+        campaignId: 'camp1',
+        creatorId: 'creator1',
+        brandId: 'brand1',
+        status: 'under_review',
+        streamChannelId: 'dispute_disp1',
+        save: jest.fn().mockResolvedValue(undefined),
+      } as unknown as Dispute;
+
+      const mockRelease = {
+        id: 'rel1',
+        amount: 100000,
+        releaseDate: originalReleaseDate,
+        update: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PaymentRelease;
+
+      const mockCampaign = {
+        id: 'camp1',
+        currency: 'NGN',
+      } as unknown as Campaign;
+
+      disputeRepoMock.findById.mockResolvedValue(dispute);
+      streamServiceMock.freezeChannel.mockResolvedValue(undefined);
+
+      campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
+      campaignRepoMock.findById.mockResolvedValue(mockCampaign);
+      campaignRepoMock.createRefund.mockResolvedValue({} as any as CampaignRefund);
+
+      await service.resolveDispute('disp1', 'admin1', {
+        action: 'split',
+        resolutionNotes: 'Split 50/50',
+      });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(dispute.save).toHaveBeenCalled();
-      expect(result).toBe(dispute);
+      expect(mockRelease.update).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const updateMock3 = mockRelease.update as jest.Mock;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const firstCallArg3 = updateMock3.mock.calls[0][0] as {
+        amount: number;
+        status: string;
+        errorDetails: string;
+      };
+      expect(firstCallArg3.amount).toBe(50000);
+      expect(firstCallArg3.status).toBe('pending');
+      expect(firstCallArg3.errorDetails).toContain('Dispute resolved via 50/50 split');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createRefund).toHaveBeenCalledWith({
+        campaignId: 'camp1',
+        brandId: 'brand1',
+        amount: 50000,
+        status: 'pending',
+        currency: 'NGN',
+        releaseDate: originalReleaseDate,
+      });
     });
   });
 

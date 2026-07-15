@@ -90,6 +90,19 @@ export class DisputesService {
       reason: dto.reason,
     });
 
+    // Block creator payout if a release exists
+    const release = await this.campaignRepository.findReleaseByCampaignAndCreator(
+      dto.campaignId,
+      creatorId,
+    );
+    if (release) {
+      const actorName = role === 'brand' ? 'Brand' : 'Creator';
+      await release.update({
+        status: 'disputed',
+        errorDetails: `${actorName} raised a dispute: ${dto.reason}`,
+      });
+    }
+
     const notifyData = {
       disputeId: dispute.id,
       campaignId: dto.campaignId,
@@ -190,6 +203,163 @@ export class DisputesService {
     dispute.resolvedById = resolvedById;
     dispute.resolutionNotes = dto.resolutionNotes;
     await dispute.save();
+
+    // Process Escrow Decision
+    const release = await this.campaignRepository.findReleaseByCampaignAndCreator(
+      dispute.campaignId,
+      dispute.creatorId,
+    );
+
+    if (dto.action === 'release_to_creator') {
+      if (release) {
+        // Transition status back to pending, preserving original releaseDate
+        await release.update({
+          status: 'pending',
+          errorDetails: `Dispute resolved in favor of Creator. Resolution notes: ${dto.resolutionNotes}`,
+        });
+      } else {
+        // Vetting stage dispute resolved in favor of Creator: create payment release scheduled now + 30 days
+        const campaign = await this.campaignRepository.findById(dispute.campaignId);
+        const submission = await this.campaignRepository.findSubmissionByCampaignAndCreator(
+          dispute.campaignId,
+          dispute.creatorId,
+        );
+        const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+          dispute.campaignId,
+          dispute.creatorId,
+        );
+        if (submission) {
+          await submission.update({ status: 'done' });
+        }
+        if (campaign && application) {
+          const releaseDate = new Date();
+          releaseDate.setDate(releaseDate.getDate() + 30); // 30 days from now
+
+          const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
+            dispute.campaignId,
+          );
+
+          await this.campaignRepository.createPaymentRelease({
+            campaignId: dispute.campaignId,
+            creatorId: dispute.creatorId,
+            applicationId: application.id,
+            amount: application.feeRequest,
+            releaseDate,
+            status: 'pending',
+            escrowId: campaignPayment?.escrowId ?? null,
+            currency: campaign.currency,
+            errorDetails: `Dispute resolved in favor of Creator. Resolution notes: ${dto.resolutionNotes}`,
+          });
+        }
+      }
+    } else if (dto.action === 'refund_to_brand') {
+      if (release) {
+        // Creator gets nothing (cancel payout)
+        await release.update({
+          status: 'cancelled',
+          errorDetails: `Dispute resolved in favor of Brand. Refunded. Resolution notes: ${dto.resolutionNotes}`,
+        });
+
+        // Queue Brand refund scheduled at the original release date
+        const campaign = await this.campaignRepository.findById(dispute.campaignId);
+        await this.campaignRepository.createRefund({
+          campaignId: dispute.campaignId,
+          brandId: dispute.brandId,
+          amount: Number(release.amount),
+          status: 'pending',
+          currency: campaign?.currency ?? 'USD',
+          releaseDate: release.releaseDate,
+        });
+      } else {
+        // Vetting stage dispute resolved in favor of Brand: refund queued immediately
+        const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+          dispute.campaignId,
+          dispute.creatorId,
+        );
+        const campaign = await this.campaignRepository.findById(dispute.campaignId);
+        if (application && campaign) {
+          await this.campaignRepository.createRefund({
+            campaignId: dispute.campaignId,
+            brandId: dispute.brandId,
+            amount: Number(application.feeRequest),
+            status: 'pending',
+            currency: campaign.currency,
+            releaseDate: new Date(),
+          });
+        }
+      }
+    } else if (dto.action === 'split') {
+      if (release) {
+        const creatorAmount = Math.floor(Number(release.amount) * 0.5);
+        const brandAmount = Number(release.amount) - creatorAmount;
+
+        // Creator gets paid 50%, scheduled at original release date
+        await release.update({
+          amount: creatorAmount,
+          status: 'pending',
+          errorDetails: `Dispute resolved via 50/50 split. Creator amount: ${creatorAmount}. Resolution notes: ${dto.resolutionNotes}`,
+        });
+
+        // Queue Brand refund for the other 50%, scheduled at original release date
+        const campaign = await this.campaignRepository.findById(dispute.campaignId);
+        await this.campaignRepository.createRefund({
+          campaignId: dispute.campaignId,
+          brandId: dispute.brandId,
+          amount: brandAmount,
+          status: 'pending',
+          currency: campaign?.currency ?? 'USD',
+          releaseDate: release.releaseDate,
+        });
+      } else {
+        // Vetting stage dispute resolved as split
+        const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+          dispute.campaignId,
+          dispute.creatorId,
+        );
+        const campaign = await this.campaignRepository.findById(dispute.campaignId);
+        const submission = await this.campaignRepository.findSubmissionByCampaignAndCreator(
+          dispute.campaignId,
+          dispute.creatorId,
+        );
+        if (submission) {
+          await submission.update({ status: 'done' });
+        }
+        if (campaign && application) {
+          const creatorAmount = Math.floor(Number(application.feeRequest) * 0.5);
+          const brandAmount = Number(application.feeRequest) - creatorAmount;
+
+          const releaseDate = new Date();
+          releaseDate.setDate(releaseDate.getDate() + 30); // 30 days from now
+
+          const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
+            dispute.campaignId,
+          );
+
+          // Creator payout release for 50%, scheduled in 30 days
+          await this.campaignRepository.createPaymentRelease({
+            campaignId: dispute.campaignId,
+            creatorId: dispute.creatorId,
+            applicationId: application.id,
+            amount: creatorAmount,
+            releaseDate,
+            status: 'pending',
+            escrowId: campaignPayment?.escrowId ?? null,
+            currency: campaign.currency,
+            errorDetails: `Dispute resolved via 50/50 split. Creator amount: ${creatorAmount}. Resolution notes: ${dto.resolutionNotes}`,
+          });
+
+          // Brand refund for the other 50%, scheduled immediately
+          await this.campaignRepository.createRefund({
+            campaignId: dispute.campaignId,
+            brandId: dispute.brandId,
+            amount: brandAmount,
+            status: 'pending',
+            currency: campaign.currency,
+            releaseDate: new Date(),
+          });
+        }
+      }
+    }
 
     // Both parties learn the outcome (the frozen chat says nothing on its own).
     await this.notificationsService.notify({
