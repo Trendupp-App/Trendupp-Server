@@ -48,6 +48,9 @@ export class PaymentRelease extends BaseEntity<PaymentRelease> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'escrow_id' })
   declare escrowId?: string | null;
 
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'USD' })
+  declare currency: string;
+
   @Column({ type: DataType.TEXT, allowNull: true, field: 'error_details' })
   declare errorDetails?: string | null;
 }

@@ -37,6 +37,7 @@ export class CampaignsService {
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async calculateBreakdown(budget: number): Promise<{
     campaignBudget: number;
     trenduppFee: number;
@@ -44,42 +45,32 @@ export class CampaignsService {
     totalToPay: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
-    const fees = await this.campaignRepository.findFees();
-    let trenduppFee = 0;
-    let vat = 0;
-    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [];
+    // Under the new billing system, the input budget is the exact total paid by the advertiser.
+    // Deductions: 15% Trendupp Fee and 7.5% VAT (Option B on total funded) are deducted from this total.
+    const trenduppFee = Math.round(budget * 0.15);
+    const vat = Math.round(budget * 0.075);
+    const campaignBudget = budget - (trenduppFee + vat);
 
-    for (const fee of fees) {
-      let amount = 0;
-      if (fee.type === 'percentage') {
-        amount = Math.round(budget * fee.value);
-      } else {
-        amount = Math.round(fee.value);
-      }
-      breakdownItems.push({
-        name: fee.name,
-        type: fee.type,
-        value: fee.value,
-        amount,
-      });
-
-      const nameLower = fee.name.toLowerCase();
-      if (
-        nameLower.includes('fee') ||
-        nameLower.includes('percentage') ||
-        nameLower.includes('commission')
-      ) {
-        trenduppFee += amount;
-      } else if (nameLower.includes('vat') || nameLower.includes('tax')) {
-        vat += amount;
-      }
-    }
+    const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
+      {
+        name: 'Trendupp Fee',
+        type: 'percentage',
+        value: 0.15,
+        amount: trenduppFee,
+      },
+      {
+        name: 'VAT',
+        type: 'percentage',
+        value: 0.075,
+        amount: vat,
+      },
+    ];
 
     return {
-      campaignBudget: budget,
+      campaignBudget,
       trenduppFee,
       vat,
-      totalToPay: budget + trenduppFee + vat,
+      totalToPay: budget,
       breakdownItems,
     };
   }
@@ -92,6 +83,9 @@ export class CampaignsService {
       // Attach application count
       const total = await this.campaignRepository.countApplications(campaign.id);
       campaign.setDataValue('applicationsCount' as any, { total });
+
+      // Mask amplification asset link by default to protect it in list views
+      campaign.setDataValue('amplificationAsset' as any, null);
     }
     return campaign;
   }
@@ -113,13 +107,28 @@ export class CampaignsService {
       creatorNicheId: string;
       campaignBrief?: string;
       contentGuidelines?: { dos: string[]; donts: string[] };
+      amplificationAsset?: string;
     },
-    file?: Express.Multer.File,
+    files?: {
+      coverImage?: Express.Multer.File;
+      amplificationAssetFile?: Express.Multer.File;
+    },
   ): Promise<Campaign> {
     let coverImage: string | undefined;
-    if (file) {
-      coverImage = await this.s3Service.uploadFile(file);
+    if (files?.coverImage) {
+      coverImage = await this.s3Service.uploadFile(files.coverImage);
     }
+
+    let amplificationAsset = data.amplificationAsset;
+    if (files?.amplificationAssetFile) {
+      amplificationAsset = await this.s3Service.uploadFile(files.amplificationAssetFile);
+    }
+
+    const brand = await this.usersService.findOne(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand user profile not found');
+    }
+    const currency = brand.country?.currency || 'USD';
 
     const { preferredPlatformIds, timeline, ...campaignData } = data;
 
@@ -128,9 +137,11 @@ export class CampaignsService {
       timeline: timeline ? new Date(timeline) : undefined,
       brandId,
       coverImage,
+      amplificationAsset,
       status: 'draft',
       currentStep: 1,
       paymentStatus: 'unpaid',
+      currency,
     });
 
     if (preferredPlatformIds && preferredPlatformIds.length > 0) {
@@ -159,8 +170,12 @@ export class CampaignsService {
       usageRights?: string;
       successLooksLike?: string;
       campaignBrief?: string;
+      amplificationAsset?: string;
     },
-    file?: Express.Multer.File,
+    files?: {
+      coverImage?: Express.Multer.File;
+      amplificationAssetFile?: Express.Multer.File;
+    },
   ): Promise<Campaign> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
@@ -178,19 +193,27 @@ export class CampaignsService {
     }
 
     let coverImage = campaign.coverImage;
-    if (file) {
-      coverImage = await this.s3Service.uploadFile(file);
+    if (files?.coverImage) {
+      coverImage = await this.s3Service.uploadFile(files.coverImage);
+    }
+
+    let amplificationAsset = campaign.amplificationAsset;
+    if (files?.amplificationAssetFile) {
+      amplificationAsset = await this.s3Service.uploadFile(files.amplificationAssetFile);
+    } else if (data.amplificationAsset !== undefined) {
+      amplificationAsset = data.amplificationAsset;
     }
 
     const { preferredPlatformIds, timeline, ...campaignData } = data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
+      amplificationAsset,
     };
     if (timeline !== undefined) {
       updates.timeline = timeline ? new Date(timeline) : null;
     }
-    if (file) {
+    if (files?.coverImage) {
       updates.coverImage = coverImage;
     }
 
@@ -260,6 +283,9 @@ export class CampaignsService {
       if (!campaign.successLooksLike) errors.push('successLooksLike criteria is required');
       if (!campaign.campaignBrief) errors.push('campaignBrief is required');
 
+      if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
+        errors.push('amplificationAsset is required for Content Amplification campaigns');
+      }
       if (errors.length > 0) {
         throw new ForbiddenException(`Cannot submit incomplete campaign: ${errors.join(', ')}`);
       }
@@ -289,12 +315,12 @@ export class CampaignsService {
       title: campaign.title,
       description: campaign.campaignBrief!,
       amount: breakdown.totalToPay,
-      currency: 'NGN', // Default to NGN as per specification
+      currency: campaign.currency, // Nigeria -> NGN, other countries -> USD
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
         email: 'app@trendupp.com', //brand.email,
-        phone: '+234900000000', //brand.phoneNumber || '',
+        phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
@@ -310,12 +336,28 @@ export class CampaignsService {
       paymentStatus: 'pending',
     });
 
+    // Calculate expected gateway fee
+    let gatewayFee = 0;
+    if (campaign.currency === 'NGN') {
+      gatewayFee = Math.round(breakdown.totalToPay * 0.015);
+      if (breakdown.totalToPay >= 2500) {
+        gatewayFee += 100;
+      }
+      if (gatewayFee > 2000) {
+        gatewayFee = 2000;
+      }
+    } else {
+      gatewayFee = Math.round(breakdown.totalToPay * 0.039);
+    }
+
     // Create pending payment record
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
-      amount: campaign.totalBudget,
+      amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
+      gatewayFee,
       paymentStatus: 'pending',
+      currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
       escrowId: String(escrow.escrow_id),
       paymentUrl: escrow.payment_url,
@@ -374,7 +416,38 @@ export class CampaignsService {
       throw new NotFoundException('Campaign not found');
     }
 
+    // Determine authorization to view the amplification asset before it is masked
+    let isAuthorized = false;
+    if (requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      const isAdmin = ['admin', 'superadmin', 'finance_admin'].includes(role);
+      const isBrandOwner = campaign.brandId === requestingUser.id;
+
+      if (isAdmin || isBrandOwner) {
+        isAuthorized = true;
+      } else if (role === 'creator') {
+        const hasAcceptedApp = campaign.applications?.some(
+          (app) => app.creatorId === requestingUser.id && app.status === 'accepted',
+        );
+        if (hasAcceptedApp) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    const rawAsset = campaign.amplificationAsset;
+
     await this.populateBreakdown(campaign);
+
+    // If authorized, restore the real asset link. Otherwise, it remains masked (null).
+    if (isAuthorized && rawAsset) {
+      campaign.setDataValue('amplificationAsset' as any, rawAsset);
+    }
 
     // Filter applications based on requester role
     if (campaign.applications && requestingUser) {
@@ -616,6 +689,137 @@ export class CampaignsService {
       await this.populateBreakdown(updated.campaign);
     }
     return updated!;
+  }
+
+  async reviewCampaignApplicationsBatch(
+    campaignId: string,
+    applicationIds: string[],
+    callerId: string,
+    status: string,
+    callerRole: string = 'brand',
+  ): Promise<CampaignApplication[]> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const isAdmin = ['admin', 'superadmin'].includes(callerRole);
+
+    // Brands must own the campaign; admins can act on any campaign
+    if (!isAdmin && campaign.brandId !== callerId) {
+      throw new ForbiddenException(`You do not own this campaign`);
+    }
+
+    if (status === 'accepted') {
+      const validation = await this.validateCreatorSelection(campaignId, applicationIds);
+      if (!validation.isValid) {
+        throw new BadRequestException(validation.message);
+      }
+    }
+
+    const results: CampaignApplication[] = [];
+
+    for (const appId of applicationIds) {
+      const application = await this.campaignRepository.findApplicationById(appId);
+      if (!application || application.campaignId !== campaignId) {
+        throw new NotFoundException(
+          `Application ${appId} not found or does not belong to this campaign`,
+        );
+      }
+
+      // Attempting to undo an already-accepted application
+      if (application.status === 'accepted' && status === 'rejected') {
+        if (!isAdmin) {
+          throw new ForbiddenException(
+            `You do not have sufficient access to undo an accepted application. Please contact support.`,
+          );
+        }
+        // Admin undo: revert application + campaign back to live
+        await application.update({ status: 'rejected' });
+        await campaign.update({ status: 'live' });
+      } else {
+        // Normal path: update application status
+        await application.update({ status });
+
+        // When a brand accepts an application, promote the campaign to active
+        if (status === 'accepted') {
+          await campaign.update({ status: 'active' });
+        }
+      }
+
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated) {
+        if (updated.campaign) {
+          await this.populateBreakdown(updated.campaign);
+        }
+        results.push(updated);
+      }
+    }
+
+    // If accepting a batch of creators, auto-reject all other applications that were not chosen
+    if (status === 'accepted') {
+      const allApplications =
+        await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+      for (const app of allApplications) {
+        if (!applicationIds.includes(app.id) && app.status !== 'rejected') {
+          await app.update({ status: 'rejected' });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async validateCreatorSelection(
+    campaignId: string,
+    applicationIds: string[],
+  ): Promise<{
+    isValid: boolean;
+    amountAvailable: number;
+    selectedTotal: number;
+    shortfall: number;
+    currency: string;
+    message: string;
+  }> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+    // If not paid yet, calculate the expected available pool from totalBudget dynamically.
+    // Creator Pool = totalBudget - (15% commission + 7.5% VAT) = totalBudget * 0.775
+    const amountAvailable =
+      payment && payment.paymentStatus === 'paid'
+        ? payment.amount
+        : Math.round(campaign.totalBudget * 0.775);
+
+    let selectedTotal = 0;
+    for (const appId of applicationIds) {
+      const app = await this.campaignRepository.findApplicationById(appId);
+      if (app && app.campaignId === campaignId) {
+        selectedTotal += app.feeRequest || 0;
+      }
+    }
+
+    const shortfall = Math.max(0, selectedTotal - amountAvailable);
+    const isValid = shortfall === 0;
+
+    const currencySymbol = campaign.currency === 'NGN' ? '₦' : '$';
+    let message = `Selection is valid. The selected creators' total fee of ${currencySymbol}${selectedTotal.toLocaleString()} fits inside the available budget pool of ${currencySymbol}${amountAvailable.toLocaleString()}.`;
+
+    if (!isValid) {
+      message = `Selected creators' total of ${currencySymbol}${selectedTotal.toLocaleString()} exceeds the available campaign budget of ${currencySymbol}${amountAvailable.toLocaleString()} by ${currencySymbol}${shortfall.toLocaleString()}. Please swap creators or fund a new campaign for the extra creators.`;
+    }
+
+    return {
+      isValid,
+      amountAvailable,
+      selectedTotal,
+      shortfall,
+      currency: campaign.currency,
+      message,
+    };
   }
 
   async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
@@ -929,10 +1133,11 @@ export class CampaignsService {
       campaignId,
       creatorId: submission.creatorId,
       applicationId: submission.applicationId,
-      amount: campaign.totalBudget,
+      amount: application.feeRequest,
       releaseDate,
       status: 'pending',
       escrowId: campaignPayment?.escrowId ?? null,
+      currency: campaign.currency,
     });
 
     await this.notificationsService.notify({
@@ -943,7 +1148,8 @@ export class CampaignsService {
         campaignId,
         campaignTitle: campaign.title,
         submissionId,
-        amount: campaign.totalBudget,
+        amount: application.feeRequest,
+        currency: campaign.currency,
         releaseDate: releaseDate.toDateString(),
       },
     });

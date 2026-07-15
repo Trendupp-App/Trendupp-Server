@@ -13,8 +13,19 @@ import { Niche } from '../../users/entities/niche.entity';
 import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
+import { CampaignRefund } from '../entities/campaign-refund.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
+
+export interface CreateRefundInput {
+  campaignId: string;
+  brandId: string;
+  amount: number;
+  currency?: string;
+  status?: string;
+  refundReference?: string | null;
+  errorDetails?: string | null;
+}
 
 @Injectable()
 export class CampaignRepository {
@@ -37,6 +48,8 @@ export class CampaignRepository {
     private readonly campaignReviewModel: typeof CampaignReview,
     @InjectModel(PaymentRelease)
     private readonly paymentReleaseModel: typeof PaymentRelease,
+    @InjectModel(CampaignRefund)
+    private readonly campaignRefundModel: typeof CampaignRefund,
   ) {}
 
   private readonly fullIncludes = [
@@ -268,6 +281,10 @@ export class CampaignRepository {
     return this.creatorCategoryModel.findAll({
       order: [['minFollowers', 'ASC']],
     });
+  }
+
+  findCreatorCategoryById(id: string): Promise<CreatorCategory | null> {
+    return this.creatorCategoryModel.findByPk(id);
   }
 
   findAllPlatforms(): Promise<Platform[]> {
@@ -666,6 +683,43 @@ export class CampaignRepository {
   async updatePayment(id: string, data: Partial<Attributes<Payment>>): Promise<void> {
     await this.paymentModel.update(data, {
       where: { id },
+    });
+  }
+
+  async sumPaymentReleases(campaignId: string): Promise<number> {
+    const sum = await this.paymentReleaseModel.sum('amount', {
+      where: { campaignId },
+    });
+    return sum || 0;
+  }
+
+  async createRefund(data: CreateRefundInput): Promise<CampaignRefund> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    return this.campaignRefundModel.create(data as any);
+  }
+
+  async findRefundByCampaignId(campaignId: string): Promise<CampaignRefund | null> {
+    return this.campaignRefundModel.findOne({
+      where: { campaignId },
+    });
+  }
+
+  async findPendingRefunds(): Promise<CampaignRefund[]> {
+    return this.campaignRefundModel.findAll({
+      where: { status: 'pending' },
+    });
+  }
+
+  async findEndedCampaignsWithoutRefund(): Promise<Campaign[]> {
+    return this.campaignModel.findAll({
+      where: {
+        status: {
+          [Op.in]: ['completed', 'cancelled'],
+        },
+        id: {
+          [Op.notIn]: Sequelize.literal(`(SELECT campaign_id FROM campaign_refunds)`),
+        },
+      },
     });
   }
 }

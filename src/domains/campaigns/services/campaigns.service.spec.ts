@@ -36,15 +36,16 @@ describe('CampaignsService', () => {
     status: 'draft',
     currentStep: 1,
     paymentStatus: 'unpaid',
+    currency: 'USD',
     approvedAt: null,
     update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
     setDataValue: jest.fn(),
     paymentBreakdown: {
-      campaignBudget: 3000000,
+      campaignBudget: 2325000,
       trenduppFee: 450000,
       vat: 225000,
-      totalToPay: 3675000,
+      totalToPay: 3000000,
     },
   } as unknown as Campaign;
 
@@ -84,6 +85,7 @@ describe('CampaignsService', () => {
       createPaymentRelease: jest.fn(),
       findPaymentByCampaignId: jest.fn(),
       updatePayment: jest.fn().mockResolvedValue(undefined),
+      findCreatorCategoryById: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -97,7 +99,13 @@ describe('CampaignsService', () => {
     } as unknown as jest.Mocked<UrlValidatorService>;
 
     usersServiceMock = {
-      findOne: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'b1',
+        email: 'brand@example.com',
+        firstName: 'Brand',
+        lastName: 'User',
+        country: { currency: 'USD', isAfrican: false },
+      }),
       findOneWithNiches: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -171,6 +179,7 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
@@ -196,7 +205,7 @@ describe('CampaignsService', () => {
       campaignRepoMock.create.mockResolvedValue(mockCampaign);
       campaignRepoMock.findById.mockResolvedValue(mockCampaign);
 
-      await service.create('b1', createData, mockFile);
+      await service.create('b1', createData, { coverImage: mockFile });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(s3ServiceMock.uploadFile).toHaveBeenCalledWith(mockFile);
@@ -208,11 +217,13 @@ describe('CampaignsService', () => {
         creatorCategoryId: 'cc1',
         brandId: 'b1',
         coverImage: 'https://mock-s3-url.com/image.jpg',
+        amplificationAsset: undefined,
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        currency: 'USD',
       });
     });
   });
@@ -292,10 +303,19 @@ describe('CampaignsService', () => {
         usageRights: 'full rights',
         successLooksLike: 'very good',
         campaignBrief: 'our brand guidelines brief',
+        amplificationAsset: 'https://hosted.link',
         update: jest.fn().mockResolvedValue(undefined),
       } as unknown as Campaign;
 
       campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+      campaignRepoMock.findCreatorCategoryById.mockResolvedValue({
+        id: 'cc1',
+        name: 'Nano',
+        minCostCreateNaira: 50000,
+        minCostCreateUsd: 50,
+        minCostAmplifyNaira: 20000,
+        minCostAmplifyUsd: 20,
+      } as any);
       usersServiceMock.findOne.mockResolvedValue({
         firstName: 'Brand',
         lastName: 'Owner',
@@ -314,8 +334,9 @@ describe('CampaignsService', () => {
       const mockPayment = {
         id: 'pay1',
         campaignId: 'c1',
-        amount: 3000000,
-        totalAmount: 3675000,
+        amount: 2325000,
+        totalAmount: 3000000,
+        gatewayFee: 117000,
         paymentStatus: 'pending',
         paymentReference: 'tx_ref_123',
         escrowId: '12345',
@@ -750,6 +771,89 @@ describe('CampaignsService', () => {
     });
   });
 
+  describe('reviewCampaignApplicationsBatch', () => {
+    it('should successfully update status to accepted in batch and auto-reject others', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp2 = {
+        id: 'app2',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp3 = {
+        id: 'app3',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById.mockImplementation((id: string) => {
+        if (id === 'app1') return Promise.resolve(mockApp1 as any);
+        if (id === 'app2') return Promise.resolve(mockApp2 as any);
+        if (id === 'app3') return Promise.resolve(mockApp3 as any);
+        return Promise.resolve(null);
+      });
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue([
+        mockApp1,
+        mockApp2,
+        mockApp3,
+      ] as any);
+
+      const results = await service.reviewCampaignApplicationsBatch(
+        'c1',
+        ['app1', 'app2'],
+        'brand1',
+        'accepted',
+      );
+
+      expect(mockApp1.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp2.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp3.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(results.length).toBe(2);
+    });
+
+    it('should successfully reject selected in batch without affecting others', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockApp2 = {
+        id: 'app2',
+        campaignId: 'c1',
+        status: 'pending',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById.mockImplementation((id: string) => {
+        if (id === 'app1') return Promise.resolve(mockApp1 as any);
+        if (id === 'app2') return Promise.resolve(mockApp2 as any);
+        return Promise.resolve(null);
+      });
+
+      const results = await service.reviewCampaignApplicationsBatch(
+        'c1',
+        ['app1'],
+        'brand1',
+        'rejected',
+      );
+
+      expect(mockApp1.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(mockApp2.update).not.toHaveBeenCalled();
+      expect(results.length).toBe(1);
+    });
+  });
+
   describe('getMyApplications', () => {
     it('should retrieve applications submitted by the creator', async () => {
       const mockAppsList = [{ id: 'app1' }];
@@ -1168,6 +1272,74 @@ describe('CampaignsService', () => {
       // deleteDraftById must NOT have been called
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.deleteDraftById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('validateCreatorSelection', () => {
+    it('should return isValid true when selected creator total proposed fee fits in the budget pool', async () => {
+      campaignRepoMock.findById.mockResolvedValue(mockCampaign);
+      // Mock payment amount (available pool) to 1,000,000 NGN
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue({
+        paymentStatus: 'paid',
+        amount: 1000000,
+      } as any);
+
+      // Selected creator fee is 450,000 NGN
+      campaignRepoMock.findApplicationById.mockResolvedValue({
+        id: 'app1',
+        campaignId: 'c1',
+        feeRequest: 450000,
+      } as any);
+
+      const result = await service.validateCreatorSelection('c1', ['app1']);
+      expect(result.isValid).toBe(true);
+      expect(result.shortfall).toBe(0);
+      expect(result.amountAvailable).toBe(1000000);
+      expect(result.selectedTotal).toBe(450000);
+    });
+
+    it('should return isValid false and correct shortfall when selected creator total proposed fee exceeds budget pool', async () => {
+      campaignRepoMock.findById.mockResolvedValue(mockCampaign);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue({
+        paymentStatus: 'paid',
+        amount: 500000,
+      } as any);
+
+      campaignRepoMock.findApplicationById.mockResolvedValue({
+        id: 'app1',
+        campaignId: 'c1',
+        feeRequest: 650000,
+      } as any);
+
+      const result = await service.validateCreatorSelection('c1', ['app1']);
+      expect(result.isValid).toBe(false);
+      expect(result.shortfall).toBe(150000);
+      expect(result.amountAvailable).toBe(500000);
+      expect(result.selectedTotal).toBe(650000);
+    });
+  });
+
+  describe('reviewCampaignApplicationsBatch Guardrail', () => {
+    it('should throw BadRequestException if accepted creator total fee request exceeds budget pool', async () => {
+      const campaign = { id: 'c1', brandId: 'b1', status: 'live' } as unknown as Campaign;
+      campaignRepoMock.findById.mockResolvedValue(campaign);
+
+      // Budget pool is 100,000 NGN
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue({
+        paymentStatus: 'paid',
+        amount: 100000,
+      } as any);
+
+      // Selected creator fee is 150,000 NGN
+      campaignRepoMock.findApplicationById.mockResolvedValue({
+        id: 'app1',
+        campaignId: 'c1',
+        feeRequest: 150000,
+      } as any);
+
+      await expect(
+        service.reviewCampaignApplicationsBatch('c1', ['app1'], 'b1', 'accepted'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

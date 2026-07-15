@@ -140,6 +140,7 @@ export class WebhooksController {
           campaignId: campaign.id,
           campaignTitle: campaign.title,
           amount: Number(payment.totalAmount ?? payment.amount),
+          currency: campaign.currency,
         },
         dedupeKey: `${campaign.id}:live`,
       });

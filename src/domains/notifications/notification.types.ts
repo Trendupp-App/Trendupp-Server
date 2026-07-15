@@ -67,6 +67,7 @@ export interface NotificationPayloads {
     campaignTitle: string;
     submissionId: string;
     amount: number;
+    currency?: string;
     releaseDate: string;
   };
 
@@ -76,16 +77,28 @@ export interface NotificationPayloads {
     campaignTitle: string;
     releaseId: string;
     amount: number;
+    currency?: string;
   };
   'payout.failed': {
     campaignId: string;
     campaignTitle: string;
     releaseId: string;
     amount: number;
+    currency?: string;
     reason: string;
   };
-  'payout.escrow_pending': { campaignId: string; releaseId: string; amount: number };
-  'campaign.payment_confirmed': { campaignId: string; campaignTitle: string; amount: number };
+  'payout.escrow_pending': {
+    campaignId: string;
+    releaseId: string;
+    amount: number;
+    currency?: string;
+  };
+  'campaign.payment_confirmed': {
+    campaignId: string;
+    campaignTitle: string;
+    amount: number;
+    currency?: string;
+  };
   'campaign.completed': { campaignId: string; campaignTitle: string };
 
   // ── Disputes ──────────────────────────────────────────────────────────────

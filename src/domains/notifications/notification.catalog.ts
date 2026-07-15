@@ -1,6 +1,12 @@
 import { CatalogEntry, NotificationType } from './notification.types';
 
-const naira = (amount: number): string => `₦${Number(amount).toLocaleString('en-NG')}`;
+const CURRENCY_SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$' };
+
+const money = (amount: number, currency?: string): string => {
+  const code = currency || 'NGN';
+  const symbol = CURRENCY_SYMBOLS[code] ?? `${code} `;
+  return `${symbol}${Number(amount).toLocaleString('en-NG')}`;
+};
 
 /**
  * The single source of truth for every notification type.
@@ -106,9 +112,9 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'critical',
     title: () => `Content approved — payout scheduled`,
     body: (d) =>
-      `Your live post for "${d.campaignTitle}" was approved. A payout of ${naira(d.amount)} is scheduled for ${d.releaseDate}.`,
+      `Your live post for "${d.campaignTitle}" was approved. A payout of ${money(d.amount, d.currency)} is scheduled for ${d.releaseDate}.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `Payout of ${naira(d.amount)} scheduled — Trendupp`,
+    emailSubject: (d) => `Payout of ${money(d.amount, d.currency)} scheduled — Trendupp`,
   },
 
   // ── Payments & payouts ─────────────────────────────────────────────────────
@@ -116,20 +122,20 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     category: 'paymentAlerts',
     channels: ['inApp', 'email'],
     priority: 'critical',
-    title: (d) => `Payment sent: ${naira(d.amount)}`,
+    title: (d) => `Payment sent: ${money(d.amount, d.currency)}`,
     body: (d) =>
-      `Your payout of ${naira(d.amount)} for "${d.campaignTitle}" has been sent to your bank account.`,
+      `Your payout of ${money(d.amount, d.currency)} for "${d.campaignTitle}" has been sent to your bank account.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `You've been paid ${naira(d.amount)} — Trendupp`,
+    emailSubject: (d) => `You've been paid ${money(d.amount, d.currency)} — Trendupp`,
   },
   'payout.failed': {
     // Money-movement failure — never suppressible, also fanned out to finance admins.
     category: 'security',
     channels: ['inApp', 'email'],
     priority: 'critical',
-    title: (d) => `Payout failed: ${naira(d.amount)}`,
+    title: (d) => `Payout failed: ${money(d.amount, d.currency)}`,
     body: (d) =>
-      `The payout of ${naira(d.amount)} for "${d.campaignTitle}" could not be completed (${d.reason}). Our team has been alerted and will retry.`,
+      `The payout of ${money(d.amount, d.currency)} for "${d.campaignTitle}" could not be completed (${d.reason}). Our team has been alerted and will retry.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'payout.escrow_pending': {
@@ -139,7 +145,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Action required: escrow release pending`,
     body: (d) =>
-      `A creator payout of ${naira(d.amount)} is blocked awaiting escrow release for campaign ${d.campaignId}. Release the escrow in the Pandascrow dashboard to unblock it.`,
+      `A creator payout of ${money(d.amount, d.currency)} is blocked awaiting escrow release for campaign ${d.campaignId}. Release the escrow in the Pandascrow dashboard to unblock it.`,
     actionUrl: (d) => `/admin/campaigns/${d.campaignId}`,
   },
   'campaign.payment_confirmed': {
@@ -148,7 +154,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'critical',
     title: (d) => `Payment confirmed — "${d.campaignTitle}" is live!`,
     body: (d) =>
-      `Your payment of ${naira(d.amount)} was confirmed and "${d.campaignTitle}" is now live. Creators can start applying.`,
+      `Your payment of ${money(d.amount, d.currency)} was confirmed and "${d.campaignTitle}" is now live. Creators can start applying.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
     emailSubject: (d) => `"${d.campaignTitle}" is live — Trendupp`,
   },

@@ -16,6 +16,7 @@ import { Fee } from './entities/fee.entity';
 import { CampaignReview } from './entities/campaign-review.entity';
 import { UrlValidatorModule } from '../../integration/url-validator/url-validator.module';
 import { PaymentRelease } from './entities/payment-release.entity';
+import { CampaignRefund } from './entities/campaign-refund.entity';
 import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
@@ -35,6 +36,7 @@ import { PayoutScheduler } from './services/payout.scheduler';
       Fee,
       CampaignReview,
       PaymentRelease,
+      CampaignRefund,
     ]),
     UsersModule,
     UrlValidatorModule,

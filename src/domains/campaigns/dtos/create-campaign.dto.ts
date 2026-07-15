@@ -138,4 +138,20 @@ export class CreateCampaignDto {
   })
   @IsOptional()
   coverImage?: any;
+
+  @ApiPropertyOptional({
+    description: 'Campaign amplification asset file',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  amplificationAssetFile?: any;
+
+  @ApiPropertyOptional({
+    description: 'Campaign amplification asset link (Google Drive, hosted link, etc.)',
+    example: 'https://drive.google.com/file/d/...',
+  })
+  @IsString()
+  @IsOptional()
+  amplificationAsset?: string;
 }
