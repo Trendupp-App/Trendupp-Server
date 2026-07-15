@@ -1,0 +1,14 @@
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+    <h2 style="color: #333; text-align: center;">Trendupp</h2>
+    <p>Hello<%= firstName ? ` ${firstName}` : '' %>,</p>
+    <h3 style="color: #333;"><%= title %></h3>
+    <p><%= body %></p>
+    <% if (actionUrl) { %>
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="<%= appUrl %><%= actionUrl %>" style="background-color: #4A90E2; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">View on Trendupp</a>
+    </div>
+    <% } %>
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+    <p style="font-size: 12px; color: #888; text-align: center;">You can manage which emails you receive in your <a href="<%= appUrl %>/settings/notifications" style="color: #888;">notification settings</a>.</p>
+    <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Trendupp. All rights reserved.</p>
+</div>

@@ -1,6 +1,10 @@
 export default () => ({
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT as string, 10) || 3000,
+  app: {
+    // Base URL of the web client — used to build deep links in notification emails
+    webUrl: process.env.WEB_APP_URL || 'https://trendupp.com',
+  },
   database: {
     host: process.env.DB_HOST,
     port: parseInt(process.env.DB_PORT as string, 10) || 5432,

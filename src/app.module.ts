@@ -18,6 +18,7 @@ import { CampaignsModule } from './domains/campaigns/campaigns.module';
 import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
 import { DisputesModule } from './domains/disputes/disputes.module';
+import { NotificationsModule } from './domains/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { DisputesModule } from './domains/disputes/disputes.module';
     AdminModule,
     ProfileModule,
     DisputesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

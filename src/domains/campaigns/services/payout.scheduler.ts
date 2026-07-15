@@ -4,6 +4,7 @@ import { CampaignRepository } from '../repository/campaign.repository';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { ConfigService } from '@nestjs/config';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 @Injectable()
 export class PayoutScheduler {
@@ -15,6 +16,7 @@ export class PayoutScheduler {
     private readonly usersService: UsersService,
     private readonly pandascrowService: PandascrowService,
     private readonly configService: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.walletId = this.configService.get<number>('pandascrow.walletId') || 1;
   }
@@ -68,6 +70,21 @@ export class PayoutScheduler {
                 `Parking as escrow_pending — will retry after escrow.completed webhook.`,
             );
             await release.update({ status: 'escrow_pending', errorDetails: null });
+
+            // Work item for finance admins: release the escrow in Pandascrow.
+            // dedupeKey: the cron fires daily on every PM2 instance — one alert
+            // per release, not one per instance per day.
+            await this.notificationsService.notify({
+              type: 'payout.escrow_pending',
+              recipientRole: 'finance_admin',
+              data: {
+                campaignId: release.campaignId,
+                releaseId: release.id,
+                amount: Number(release.amount),
+                currency: release.currency,
+              },
+              dedupeKey: `${release.id}:escrow_pending`,
+            });
             continue;
           }
 
@@ -89,6 +106,20 @@ export class PayoutScheduler {
             });
             this.logger.log(`Successfully completed payout for release ID: ${release.id}`);
 
+            const campaign = await this.campaignRepository.findById(release.campaignId);
+            await this.notificationsService.notify({
+              type: 'payout.released',
+              recipientId: release.creatorId,
+              data: {
+                campaignId: release.campaignId,
+                campaignTitle: campaign?.title ?? 'your campaign',
+                releaseId: release.id,
+                amount: Number(release.amount),
+                currency: release.currency,
+              },
+              dedupeKey: release.id,
+            });
+
             // Check if the campaign can be completed
             await this.checkAndCompleteCampaign(release.campaignId);
           } else {
@@ -100,6 +131,32 @@ export class PayoutScheduler {
           await release.update({
             status: 'failed',
             errorDetails: message,
+          });
+
+          const campaign = await this.campaignRepository
+            .findById(release.campaignId)
+            .catch(() => null);
+          const failureData = {
+            campaignId: release.campaignId,
+            campaignTitle: campaign?.title ?? 'your campaign',
+            releaseId: release.id,
+            amount: Number(release.amount),
+            currency: release.currency,
+            reason: message,
+          };
+          // Creator alert + finance-admin work item. Failed releases are retried
+          // on subsequent cron runs, so dedupe on the release id to notify once.
+          await this.notificationsService.notify({
+            type: 'payout.failed',
+            recipientId: release.creatorId,
+            data: failureData,
+            dedupeKey: `${release.id}:failed`,
+          });
+          await this.notificationsService.notify({
+            type: 'payout.failed',
+            recipientRole: 'finance_admin',
+            data: failureData,
+            dedupeKey: `${release.id}:failed:finance`,
           });
         }
       }
@@ -248,6 +305,13 @@ export class PayoutScheduler {
       if (campaign && campaign.status !== 'completed') {
         await campaign.update({ status: 'completed' });
         this.logger.log(`Campaign ID: ${campaignId} has been successfully completed.`);
+
+        await this.notificationsService.notify({
+          type: 'campaign.completed',
+          recipientId: campaign.brandId,
+          data: { campaignId, campaignTitle: campaign.title },
+          dedupeKey: `${campaignId}:completed`,
+        });
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

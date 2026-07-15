@@ -5,6 +5,7 @@ import { CampaignRepository } from '../repository/campaign.repository';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { ConfigService } from '@nestjs/config';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 describe('PayoutScheduler', () => {
   let scheduler: PayoutScheduler;
@@ -12,6 +13,7 @@ describe('PayoutScheduler', () => {
   let usersServiceMock: jest.Mocked<UsersService>;
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let configServiceMock: jest.Mocked<ConfigService>;
+  let notificationsServiceMock: jest.Mocked<NotificationsService>;
 
   beforeEach(async () => {
     campaignRepoMock = {
@@ -39,6 +41,10 @@ describe('PayoutScheduler', () => {
       get: jest.fn().mockReturnValue(1),
     } as any;
 
+    notificationsServiceMock = {
+      notify: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PayoutScheduler,
@@ -46,6 +52,7 @@ describe('PayoutScheduler', () => {
         { provide: UsersService, useValue: usersServiceMock },
         { provide: PandascrowService, useValue: pandascrowServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
+        { provide: NotificationsService, useValue: notificationsServiceMock },
       ],
     }).compile();
 

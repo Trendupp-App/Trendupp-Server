@@ -18,6 +18,7 @@ import { UrlValidatorModule } from '../../integration/url-validator/url-validato
 import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
 import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 import { WebhooksController } from './controllers/webhooks.controller';
 import { PayoutScheduler } from './services/payout.scheduler';
@@ -40,6 +41,7 @@ import { PayoutScheduler } from './services/payout.scheduler';
     UsersModule,
     UrlValidatorModule,
     PandascrowModule,
+    NotificationsModule,
   ],
 
   providers: [CampaignRepository, CampaignsService, S3Service, PayoutScheduler],

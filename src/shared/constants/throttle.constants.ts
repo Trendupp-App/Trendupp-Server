@@ -33,4 +33,7 @@ export const THROTTLE_LIMITS = {
   // Campaigns
 
   CAMPAIGN_CREATE: { ttl: 60000, limit: 5 },
+
+  // Notifications — generous: clients poll unread-count every 30-60s
+  NOTIFICATION_POLL: { ttl: 60000, limit: 120 },
 } as const;
