@@ -12,6 +12,7 @@ import { SocialConnection } from '../entities/social-connection.entity';
 import { SocialConnectionRepository } from '../repository/social-connection.repository';
 import { SocialVerificationService } from './social-verification.service';
 import { ConnectSocialDto } from '../dtos/connect-social.dto';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
   computeTier,
   isSocialPlatform,
@@ -56,6 +57,7 @@ export class SocialsService {
     private readonly repo: SocialConnectionRepository,
     private readonly verification: SocialVerificationService,
     private readonly usersService: UsersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Full set of platform cards (connected or not) for the Connect Socials screen. */
@@ -105,6 +107,18 @@ export class SocialsService {
       `User ${userId} connected ${platform} (@${verified.username}, ${verified.followerCount} followers) → ${tier}`,
     );
 
+    await this.notificationsService.notify({
+      type: 'social.connected',
+      recipientId: userId,
+      data: {
+        platform,
+        platformLabel: PLATFORM_LABELS[platform],
+        username: verified.username,
+        followerCount: verified.followerCount,
+        tier,
+      },
+    });
+
     return {
       message: `${PLATFORM_LABELS[platform]} connected successfully`,
       tier,
@@ -118,6 +132,13 @@ export class SocialsService {
     const platform = this.parsePlatform(platformRaw);
     await this.repo.removeByUserAndPlatform(userId, platform);
     const tier = await this.syncUserAndTier(userId);
+
+    await this.notificationsService.notify({
+      type: 'social.disconnected',
+      recipientId: userId,
+      data: { platform, platformLabel: PLATFORM_LABELS[platform], tier },
+    });
+
     return {
       message: `${PLATFORM_LABELS[platform]} disconnected`,
       tier,

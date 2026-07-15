@@ -168,6 +168,26 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
 
+  // ── Social connections (account-change confirmations — in-app only) ───────
+  'social.connected': {
+    category: 'security',
+    channels: ['inApp'],
+    priority: 'low',
+    title: (d) => `${d.platformLabel} connected`,
+    body: (d) =>
+      `@${d.username} was verified with ${Number(d.followerCount).toLocaleString('en-NG')} followers. Your creator tier is now ${d.tier}.`,
+    actionUrl: () => `/settings/socials`,
+  },
+  'social.disconnected': {
+    category: 'security',
+    channels: ['inApp'],
+    priority: 'low',
+    title: (d) => `${d.platformLabel} disconnected`,
+    body: (d) =>
+      `Your ${d.platformLabel} account was disconnected. Your creator tier is now ${d.tier}. If this wasn't you, contact support.`,
+    actionUrl: () => `/settings/socials`,
+  },
+
   // ── Disputes (contractual process — never suppressible) ───────────────────
   'dispute.raised': {
     category: 'security',

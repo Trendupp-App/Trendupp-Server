@@ -7,9 +7,15 @@ import { SocialsService } from './services/socials.service';
 import { SocialsController } from './controllers/socials.controller';
 import { UsersModule } from '../users/users.module';
 import { SocialApisModule } from '../../integration/social-apis/social-apis.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [SequelizeModule.forFeature([SocialConnection]), UsersModule, SocialApisModule],
+  imports: [
+    SequelizeModule.forFeature([SocialConnection]),
+    UsersModule,
+    SocialApisModule,
+    NotificationsModule,
+  ],
   providers: [SocialConnectionRepository, SocialVerificationService, SocialsService],
   controllers: [SocialsController],
   exports: [SocialsService],

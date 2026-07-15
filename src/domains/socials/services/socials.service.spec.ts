@@ -10,6 +10,7 @@ import { SocialsService } from './socials.service';
 import { SocialConnectionRepository } from '../repository/social-connection.repository';
 import { SocialVerificationService } from './social-verification.service';
 import { UsersService } from '../../users/services/users.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { SocialConnection } from '../entities/social-connection.entity';
 import { SocialPlatform } from '../constants/social-platforms';
 
@@ -31,6 +32,7 @@ describe('SocialsService', () => {
   let repo: jest.Mocked<SocialConnectionRepository>;
   let verification: jest.Mocked<SocialVerificationService>;
   let users: jest.Mocked<UsersService>;
+  let notifications: jest.Mocked<NotificationsService>;
 
   const userId = 'user-1';
 
@@ -51,12 +53,17 @@ describe('SocialsService', () => {
       update: jest.fn().mockResolvedValue(null),
     } as unknown as jest.Mocked<UsersService>;
 
+    notifications = {
+      notify: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<NotificationsService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SocialsService,
         { provide: SocialConnectionRepository, useValue: repo },
         { provide: SocialVerificationService, useValue: verification },
         { provide: UsersService, useValue: users },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
