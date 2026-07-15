@@ -27,11 +27,14 @@ export class YoutubeAuthService {
   private readonly clientId: string | undefined;
   private readonly clientSecret: string | undefined;
   private readonly isMockMode: boolean;
+  /** Mock codes/tokens are honored only without real credentials or outside production. */
+  private readonly allowMockAuth: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.clientId = this.configService.get<string>('youtube.clientId');
     this.clientSecret = this.configService.get<string>('youtube.clientSecret');
     this.isMockMode = !this.clientId || !this.clientSecret;
+    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
 
     if (this.isMockMode) {
       this.logger.warn(
@@ -47,7 +50,10 @@ export class YoutubeAuthService {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<YoutubeTokenResponse> {
-    if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
+    ) {
       this.logger.warn(`MOCK mode: Simulating YouTube token exchange for code: ${code}`);
       return { accessToken: 'mock-youtube-access-token-123456789', expiresIn: 3600 };
     }
@@ -98,7 +104,10 @@ export class YoutubeAuthService {
   }
 
   async getChannelStats(accessToken: string): Promise<YoutubeChannelStats> {
-    if (this.isMockMode || accessToken.startsWith('mock-youtube-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-youtube-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating YouTube channel stats fetch.');
       return {
         channelId: 'mock-youtube-channel-id-123456789',

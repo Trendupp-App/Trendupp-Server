@@ -26,12 +26,15 @@ export class TiktokAuthService {
   private readonly clientKey: string | undefined;
   private readonly clientSecret: string | undefined;
   private readonly isMockMode: boolean;
+  /** Mock codes/tokens are honored only without real credentials or outside production. */
+  private readonly allowMockAuth: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.clientKey = this.configService.get<string>('tiktok.clientKey');
     this.clientSecret = this.configService.get<string>('tiktok.clientSecret');
 
     this.isMockMode = !this.clientKey || !this.clientSecret;
+    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
 
     if (this.isMockMode) {
       this.logger.warn(
@@ -47,7 +50,10 @@ export class TiktokAuthService {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<TiktokTokenResponse> {
-    if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
+    ) {
       this.logger.warn(`MOCK mode: Simulating token exchange for code: ${code}`);
 
       // If code is serialized JSON mock data, try to extract custom ID
@@ -123,7 +129,10 @@ export class TiktokAuthService {
   }
 
   async getUserProfile(accessToken: string): Promise<TiktokUserProfile> {
-    if (this.isMockMode || accessToken.startsWith('mock-tiktok-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-tiktok-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating user profile fetch.');
 
       let openId = 'mock-tiktok-open-id-123456789';
@@ -200,7 +209,10 @@ export class TiktokAuthService {
    * credentials so the connect flow is exercisable end-to-end in dev/test.
    */
   async getFollowerStats(accessToken: string): Promise<TiktokFollowerStats> {
-    if (this.isMockMode || accessToken.startsWith('mock-tiktok-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-tiktok-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating TikTok follower stats fetch.');
       let openId = 'mock-tiktok-open-id-123456789';
       const parts = accessToken.split('mock-tiktok-access-token-');

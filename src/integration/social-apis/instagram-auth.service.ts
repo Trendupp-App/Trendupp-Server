@@ -23,12 +23,15 @@ export class InstagramAuthService {
   private readonly appId: string | undefined;
   private readonly appSecret: string | undefined;
   private readonly isMockMode: boolean;
+  /** Mock codes/tokens are honored only without real credentials or outside production. */
+  private readonly allowMockAuth: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.appId = this.configService.get<string>('instagram.appId');
     this.appSecret = this.configService.get<string>('instagram.appSecret');
 
     this.isMockMode = !this.appId || !this.appSecret;
+    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
 
     if (this.isMockMode) {
       this.logger.warn(
@@ -40,7 +43,10 @@ export class InstagramAuthService {
   }
 
   async exchangeCodeForToken(code: string, redirectUri: string): Promise<InstagramTokenResponse> {
-    if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
+    ) {
       this.logger.warn(`MOCK mode: Simulating token exchange for code: ${code}`);
 
       let userId = 'mock-instagram-user-id-123456789';
@@ -117,7 +123,10 @@ export class InstagramAuthService {
   }
 
   async getUserProfile(accessToken: string): Promise<InstagramUserProfile> {
-    if (this.isMockMode || accessToken.startsWith('mock-instagram-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-instagram-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating user profile fetch.');
 
       let id = 'mock-instagram-user-id-123456789';
@@ -177,7 +186,10 @@ export class InstagramAuthService {
    * and we default to 0. Falls back to mock data without credentials.
    */
   async getFollowerStats(accessToken: string): Promise<InstagramFollowerStats> {
-    if (this.isMockMode || accessToken.startsWith('mock-instagram-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-instagram-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating Instagram follower stats fetch.');
       let id = 'mock-instagram-user-id-123456789';
       const parts = accessToken.split('mock-instagram-access-token-');

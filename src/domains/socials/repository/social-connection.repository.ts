@@ -34,6 +34,14 @@ export class SocialConnectionRepository {
     return this.model.findOne({ where: { userId, platform } });
   }
 
+  /** Whoever (if anyone) has this exact platform account connected. */
+  findByPlatformAccount(
+    platform: SocialPlatform,
+    platformUserId: string,
+  ): Promise<SocialConnection | null> {
+    return this.model.findOne({ where: { platform, platformUserId } });
+  }
+
   /** Create the connection, or update it in place if one already exists. */
   async upsert(
     userId: string,

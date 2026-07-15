@@ -40,6 +40,7 @@ describe('SocialsService', () => {
     repo = {
       findByUser: jest.fn().mockResolvedValue([]),
       findByUserAndPlatform: jest.fn(),
+      findByPlatformAccount: jest.fn().mockResolvedValue(null),
       upsert: jest.fn().mockResolvedValue(conn({})),
       removeByUserAndPlatform: jest.fn().mockResolvedValue(1),
     } as unknown as jest.Mocked<SocialConnectionRepository>;
@@ -124,6 +125,41 @@ describe('SocialsService', () => {
     );
     expect(result.tier).toBe('Micro Creator');
     expect(result.message).toContain('TikTok');
+  });
+
+  it('connect rejects a platform account already linked to another Trendupp profile', async () => {
+    verification.verify.mockResolvedValue({
+      platformUserId: 'tt-1',
+      username: 'creator',
+      followerCount: 15000,
+      accessToken: 'tok',
+    });
+    repo.findByPlatformAccount.mockResolvedValue(
+      conn({ platform: SocialPlatform.TIKTOK, userId: 'someone-else' }),
+    );
+
+    await expect(
+      service.connect(userId, 'tiktok', { code: 'c', redirectUri: 'r' }),
+    ).rejects.toThrow(ConflictException);
+    expect(repo.upsert).not.toHaveBeenCalled();
+  });
+
+  it('connect allows reconnecting the same account for the same user', async () => {
+    verification.verify.mockResolvedValue({
+      platformUserId: 'tt-1',
+      username: 'creator',
+      followerCount: 15000,
+      accessToken: 'tok',
+    });
+    repo.findByPlatformAccount.mockResolvedValue(conn({ platform: SocialPlatform.TIKTOK, userId }));
+    repo.findByUser.mockResolvedValue([
+      conn({ platform: SocialPlatform.TIKTOK, username: 'creator', followerCount: 15000 }),
+    ]);
+
+    await expect(
+      service.connect(userId, 'tiktok', { code: 'c', redirectUri: 'r' }),
+    ).resolves.toBeDefined();
+    expect(repo.upsert).toHaveBeenCalled();
   });
 
   it('connect rejects an account below the platform minimum', async () => {

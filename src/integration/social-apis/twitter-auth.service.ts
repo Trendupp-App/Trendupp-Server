@@ -28,11 +28,14 @@ export class TwitterAuthService {
   private readonly clientId: string | undefined;
   private readonly clientSecret: string | undefined;
   private readonly isMockMode: boolean;
+  /** Mock codes/tokens are honored only without real credentials or outside production. */
+  private readonly allowMockAuth: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.clientId = this.configService.get<string>('twitter.clientId');
     this.clientSecret = this.configService.get<string>('twitter.clientSecret');
     this.isMockMode = !this.clientId || !this.clientSecret;
+    this.allowMockAuth = this.isMockMode || this.configService.get<string>('env') !== 'production';
 
     if (this.isMockMode) {
       this.logger.warn(
@@ -48,7 +51,10 @@ export class TwitterAuthService {
     redirectUri: string,
     codeVerifier?: string,
   ): Promise<TwitterTokenResponse> {
-    if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && (code.startsWith('mock_') || code.startsWith('{')))
+    ) {
       this.logger.warn(`MOCK mode: Simulating X token exchange for code: ${code}`);
       return { accessToken: 'mock-twitter-access-token-123456789', expiresIn: 7200 };
     }
@@ -103,7 +109,10 @@ export class TwitterAuthService {
   }
 
   async getUserStats(accessToken: string): Promise<TwitterUserStats> {
-    if (this.isMockMode || accessToken.startsWith('mock-twitter-access-token-')) {
+    if (
+      this.isMockMode ||
+      (this.allowMockAuth && accessToken.startsWith('mock-twitter-access-token-'))
+    ) {
       this.logger.warn('MOCK mode: Simulating X user stats fetch.');
       return {
         userId: 'mock-twitter-user-id-123456789',

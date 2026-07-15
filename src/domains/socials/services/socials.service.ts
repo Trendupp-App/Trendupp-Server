@@ -6,6 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { UniqueConstraintError } from 'sequelize';
 import { UsersService } from '../../users/services/users.service';
 import { User } from '../../users/entities/user.entity';
 import { SocialConnection } from '../entities/social-connection.entity';
@@ -80,6 +81,19 @@ export class SocialsService {
     const platform = this.parsePlatform(platformRaw);
     const verified = await this.verification.verify(platform, dto);
 
+    // One social account backs exactly one Trendupp profile. Backstopped by
+    // the unique (platform, platform_user_id) index — this check just gives
+    // a friendly error instead of a raw constraint violation.
+    if (verified.platformUserId) {
+      const owner = await this.repo.findByPlatformAccount(platform, verified.platformUserId);
+      if (owner && owner.userId !== userId) {
+        throw new ConflictException(
+          `This ${PLATFORM_LABELS[platform]} account is already linked to another Trendupp profile. ` +
+            `If you believe this is an error, please contact support.`,
+        );
+      }
+    }
+
     const min = MIN_FOLLOWERS[platform];
     if (verified.followerCount < min) {
       throw new UnprocessableEntityException(
@@ -88,18 +102,30 @@ export class SocialsService {
       );
     }
 
-    await this.repo.upsert(userId, platform, {
-      platformUserId: verified.platformUserId ?? null,
-      username: verified.username,
-      avatarUrl: verified.avatarUrl ?? null,
-      followerCount: verified.followerCount,
-      isVerified: true,
-      status: 'connected',
-      accessToken: verified.accessToken ?? null,
-      refreshToken: verified.refreshToken ?? null,
-      tokenExpiresAt: verified.tokenExpiresAt ?? null,
-      lastVerifiedAt: new Date(),
-    });
+    try {
+      await this.repo.upsert(userId, platform, {
+        platformUserId: verified.platformUserId ?? null,
+        username: verified.username,
+        avatarUrl: verified.avatarUrl ?? null,
+        followerCount: verified.followerCount,
+        isVerified: true,
+        status: 'connected',
+        accessToken: verified.accessToken ?? null,
+        refreshToken: verified.refreshToken ?? null,
+        tokenExpiresAt: verified.tokenExpiresAt ?? null,
+        lastVerifiedAt: new Date(),
+      });
+    } catch (error) {
+      if (error instanceof UniqueConstraintError) {
+        // Race with a concurrent connect of the same platform account —
+        // the unique (platform, platform_user_id) index is the authority.
+        throw new ConflictException(
+          `This ${PLATFORM_LABELS[platform]} account is already linked to another Trendupp profile. ` +
+            `If you believe this is an error, please contact support.`,
+        );
+      }
+      throw error;
+    }
 
     const tier = await this.syncUserAndTier(userId);
     const connections = await this.list(userId);
