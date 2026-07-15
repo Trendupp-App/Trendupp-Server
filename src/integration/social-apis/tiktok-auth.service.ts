@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -111,6 +112,7 @@ export class TiktokAuthService {
         'TikTok exchangeCodeForToken error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to authenticate with TikTok');
     }
   }
@@ -163,6 +165,7 @@ export class TiktokAuthService {
         'TikTok getUserProfile error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve TikTok user profile info');
     }
   }
@@ -217,6 +220,7 @@ export class TiktokAuthService {
         'TikTok getFollowerStats error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve TikTok follower stats');
     }
   }

@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -104,6 +105,7 @@ export class YoutubeAuthService {
         'YouTube exchangeCodeForToken error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to authenticate with YouTube');
     }
   }
@@ -150,6 +152,7 @@ export class YoutubeAuthService {
         'YouTube getChannelStats error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve YouTube channel stats');
     }
   }

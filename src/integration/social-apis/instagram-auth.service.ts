@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -104,6 +105,7 @@ export class InstagramAuthService {
         'Instagram exchangeCodeForToken error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to authenticate with Instagram');
     }
   }
@@ -145,6 +147,7 @@ export class InstagramAuthService {
         'Instagram getUserProfile error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve Instagram user profile info');
     }
   }
@@ -189,6 +192,7 @@ export class InstagramAuthService {
         'Instagram getFollowerStats error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve Instagram follower stats');
     }
   }

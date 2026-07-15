@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -108,6 +109,7 @@ export class TwitterAuthService {
         'X exchangeCodeForToken error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to authenticate with X');
     }
   }
@@ -146,6 +148,7 @@ export class TwitterAuthService {
       return { userId, username, followerCount, avatarUrl };
     } catch (error) {
       this.logger.error('X getUserStats error', error instanceof Error ? error.stack : error);
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve X user stats');
     }
   }
