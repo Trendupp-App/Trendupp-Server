@@ -6,6 +6,7 @@ import { HttpLoggerMiddleware } from './shared/logger/http-logger.middleware';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { getLoggerConfig } from './shared/logger/logger.config';
@@ -18,9 +19,13 @@ import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
 import { DisputesModule } from './domains/disputes/disputes.module';
 import { SocialsModule } from './domains/socials/socials.module';
+import { NotificationsModule } from './domains/notifications/notifications.module';
 
 @Module({
   imports: [
+    // Task Scheduler
+    ScheduleModule.forRoot(),
+
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
@@ -90,6 +95,7 @@ import { SocialsModule } from './domains/socials/socials.module';
     ProfileModule,
     DisputesModule,
     SocialsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, IsEmail, Length } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsEmail, Length, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdatePersonalInfoDto {
@@ -67,6 +67,25 @@ export class UpdatePersonalInfoDto {
   @IsOptional()
   @Transform(({ value }): unknown => (value === '' ? undefined : value))
   stateId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Date of birth of the creator (YYYY-MM-DD)',
+    example: '1998-04-20',
+  })
+  @IsString()
+  @IsOptional()
+  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  dateOfBirth?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender of the creator',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  gender?: string;
 
   @ApiPropertyOptional({
     type: 'string',

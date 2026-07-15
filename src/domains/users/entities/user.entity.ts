@@ -16,6 +16,7 @@ import { UserNiche } from './user-niche.entity';
 import { Industry } from './industry.entity';
 import { UserIndustry } from './user-industry.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { Bank } from './bank.entity';
 
 @Table({ tableName: 'users' })
@@ -23,16 +24,16 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: false })
   declare email: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
+  @Column({ type: DataType.STRING, allowNull: false, field: 'first_name' })
   declare firstName: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
+  @Column({ type: DataType.STRING, allowNull: false, field: 'last_name' })
   declare lastName: string;
 
-  @Column({ type: DataType.STRING, allowNull: true })
+  @Column({ type: DataType.STRING, allowNull: true, field: 'phone_number' })
   declare phoneNumber: string;
 
-  @Column({ type: DataType.BOOLEAN, defaultValue: true })
+  @Column({ type: DataType.BOOLEAN, defaultValue: true, field: 'is_active' })
   declare isActive: boolean;
 
   @ForeignKey(() => Role)
@@ -84,6 +85,22 @@ export class User extends BaseEntity<User> {
     field: 'accepted_terms',
   })
   declare acceptedTerms: boolean;
+
+  @Column({
+    type: DataType.DECIMAL(3, 2),
+    allowNull: true,
+    defaultValue: null,
+    field: 'avg_rating',
+  })
+  declare avgRating?: number | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_reviews',
+  })
+  declare totalReviews: number;
 
   @Column({
     type: DataType.BOOLEAN,
@@ -153,6 +170,12 @@ export class User extends BaseEntity<User> {
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'avatar_url' })
   declare avatarUrl?: string;
+
+  @Column({ type: DataType.DATEONLY, allowNull: true, field: 'date_of_birth' })
+  declare dateOfBirth?: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'gender' })
+  declare gender?: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'verification_video_url' })
   declare verificationVideoUrl?: string;
@@ -255,6 +278,9 @@ export class User extends BaseEntity<User> {
 
   @HasMany(() => Campaign)
   declare campaigns?: Campaign[];
+
+  @HasMany(() => CampaignApplication)
+  declare applications?: CampaignApplication[];
 
   get onboardingPercentage(): number {
     let percentage = 0;
@@ -414,6 +440,9 @@ export class User extends BaseEntity<User> {
       email: this.repEmail || null,
       phone: this.repPhone || null,
     };
+
+    values['avgRating'] = this.avgRating ? parseFloat(this.avgRating.toString()) : null;
+    values['totalReviews'] = this.totalReviews || 0;
 
     return values;
   }

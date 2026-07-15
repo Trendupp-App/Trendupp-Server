@@ -6,7 +6,6 @@ import {
   Body,
   Param,
   UseGuards,
-  ConflictException,
   HttpCode,
   HttpStatus,
   Query,
@@ -99,9 +98,19 @@ export class OnboardingController {
   @ApiOperation({
     summary: 'Get all countries (operating-country options — same dataset as nationalities)',
   })
+  @ApiQuery({
+    name: 'isAfrican',
+    required: false,
+    type: Boolean,
+    description: 'Filter only African countries if true',
+  })
   @ApiResponse({ status: 200, description: 'List of countries retrieved' })
-  async getCountries() {
-    return this.onboardingService.getAllNationalities();
+  async getCountries(@Query('isAfrican') isAfrican?: string) {
+    const filters: { isAfrican?: boolean } = {};
+    if (isAfrican !== undefined) {
+      filters.isAfrican = isAfrican === 'true';
+    }
+    return this.onboardingService.getAllNationalities(filters);
   }
 
   @Get('countries/:countryId/states')
@@ -194,14 +203,6 @@ export class OnboardingController {
     )
     avatar?: Express.Multer.File,
   ) {
-    const checkUsername = dto.username || dto.brandName;
-    if (checkUsername) {
-      const existing = await this.usersService.findByUsername(checkUsername);
-      if (existing && existing.id !== user.id) {
-        throw new ConflictException('Username is already taken');
-      }
-    }
-
     const updates: Partial<User> = {
       countryId: dto.countryId,
       stateId: dto.stateId,
@@ -214,6 +215,8 @@ export class OnboardingController {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.websiteUrl !== undefined) updates.websiteUrl = dto.websiteUrl;
     if (dto.monthlyBudget !== undefined) updates.monthlyBudget = dto.monthlyBudget;
+    if (dto.dateOfBirth !== undefined) updates.dateOfBirth = dto.dateOfBirth;
+    if (dto.gender !== undefined) updates.gender = dto.gender;
 
     if (avatar) {
       const avatarUrl = await this.s3Service.uploadFile(avatar, 'avatars');
@@ -324,10 +327,10 @@ export class OnboardingController {
     );
 
     let tier = 'Nano Creator';
-    if (maxFollowers >= 500000) {
+    if (maxFollowers >= 1000000) {
+      tier = 'Mega Creator';
+    } else if (maxFollowers >= 200000) {
       tier = 'Macro Creator';
-    } else if (maxFollowers >= 100000) {
-      tier = 'Mid-tier Creator';
     } else if (maxFollowers >= 10000) {
       tier = 'Micro Creator';
     }

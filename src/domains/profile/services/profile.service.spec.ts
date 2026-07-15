@@ -104,6 +104,8 @@ describe('ProfileService', () => {
         username: 'newuser',
         email: 'new@example.com',
         bio: 'New bio description',
+        dateOfBirth: '1998-04-20',
+        gender: 'female',
       };
 
       const result = await service.updatePersonalInfo('u1', dto);
@@ -117,6 +119,8 @@ describe('ProfileService', () => {
         username: 'newuser',
         email: 'new@example.com',
         bio: 'New bio description',
+        dateOfBirth: '1998-04-20',
+        gender: 'female',
       });
       expect(result.username).toBe('newuser');
     });
@@ -218,6 +222,37 @@ describe('ProfileService', () => {
         tiktokUsername: 'new_tiktok',
         tiktokFollowers: 200,
         assignedTier: 'Micro Creator', // max is 15000
+      });
+    });
+
+    it('should assign Mega Creator tier if followers is 1M or more', async () => {
+      const mockUser = {
+        id: 'u1',
+        instagramUsername: null,
+        instagramFollowers: 0,
+        tiktokUsername: null,
+        tiktokFollowers: 0,
+        youtubeUsername: null,
+        youtubeFollowers: 0,
+        twitterUsername: null,
+        twitterFollowers: 0,
+      } as unknown as User;
+
+      usersServiceMock.findOne.mockResolvedValue(mockUser);
+      usersServiceMock.update.mockResolvedValue(mockUser);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
+
+      const dto: UpdateProfileSocialsDto = {
+        youtubeUsername: 'mega_creator',
+        youtubeFollowers: 1200000,
+      };
+
+      await service.updateSocials('u1', dto);
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
+        youtubeUsername: 'mega_creator',
+        youtubeFollowers: 1200000,
+        assignedTier: 'Mega Creator',
       });
     });
 

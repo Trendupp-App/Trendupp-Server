@@ -29,8 +29,8 @@ export class OnboardingService {
     return this.nicheRepository.findAll();
   }
 
-  async getAllNationalities(): Promise<Nationality[]> {
-    return this.nationalityRepository.findAll();
+  async getAllNationalities(filters?: { isAfrican?: boolean }): Promise<Nationality[]> {
+    return this.nationalityRepository.findAll(filters);
   }
 
   async getStatesByNationality(nationalityId: string): Promise<State[]> {

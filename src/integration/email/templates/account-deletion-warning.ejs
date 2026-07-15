@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Deletion Notice — Trendupp</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: #f4f4f7;
+        color: #333;
+      }
+      .container {
+        max-width: 580px;
+        margin: 40px auto;
+        background: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      .header {
+        background: linear-gradient(135deg, #d9534f 0%, #c0392b 100%);
+        padding: 36px 40px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+      }
+      .body {
+        padding: 36px 40px;
+      }
+      .body p {
+        font-size: 15px;
+        line-height: 1.7;
+        margin: 0 0 16px;
+        color: #555;
+      }
+      .body p strong {
+        color: #333;
+      }
+      .warning-box {
+        background: #fff5f5;
+        border-left: 4px solid #d9534f;
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin: 24px 0;
+      }
+      .warning-box p {
+        margin: 0;
+        color: #c0392b;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .cta {
+        text-align: center;
+        margin: 32px 0;
+      }
+      .cta a {
+        display: inline-block;
+        background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+        color: #ffffff;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 14px 36px;
+        border-radius: 8px;
+        letter-spacing: 0.3px;
+      }
+      .footer {
+        background: #f9f9fb;
+        padding: 24px 40px;
+        text-align: center;
+        border-top: 1px solid #ebebf0;
+      }
+      .footer p {
+        font-size: 12px;
+        color: #aaa;
+        margin: 0;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>⚠️ Account Deletion Notice</h1>
+      </div>
+
+      <div class="body">
+        <p>Hi <strong><%= firstName || 'there' %></strong>,</p>
+
+        <p>
+          We noticed your Trendupp account has been inactive for the past 60 days.
+          To keep our platform healthy and avoid billing dormant accounts, we are
+          writing to let you know that your account is scheduled for permanent deletion.
+        </p>
+
+        <div class="warning-box">
+          <p>🗓 Your account will be permanently deleted in <strong>30 days</strong>.</p>
+        </div>
+
+        <p>
+          If you'd like to keep your account, simply log back in to Trendupp before the
+          deletion date. Logging in will automatically reactivate your account and cancel
+          the scheduled deletion.
+        </p>
+
+        <p>
+          If you no longer wish to use Trendupp, no action is needed — your account and
+          all associated data will be permanently removed after the 30-day window.
+        </p>
+
+        <div class="cta">
+          <a href="https://trendupp.com/login">Log In to Reactivate My Account</a>
+        </div>
+
+        <p>
+          If you have any questions, our support team is happy to help at
+          <a href="mailto:support@trendupp.com">support@trendupp.com</a>.
+        </p>
+
+        <p>— The Trendupp Team</p>
+      </div>
+
+      <div class="footer">
+        <p>
+          You are receiving this email because your account at
+          <strong>trendupp.com</strong> has been inactive for 60 days.<br />
+          © <%= new Date().getFullYear() %> Trendupp. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, IsOptional, Length } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, IsOptional, Length, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateProfileDto {
@@ -82,6 +82,25 @@ export class UpdateProfileDto {
   monthlyBudget?: string;
 
   @ApiPropertyOptional({
+    description: 'Date of birth of the creator (YYYY-MM-DD)',
+    example: '1998-04-20',
+  })
+  @IsString()
+  @IsOptional()
+  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  dateOfBirth?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender of the creator',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  gender?: string;
+
+  @ApiPropertyOptional({
     type: 'string',
     format: 'binary',
     description: 'Profile picture / avatar (JPEG, PNG, WebP up to 5MB)',
@@ -121,6 +140,19 @@ export class CreatorProfileDto {
     example: 'Exploring lifestyle and fashion trends in Lagos.',
   })
   bio?: string;
+
+  @ApiPropertyOptional({
+    description: 'Date of birth of the creator (YYYY-MM-DD)',
+    example: '1998-04-20',
+  })
+  dateOfBirth?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender of the creator',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  gender?: string;
 
   @ApiPropertyOptional({
     type: 'string',

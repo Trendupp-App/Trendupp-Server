@@ -1,6 +1,10 @@
 export default () => ({
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT as string, 10) || 3000,
+  app: {
+    // Base URL of the web client — used to build deep links in notification emails
+    webUrl: process.env.WEB_APP_URL || 'https://trendupp.com',
+  },
   database: {
     host: process.env.DB_HOST,
     port: parseInt(process.env.DB_PORT as string, 10) || 5432,
@@ -63,5 +67,11 @@ export default () => ({
   stream: {
     apiKey: process.env.STREAM_API_KEY,
     apiSecret: process.env.STREAM_API_SECRET,
+  },
+  pandascrow: {
+    apiKey: process.env.PANDASCROW_API_KEY,
+    secretKey: process.env.PANDASCROW_SECRET_KEY,
+    apiUrl: process.env.PANDASCROW_API_URL || 'https://sandbox.pandascrow.io',
+    accountUuid: process.env.PANDASCROW_ACCOUNT_UUID,
   },
 });

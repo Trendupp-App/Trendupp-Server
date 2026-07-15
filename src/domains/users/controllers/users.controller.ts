@@ -1,10 +1,16 @@
-import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from '../services/users.service';
 import { User } from '../entities/user.entity';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { ExploreSearchQueryDto } from '../dtos/explore-search-query.dto';
+import { RolesGuard } from '../../../shared/guards/roles.guard';
+import { Roles } from '../../../shared/decorators/roles.decorator';
 
 @ApiTags('users')
 @Controller('users')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -20,6 +26,51 @@ export class UsersController {
   @ApiResponse({ status: 200, type: [User] })
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('creators/top-performers')
+  @UseGuards(RolesGuard)
+  @Roles('brand', 'admin', 'finance_admin', 'super_admin')
+  @ApiOperation({ summary: 'Get list of top performing creators sorted by total social followers' })
+  @ApiResponse({ status: 200, type: [User] })
+  getTopPerformers() {
+    return this.usersService.getTopPerformers();
+  }
+
+  @Get('explore/search')
+  @ApiOperation({
+    summary:
+      '📌Unified search for campaigns (by title) and users (creators/brands by name/username)',
+  })
+  @ApiResponse({ status: 200, description: 'Grouped explore search results' })
+  async exploreSearch(@Query() query: ExploreSearchQueryDto) {
+    return this.usersService.unifiedSearch(query);
+  }
+
+  @Get('explore/profile/:id')
+  @ApiOperation({
+    summary:
+      '📌Get single creator or brand profile details with campaign history and platform followers',
+  })
+  @ApiResponse({ status: 200, description: 'Profile details for creator or brand' })
+  async getExploreProfile(@Param('id') id: string): Promise<Record<string, unknown>> {
+    return this.usersService.exploreProfile(id);
+  }
+
+  @Get('explore/:role')
+  @ApiOperation({ summary: '📌Explore creators or brands with optional category filter' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    description: 'Industry name/ID or Niche name/ID',
+  })
+  @ApiResponse({ status: 200, description: 'List of creators or brands matching criteria' })
+  async explore(
+    @Param('role') role: string,
+    @Query('category') category?: string,
+  ): Promise<Record<string, unknown>[]> {
+    return this.usersService.exploreUsers(role, { category });
   }
 
   @Get(':id')

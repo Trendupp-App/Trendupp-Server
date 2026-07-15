@@ -6,6 +6,9 @@ export const validationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(3000),
 
+  // Web client base URL (deep links in notification emails)
+  WEB_APP_URL: Joi.string().uri().default('https://trendupp.com'),
+
   // Database
   DB_HOST: Joi.string().required(),
   DB_PORT: Joi.number().default(5432),
@@ -62,4 +65,10 @@ export const validationSchema = Joi.object({
   // Stream Chat
   STREAM_API_KEY: Joi.string().allow('').optional(),
   STREAM_API_SECRET: Joi.string().allow('').optional(),
+
+  // Pandascrow Escrow System
+  PANDASCROW_API_KEY: Joi.string().allow('').optional(),
+  PANDASCROW_SECRET_KEY: Joi.string().allow('').optional(),
+  PANDASCROW_API_URL: Joi.string().uri().allow('').optional(),
+  PANDASCROW_ACCOUNT_UUID: Joi.string().allow('').optional(),
 });

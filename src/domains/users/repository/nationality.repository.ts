@@ -9,8 +9,13 @@ export class NationalityRepository {
     private readonly nationalityModel: typeof Nationality,
   ) {}
 
-  async findAll(): Promise<Nationality[]> {
+  async findAll(filters?: { isAfrican?: boolean }): Promise<Nationality[]> {
+    const where: Record<string, any> = {};
+    if (filters?.isAfrican !== undefined) {
+      where.isAfrican = filters.isAfrican;
+    }
     return this.nationalityModel.findAll({
+      where,
       order: [['name', 'ASC']],
     });
   }

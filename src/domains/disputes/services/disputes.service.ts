@@ -11,6 +11,7 @@ import { CampaignRepository } from '../../campaigns/repository/campaign.reposito
 import { CreateDisputeDto } from '../dtos/create-dispute.dto';
 import { ActivateDisputeDto } from '../dtos/activate-dispute.dto';
 import { ResolveDisputeDto } from '../dtos/resolve-dispute.dto';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 @Injectable()
 export class DisputesService {
@@ -18,6 +19,7 @@ export class DisputesService {
     private readonly disputeRepository: DisputeRepository,
     private readonly campaignRepository: CampaignRepository,
     private readonly streamService: StreamService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -80,13 +82,35 @@ export class DisputesService {
       );
     }
 
-    return this.disputeRepository.create({
+    const dispute = await this.disputeRepository.create({
       campaignId: dto.campaignId,
       creatorId,
       brandId,
       status: 'raised',
       reason: dto.reason,
     });
+
+    const notifyData = {
+      disputeId: dispute.id,
+      campaignId: dto.campaignId,
+      reason: dto.reason,
+    };
+    // Counterparty (the dispatcher filters out the actor automatically) ...
+    await this.notificationsService.notify({
+      type: 'dispute.raised',
+      recipientId: [creatorId, brandId],
+      actorId: userId,
+      data: notifyData,
+    });
+    // ... and admins, who need to activate the dispute.
+    await this.notificationsService.notify({
+      type: 'dispute.raised',
+      recipientRole: 'admin',
+      actorId: userId,
+      data: notifyData,
+    });
+
+    return dispute;
   }
 
   async activateDispute(id: string, adminId: string, dto: ActivateDisputeDto): Promise<Dispute> {
@@ -130,6 +154,14 @@ export class DisputesService {
       dispute.activatedById = adminId;
       dispute.activatedAt = new Date();
       await dispute.save();
+
+      await this.notificationsService.notify({
+        type: 'dispute.activated',
+        recipientId: [dispute.creatorId, dispute.brandId],
+        actorId: adminId,
+        data: { disputeId: dispute.id, campaignId: dispute.campaignId },
+        dedupeKey: dispute.id,
+      });
     }
 
     return dispute;
@@ -158,6 +190,28 @@ export class DisputesService {
     dispute.resolvedById = resolvedById;
     dispute.resolutionNotes = dto.resolutionNotes;
     await dispute.save();
+
+    // Both parties learn the outcome (the frozen chat says nothing on its own).
+    await this.notificationsService.notify({
+      type: 'dispute.resolved',
+      recipientId: [dispute.creatorId, dispute.brandId],
+      actorId: resolvedById,
+      data: {
+        disputeId: dispute.id,
+        campaignId: dispute.campaignId,
+        escrowAction: dto.action,
+        resolutionNotes: dto.resolutionNotes,
+      },
+      dedupeKey: dispute.id,
+    });
+    // Finance work item: execute the escrow decision in Pandascrow.
+    await this.notificationsService.notify({
+      type: 'dispute.escrow_action_required',
+      recipientRole: 'finance_admin',
+      actorId: resolvedById,
+      data: { disputeId: dispute.id, campaignId: dispute.campaignId, escrowAction: dto.action },
+      dedupeKey: dispute.id,
+    });
 
     return dispute;
   }

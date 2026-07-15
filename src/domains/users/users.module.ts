@@ -15,10 +15,13 @@ import { StateRepository } from './repository/state.repository';
 import { BankRepository } from './repository/bank.repository';
 import { IndustryRepository } from './repository/industry.repository';
 import { UsersService } from './services/users.service';
+import { AccountLifecycleScheduler } from './services/account-lifecycle.scheduler';
+import { EmailModule } from '../../integration/email/email.module';
 
 import { Role } from './entities/role.entity';
 import { RoleRepository } from './repository/role.repository';
 import { UsersController } from './controllers/users.controller';
+import { Campaign } from '../campaigns/entities/campaign.entity';
 
 @Module({
   imports: [
@@ -32,7 +35,9 @@ import { UsersController } from './controllers/users.controller';
       Bank,
       Industry,
       UserIndustry,
+      Campaign,
     ]),
+    EmailModule,
   ],
   providers: [
     UserRepository,
@@ -43,6 +48,7 @@ import { UsersController } from './controllers/users.controller';
     BankRepository,
     IndustryRepository,
     UsersService,
+    AccountLifecycleScheduler,
   ],
   controllers: [UsersController],
   exports: [

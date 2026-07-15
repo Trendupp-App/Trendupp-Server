@@ -7,10 +7,10 @@ module.exports = {
 
     // 1. Seed Creator Categories
     const categories = [
-      { name: 'Nano', min_followers: 0, max_followers: 9999 },
-      { name: 'Micro', min_followers: 10000, max_followers: 99999 },
-      { name: 'Mid-tier', min_followers: 100000, max_followers: 499999 },
-      { name: 'Macro', min_followers: 500000, max_followers: null },
+      { name: 'Nano', min_followers: 1000, max_followers: 9999 },
+      { name: 'Micro', min_followers: 10000, max_followers: 199999 },
+      { name: 'Macro', min_followers: 200000, max_followers: 999999 },
+      { name: 'Mega', min_followers: 1000000, max_followers: null },
     ].map((cat) => ({
       id: crypto.randomUUID(),
       name: cat.name,

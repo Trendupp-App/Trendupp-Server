@@ -151,13 +151,6 @@ export class AuthService {
       finalUsername = signupDto.username;
     }
 
-    if (finalUsername) {
-      const usernameExists = await this.usersService.findByUsername(finalUsername);
-      if (usernameExists && usernameExists.email !== email) {
-        throw new ConflictException('Username is already taken');
-      }
-    }
-
     if (existingUser) {
       // If email is not verified, update details, generate a new OTP, and resend
       await existingUser.update({
@@ -741,9 +734,9 @@ export class AuthService {
   private async checkAndReactivateUser(user: User): Promise<void> {
     if (user.isActive === false) {
       if (user.deactivatedAt) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        if (user.deactivatedAt >= thirtyDaysAgo) {
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        if (user.deactivatedAt >= ninetyDaysAgo) {
           await this.usersService.update(user.id, {
             isActive: true,
             deactivatedAt: null,
@@ -752,7 +745,7 @@ export class AuthService {
           user.deactivatedAt = null;
         } else {
           throw new UnauthorizedException(
-            'Account has been deactivated and is past the 30-day restoration period.',
+            'Account has been deactivated and is past the 90-day restoration period.',
           );
         }
       } else {

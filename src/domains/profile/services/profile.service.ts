@@ -99,6 +99,22 @@ export class ProfileService {
       }
     }
 
+    if (dto.dateOfBirth !== undefined) {
+      if (dto.dateOfBirth === null) {
+        updates.dateOfBirth = null;
+      } else if (dto.dateOfBirth.trim() !== '') {
+        updates.dateOfBirth = dto.dateOfBirth;
+      }
+    }
+
+    if (dto.gender !== undefined) {
+      if (dto.gender === null) {
+        updates.gender = null;
+      } else if (dto.gender.trim() !== '') {
+        updates.gender = dto.gender;
+      }
+    }
+
     if (avatarFile) {
       const avatarUrl = await this.s3Service.uploadFile(avatarFile, 'avatars');
       updates.avatarUrl = avatarUrl;
@@ -231,10 +247,10 @@ export class ProfileService {
     );
 
     let tier = 'Nano Creator';
-    if (maxFollowers >= 500000) {
+    if (maxFollowers >= 1000000) {
+      tier = 'Mega Creator';
+    } else if (maxFollowers >= 200000) {
       tier = 'Macro Creator';
-    } else if (maxFollowers >= 100000) {
-      tier = 'Mid-tier Creator';
     } else if (maxFollowers >= 10000) {
       tier = 'Micro Creator';
     }
