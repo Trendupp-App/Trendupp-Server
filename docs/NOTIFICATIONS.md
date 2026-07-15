@@ -66,9 +66,9 @@ Category → settings-key mapping: `applicationUpdates`, `paymentAlerts`,
 `newCampaigns`, `brandMessages`, `weeklySummary`, `marketingOffers` map 1:1;
 `security` is the non-suppressible sentinel.
 
-## Implemented notifications (22)
+## Implemented notifications (24)
 
-**Legend** — Channels: all types are in-app + email. Gate: settings key, or
+**Legend** — Channels: in-app + email unless noted. Gate: settings key, or
 **security** = non-suppressible. Dedupe: the `dedupeKey` passed (✗ = request-path
 call, naturally single-fire).
 
@@ -109,6 +109,13 @@ call, naturally single-fire).
 | `refund.completed` | critical | `paymentAlerts` | brand | `PayoutScheduler.processPendingRefunds` — transfer succeeded. Zero-amount refunds never notify (created directly as completed). | `<refundId>` |
 | `refund.failed` | critical | security | brand **and** finance_admins | `processPendingRefunds` catch — transfer failed | `<refundId>:failed`, `<refundId>:failed:finance` |
 | `refund.bank_details_required` | high | security | brand (actionable → `/settings/payout`) | `processPendingRefunds` — refund parked, brand has no bank details | `<refundId>:bank_details` |
+
+### Social connections — gate: security, **in-app only** (account-change confirmations)
+
+| Type | Priority | Recipients | Trigger | Dedupe |
+|---|---|---|---|---|
+| `social.connected` | low | creator/brand | `SocialsService.connect` — OAuth-verified account linked; includes verified follower count + recomputed tier | ✗ |
+| `social.disconnected` | low | creator/brand | `SocialsService.disconnect` — doubles as a security signal ("if this wasn't you, contact support") | ✗ |
 
 ### Disputes — gate: security (contractual process, never suppressible)
 
