@@ -148,6 +148,36 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
       `A creator payout of ${money(d.amount, d.currency)} is blocked awaiting escrow release for campaign ${d.campaignId}. Release the escrow in the Pandascrow dashboard to unblock it.`,
     actionUrl: (d) => `/admin/campaigns/${d.campaignId}`,
   },
+  'refund.completed': {
+    category: 'paymentAlerts',
+    channels: ['inApp', 'email'],
+    priority: 'critical',
+    title: (d) => `Refund sent: ${money(d.amount, d.currency)}`,
+    body: (d) =>
+      `The unused budget of ${money(d.amount, d.currency)} from "${d.campaignTitle}" has been refunded to your bank account.`,
+    actionUrl: (d) => `/campaigns/${d.campaignId}`,
+    emailSubject: (d) => `Your refund of ${money(d.amount, d.currency)} is on its way — Trendupp`,
+  },
+  'refund.failed': {
+    // Money-movement failure — never suppressible, also fanned out to finance admins.
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'critical',
+    title: (d) => `Refund failed: ${money(d.amount, d.currency)}`,
+    body: (d) =>
+      `The refund of ${money(d.amount, d.currency)} for "${d.campaignTitle}" could not be completed (${d.reason}). Our team has been alerted and will retry.`,
+    actionUrl: (d) => `/campaigns/${d.campaignId}`,
+  },
+  'refund.bank_details_required': {
+    // Actionable: the refund is parked until the brand adds bank details.
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Add your bank details to receive ${money(d.amount, d.currency)}`,
+    body: (d) =>
+      `A refund of ${money(d.amount, d.currency)} from "${d.campaignTitle}" is waiting for you, but your payout bank details are missing. Add them in your profile to receive it.`,
+    actionUrl: () => `/settings/payout`,
+  },
   'campaign.payment_confirmed': {
     category: 'paymentAlerts',
     channels: ['inApp', 'email'],

@@ -93,6 +93,28 @@ export interface NotificationPayloads {
     amount: number;
     currency?: string;
   };
+  'refund.completed': {
+    campaignId: string;
+    campaignTitle: string;
+    refundId: string;
+    amount: number;
+    currency?: string;
+  };
+  'refund.failed': {
+    campaignId: string;
+    campaignTitle: string;
+    refundId: string;
+    amount: number;
+    currency?: string;
+    reason: string;
+  };
+  'refund.bank_details_required': {
+    campaignId: string;
+    campaignTitle: string;
+    refundId: string;
+    amount: number;
+    currency?: string;
+  };
   'campaign.payment_confirmed': {
     campaignId: string;
     campaignTitle: string;

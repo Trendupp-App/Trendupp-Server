@@ -155,6 +155,62 @@ describe('PayoutScheduler', () => {
         refundReference: expect.any(String),
         errorDetails: null,
       });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'refund.completed',
+          recipientId: 'b1',
+          data: expect.objectContaining({ refundId: 'r1', amount: 100000, currency: 'NGN' }),
+          dedupeKey: 'r1',
+        }),
+      );
+    });
+
+    it('should notify brand and finance admins when a refund transfer fails', async () => {
+      const mockBrand = {
+        id: 'b1',
+        email: 'brand@test.com',
+        firstName: 'Brand',
+        lastName: 'User',
+        bankAccountNumber: '1234567890',
+        bank: { code: '058' },
+      };
+
+      const mockRefund = {
+        id: 'r1',
+        campaignId: 'c1',
+        brandId: 'b1',
+        amount: 100000,
+        currency: 'NGN',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findPendingRefunds.mockResolvedValue([mockRefund as any]);
+      usersServiceMock.findOne.mockResolvedValue(mockBrand as any);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue({
+        escrowStatus: 'completed',
+      } as any);
+      pandascrowServiceMock.requestPayout.mockResolvedValue(false);
+
+      await scheduler.processPendingRefunds();
+
+      expect(mockRefund.update).toHaveBeenCalledWith({
+        status: 'failed',
+        errorDetails: expect.any(String),
+      });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'refund.failed',
+          recipientId: 'b1',
+          dedupeKey: 'r1:failed',
+        }),
+      );
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'refund.failed',
+          recipientRole: 'finance_admin',
+          dedupeKey: 'r1:failed:finance',
+        }),
+      );
     });
 
     it('should park refund as pending_bank_details if details are missing', async () => {
@@ -181,6 +237,13 @@ describe('PayoutScheduler', () => {
       expect(mockRefund.update).toHaveBeenCalledWith({
         status: 'pending_bank_details',
       });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'refund.bank_details_required',
+          recipientId: 'b1',
+          dedupeKey: 'r1:bank_details',
+        }),
+      );
     });
   });
 });
