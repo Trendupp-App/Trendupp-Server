@@ -286,11 +286,11 @@ describe('ProfileService', () => {
       });
     });
 
-    it('should ignore social platform update when username is empty string', async () => {
+    it('should disconnect social platform when username is empty string or whitespace', async () => {
       const mockUser = {
         id: 'u1',
         instagramUsername: 'old_insta',
-        instagramFollowers: 500000,
+        instagramFollowers: 50000,
         tiktokUsername: null,
         tiktokFollowers: 0,
         youtubeUsername: null,
@@ -310,9 +310,12 @@ describe('ProfileService', () => {
 
       await service.updateSocials('u1', dto);
 
-      // Verify usersServiceMock.update was NOT called since no valid updates were resolved
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
-        assignedTier: 'Macro Creator', // recalculates existing insta followers 500000 -> macro
+        instagramUsername: null,
+        instagramFollowers: 0,
+        tiktokUsername: null,
+        tiktokFollowers: 0,
+        assignedTier: 'Nano Creator',
       });
     });
   });

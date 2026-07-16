@@ -237,10 +237,6 @@ export class UpdateCampaignDto {
   @IsOptional()
   timeline?: string;
 
-  @ApiPropertyOptional({
-    description: 'ID of the targeted creator niche',
-    example: 'a00d1390-63d3-4a5e-8f07-b10f837fb5ad',
-  })
   @Transform(({ value }: { value: unknown }): string | undefined => {
     if (value === '' || value === null || value === undefined) return undefined;
     if (typeof value === 'string') return value;
@@ -250,6 +246,35 @@ export class UpdateCampaignDto {
   @IsUUID(4)
   @IsOptional()
   creatorNicheId?: string;
+
+  @ApiPropertyOptional({
+    description: 'IDs of the targeted creator niches',
+    example: ['a00d1390-63d3-4a5e-8f07-b10f837fb5ad'],
+    type: [String],
+  })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: unknown) => String(v).trim());
+    }
+    if (typeof value === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.map((v: unknown) => String(v).trim());
+        }
+      } catch {
+        return [value.trim()];
+      }
+    }
+    return undefined;
+  })
+  @IsArray()
+  @IsUUID(4, { each: true })
+  @IsOptional()
+  creatorNicheIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Campaign cover image file',

@@ -49,6 +49,16 @@ export class Campaign extends BaseEntity<Campaign> {
   @BelongsTo(() => Niche)
   declare creatorNiche?: Niche;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: [],
+    field: 'creator_niche_ids',
+  })
+  declare creatorNicheIds: string[];
+
+  declare creatorNiches?: Niche[];
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare timeline?: Date;
 

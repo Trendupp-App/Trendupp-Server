@@ -12,6 +12,7 @@ import { CampaignReview } from '../entities/campaign-review.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
 import { CampaignRefund } from '../entities/campaign-refund.entity';
 import { Dispute } from '../../disputes/entities/dispute.entity';
+import { Niche } from '../../users/entities/niche.entity';
 import { paginate } from '../../../shared/utils/pagination.utils';
 import { Op } from 'sequelize';
 
@@ -25,9 +26,13 @@ jest.mock('../../../shared/utils/pagination.utils', () => ({
 describe('CampaignRepository', () => {
   let repository: CampaignRepository;
   let campaignModelMock: Record<string, unknown>;
+  let nicheModelMock: Record<string, unknown>;
 
   beforeEach(async () => {
     campaignModelMock = {};
+    nicheModelMock = {
+      findAll: jest.fn().mockResolvedValue([{ id: 'fashion-niche-uuid', name: 'Fashion' }]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -43,6 +48,7 @@ describe('CampaignRepository', () => {
         { provide: getModelToken(PaymentRelease), useValue: {} },
         { provide: getModelToken(CampaignRefund), useValue: {} },
         { provide: getModelToken(Dispute), useValue: {} },
+        { provide: getModelToken(Niche), useValue: nicheModelMock },
       ],
     }).compile();
 
@@ -71,13 +77,14 @@ describe('CampaignRepository', () => {
           '$preferredPlatforms.name$': {
             [Op.or]: [{ [Op.iLike]: 'Instagram' }, { [Op.iLike]: 'Twitter' }],
           },
-          '$creatorNiche.name$': {
-            [Op.or]: [{ [Op.iLike]: 'Fashion' }],
-          },
+          [Op.and]: [
+            expect.objectContaining({
+              val: '(creator_niche_ids @> \'["fashion-niche-uuid"]\'::jsonb)',
+            }),
+          ],
         }),
         order: [['totalBudget', 'DESC']],
         distinct: true,
-        subQuery: false,
       }),
       { page: 1, limit: 10 },
     );

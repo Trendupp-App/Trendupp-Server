@@ -2,10 +2,14 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsInt, Min } from 'class-validator';
 
 export class UpdateSocialsDto {
-  @ApiPropertyOptional({ description: 'Instagram handle name', example: 'my_insta' })
+  @ApiPropertyOptional({
+    description: 'Instagram handle name',
+    example: 'my_insta',
+    nullable: true,
+  })
   @IsString()
   @IsOptional()
-  instagramUsername?: string;
+  instagramUsername?: string | null;
 
   @ApiPropertyOptional({ description: 'Instagram followers count', example: 12000 })
   @IsInt()
@@ -13,10 +17,10 @@ export class UpdateSocialsDto {
   @IsOptional()
   instagramFollowers?: number;
 
-  @ApiPropertyOptional({ description: 'TikTok handle name', example: 'my_tiktok' })
+  @ApiPropertyOptional({ description: 'TikTok handle name', example: 'my_tiktok', nullable: true })
   @IsString()
   @IsOptional()
-  tiktokUsername?: string;
+  tiktokUsername?: string | null;
 
   @ApiPropertyOptional({ description: 'TikTok followers count', example: 50000 })
   @IsInt()
@@ -24,10 +28,14 @@ export class UpdateSocialsDto {
   @IsOptional()
   tiktokFollowers?: number;
 
-  @ApiPropertyOptional({ description: 'YouTube channel handle or name', example: 'my_channel' })
+  @ApiPropertyOptional({
+    description: 'YouTube channel handle or name',
+    example: 'my_channel',
+    nullable: true,
+  })
   @IsString()
   @IsOptional()
-  youtubeUsername?: string;
+  youtubeUsername?: string | null;
 
   @ApiPropertyOptional({ description: 'YouTube subscribers count', example: 8500 })
   @IsInt()
@@ -35,10 +43,14 @@ export class UpdateSocialsDto {
   @IsOptional()
   youtubeFollowers?: number;
 
-  @ApiPropertyOptional({ description: 'X / Twitter handle name', example: 'my_twitter' })
+  @ApiPropertyOptional({
+    description: 'X / Twitter handle name',
+    example: 'my_twitter',
+    nullable: true,
+  })
   @IsString()
   @IsOptional()
-  twitterUsername?: string;
+  twitterUsername?: string | null;
 
   @ApiPropertyOptional({ description: 'X / Twitter followers count', example: 3400 })
   @IsInt()

@@ -18,6 +18,7 @@ import { UrlValidatorModule } from '../../integration/url-validator/url-validato
 import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
+import { Niche } from '../users/entities/niche.entity';
 import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../../integration/email/email.module';
@@ -40,8 +41,10 @@ import { PayoutScheduler } from './services/payout.scheduler';
       PaymentRelease,
       CampaignRefund,
       Dispute,
+      Niche,
     ]),
     UsersModule,
+
     UrlValidatorModule,
     PandascrowModule,
     NotificationsModule,
