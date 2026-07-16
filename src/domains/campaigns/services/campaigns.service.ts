@@ -24,6 +24,9 @@ import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
+import { Niche } from '../../users/entities/niche.entity';
+import { Op } from 'sequelize';
+import { InjectModel } from '@nestjs/sequelize';
 
 @Injectable()
 export class CampaignsService {
@@ -35,6 +38,8 @@ export class CampaignsService {
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
+    @InjectModel(Niche)
+    private readonly nicheModel: typeof Niche,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -91,6 +96,23 @@ export class CampaignsService {
       if (!requestingUserId || requestingUserId !== campaign.brandId) {
         campaign.setDataValue('amplificationAsset' as any, null);
       }
+
+      // Populate creatorNiches and fallback creatorNiche
+      if (campaign.creatorNicheIds && campaign.creatorNicheIds.length > 0) {
+        const niches = await this.nicheModel.findAll({
+          where: {
+            id: {
+              [Op.in]: campaign.creatorNicheIds,
+            },
+          },
+        });
+
+        campaign.setDataValue('creatorNiches' as any, niches);
+        campaign.setDataValue('creatorNiche' as any, niches[0] || null);
+      } else {
+        campaign.setDataValue('creatorNiches' as any, []);
+        campaign.setDataValue('creatorNiche' as any, null);
+      }
     }
     return campaign;
   }
@@ -109,7 +131,8 @@ export class CampaignsService {
       creatorCategoryId: string;
       preferredPlatformIds: string[];
       timeline: string;
-      creatorNicheId: string;
+      creatorNicheId?: string;
+      creatorNicheIds?: string[];
       campaignBrief?: string;
       contentGuidelines?: { dos: string[]; donts: string[] };
       amplificationAsset?: string;
@@ -135,11 +158,18 @@ export class CampaignsService {
     }
     const currency = brand.country?.currency || 'USD';
 
-    const { preferredPlatformIds, timeline, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, creatorNicheId, creatorNicheIds, ...campaignData } =
+      data;
+
+    const resolvedNicheIds = creatorNicheIds || (creatorNicheId ? [creatorNicheId] : []);
+    const resolvedNicheId = creatorNicheId || (resolvedNicheIds && resolvedNicheIds[0]) || null;
 
     const campaign = await this.campaignRepository.create({
       ...campaignData,
+      creatorNicheId: resolvedNicheId as string,
+      creatorNicheIds: resolvedNicheIds,
       timeline: timeline ? new Date(timeline) : undefined,
+
       brandId,
       coverImage,
       amplificationAsset,
@@ -169,6 +199,7 @@ export class CampaignsService {
       preferredPlatformIds?: string[];
       timeline?: string;
       creatorNicheId?: string;
+      creatorNicheIds?: string[];
       deliverables?: string[];
       contentDirection?: string[];
       contentGuidelines?: { dos: string[]; donts: string[] };
@@ -209,7 +240,8 @@ export class CampaignsService {
       amplificationAsset = data.amplificationAsset;
     }
 
-    const { preferredPlatformIds, timeline, ...campaignData } = data;
+    const { preferredPlatformIds, timeline, creatorNicheId, creatorNicheIds, ...campaignData } =
+      data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
@@ -218,6 +250,22 @@ export class CampaignsService {
     if (timeline !== undefined) {
       updates.timeline = timeline ? new Date(timeline) : null;
     }
+    if (files?.coverImage) {
+      updates.coverImage = coverImage;
+    }
+
+    if (creatorNicheIds !== undefined || creatorNicheId !== undefined) {
+      const resolvedNicheIds =
+        creatorNicheIds !== undefined ? creatorNicheIds : creatorNicheId ? [creatorNicheId] : [];
+      const resolvedNicheId =
+        creatorNicheId !== undefined
+          ? creatorNicheId
+          : (resolvedNicheIds && resolvedNicheIds[0]) || null;
+
+      updates.creatorNicheId = resolvedNicheId;
+      updates.creatorNicheIds = resolvedNicheIds;
+    }
+
     if (files?.coverImage) {
       updates.coverImage = coverImage;
     }
@@ -268,7 +316,9 @@ export class CampaignsService {
       if (!campaign.totalBudget) errors.push('totalBudget is required');
       if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
       if (!campaign.timeline) errors.push('timeline is required');
-      if (!campaign.creatorNicheId) errors.push('creatorNiche is required');
+      if (!campaign.creatorNicheIds || campaign.creatorNicheIds.length === 0) {
+        errors.push('creatorNiche is required');
+      }
       if (!campaign.preferredPlatforms || campaign.preferredPlatforms.length === 0) {
         errors.push('at least one preferred platform is required');
       }

@@ -156,22 +156,21 @@ export class ProfileService {
     const updatesObj = updates as Record<string, string | number | null | undefined>;
 
     // Helper to process social connection and disconnection
-    // If username is null, we disconnect it. If it's a non-empty string, we connect/update it.
-    // If it's an empty string, we ignore it (do not update).
+    // If username is null or an empty string, we disconnect it. If it's a non-empty string, we connect/update it.
     const processSocial = (
       inputUsername: string | null | undefined,
       inputFollowers: number | undefined,
-      currentUsername: string | undefined,
+      currentUsername: string | null | undefined,
       currentFollowers: number,
       fieldUsername: string,
       fieldFollowers: string,
     ) => {
       if (inputUsername !== undefined) {
-        if (inputUsername === null) {
-          // Disconnect if explicitly null
+        if (inputUsername === null || inputUsername.trim() === '') {
+          // Disconnect if explicitly null or empty string
           updatesObj[fieldUsername] = null;
           updatesObj[fieldFollowers] = 0;
-        } else if (inputUsername.trim() !== '') {
+        } else {
           // Connect/Update only if non-empty string
           updatesObj[fieldUsername] = inputUsername;
           updatesObj[fieldFollowers] =

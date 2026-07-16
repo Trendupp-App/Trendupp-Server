@@ -26,6 +26,7 @@ export interface CreateRefundInput {
   status?: string;
   refundReference?: string | null;
   errorDetails?: string | null;
+  releaseDate?: Date;
 }
 
 @Injectable()
@@ -53,6 +54,8 @@ export class CampaignRepository {
     private readonly campaignRefundModel: typeof CampaignRefund,
     @InjectModel(Dispute)
     private readonly disputeModel: typeof Dispute,
+    @InjectModel(Niche)
+    private readonly nicheModel: typeof Niche,
   ) {}
 
   private readonly fullIncludes = [
@@ -68,10 +71,6 @@ export class CampaignRepository {
     {
       model: Platform,
       as: 'preferredPlatforms',
-    },
-    {
-      model: Niche,
-      as: 'creatorNiche',
     },
   ];
 
@@ -122,13 +121,13 @@ export class CampaignRepository {
     return campaign;
   }
 
-  findAll(
+  async findAll(
     query: FindAllCampaignsQueryDto,
     prioritizeNicheIds?: string[],
   ): Promise<PaginatedResult<Campaign>> {
     const { status, sortBy, platforms, niches, nicheIds, goal, page = 1, limit = 10 } = query;
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string | symbol, any> = {};
 
     // Extra includes appended for virtual status lookups (active, content_review, revisions)
     const extraIncludes: object[] = [];
@@ -179,11 +178,28 @@ export class CampaignRepository {
 
     // 3. Filter by Niches / Niche IDs
     if (nicheIds && nicheIds.length > 0) {
-      where['creatorNicheId'] = { [Op.in]: nicheIds };
+      const literalParts = nicheIds.map(
+        (id) => `creator_niche_ids @> '${JSON.stringify([id])}'::jsonb`,
+      );
+      where[Op.and] = [Sequelize.literal(`(${literalParts.join(' OR ')})`)];
     } else if (niches && niches.length > 0) {
-      where['$creatorNiche.name$'] = {
-        [Op.or]: niches.map((name) => ({ [Op.iLike]: name })),
-      };
+      const matchingNiches = await this.nicheModel.findAll({
+        where: {
+          name: {
+            [Op.or]: niches.map((name) => ({ [Op.iLike]: name })),
+          },
+        },
+        attributes: ['id'],
+      });
+      const matchedNicheIds = matchingNiches.map((n) => n.id);
+      if (matchedNicheIds.length > 0) {
+        const literalParts = matchedNicheIds.map(
+          (id) => `creator_niche_ids @> '${JSON.stringify([id])}'::jsonb`,
+        );
+        where[Op.and] = [Sequelize.literal(`(${literalParts.join(' OR ')})`)];
+      } else {
+        where['id'] = null; // force empty result since no matching niches
+      }
     }
 
     // 4. Filter by Campaign Goal
@@ -200,12 +216,14 @@ export class CampaignRepository {
     // 5. Determine Order Sort Criteria
     let order: any[] = [['createdAt', 'DESC']]; // default newest
     if (prioritizeNicheIds && prioritizeNicheIds.length > 0 && !sortBy) {
-      const escapedIds = prioritizeNicheIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      const literalParts = prioritizeNicheIds.map(
+        (id) => `creator_niche_ids @> '${JSON.stringify([id])}'::jsonb`,
+      );
       order = [
         [
           Sequelize.literal(`
             CASE 
-              WHEN "creator_niche_id" IN (${escapedIds}) THEN 1 
+              WHEN (${literalParts.join(' OR ')}) THEN 1 
               ELSE 2 
             END
           `),
@@ -713,9 +731,14 @@ export class CampaignRepository {
     });
   }
 
-  async findPendingRefunds(): Promise<CampaignRefund[]> {
+  async findPendingRefunds(now: Date = new Date()): Promise<CampaignRefund[]> {
     return this.campaignRefundModel.findAll({
-      where: { status: 'pending' },
+      where: {
+        status: 'pending',
+        releaseDate: {
+          [Op.lte]: now,
+        },
+      },
     });
   }
 
@@ -760,5 +783,33 @@ export class CampaignRepository {
       reason: data.reason,
       status: 'raised',
     }) as Promise<Dispute>;
+  }
+
+  async findReleaseByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<PaymentRelease | null> {
+    return this.paymentReleaseModel.findOne({
+      where: { campaignId, creatorId },
+    });
+  }
+
+  async findSubmissionByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<ContentSubmission | null> {
+    return this.contentSubmissionModel.findOne({
+      where: { campaignId, creatorId },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  async findApplicationByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<CampaignApplication | null> {
+    return this.campaignApplicationModel.findOne({
+      where: { campaignId, creatorId },
+    });
   }
 }

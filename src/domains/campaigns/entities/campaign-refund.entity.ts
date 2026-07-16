@@ -39,4 +39,12 @@ export class CampaignRefund extends BaseEntity<CampaignRefund> {
 
   @Column({ type: DataType.TEXT, allowNull: true, field: 'error_details' })
   declare errorDetails?: string | null;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: false,
+    defaultValue: DataType.NOW,
+    field: 'release_date',
+  })
+  declare releaseDate: Date;
 }

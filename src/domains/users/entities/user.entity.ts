@@ -163,7 +163,7 @@ export class User extends BaseEntity<User> {
   declare bio?: string;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'instagram_username' })
-  declare instagramUsername?: string;
+  declare instagramUsername?: string | null;
 
   @Column({
     type: DataType.INTEGER,
@@ -174,19 +174,19 @@ export class User extends BaseEntity<User> {
   declare instagramFollowers: number;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'tiktok_username' })
-  declare tiktokUsername?: string;
+  declare tiktokUsername?: string | null;
 
   @Column({ type: DataType.INTEGER, defaultValue: 0, allowNull: false, field: 'tiktok_followers' })
   declare tiktokFollowers: number;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'youtube_username' })
-  declare youtubeUsername?: string;
+  declare youtubeUsername?: string | null;
 
   @Column({ type: DataType.INTEGER, defaultValue: 0, allowNull: false, field: 'youtube_followers' })
   declare youtubeFollowers: number;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'twitter_username' })
-  declare twitterUsername?: string;
+  declare twitterUsername?: string | null;
 
   @Column({ type: DataType.INTEGER, defaultValue: 0, allowNull: false, field: 'twitter_followers' })
   declare twitterFollowers: number;

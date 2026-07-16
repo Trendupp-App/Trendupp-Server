@@ -15,6 +15,8 @@ import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
+import { getModelToken } from '@nestjs/sequelize';
+import { Niche } from '../../users/entities/niche.entity';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -25,6 +27,7 @@ describe('CampaignsService', () => {
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
   let emailServiceMock: jest.Mocked<EmailService>;
+  let nicheModelMock: Record<string, unknown>;
 
   const mockCampaign = {
     id: 'c1',
@@ -34,6 +37,7 @@ describe('CampaignsService', () => {
     totalBudget: 3000000,
     creatorCategoryId: 'cc1',
     creatorNicheId: 'n1',
+    creatorNicheIds: ['n1'],
     timeline: new Date('2026-07-31T23:59:59.999Z'),
     status: 'draft',
     currentStep: 1,
@@ -42,6 +46,7 @@ describe('CampaignsService', () => {
     approvedAt: null,
     update: jest.fn().mockResolvedValue(undefined),
     $set: jest.fn().mockResolvedValue(undefined),
+
     setDataValue: jest.fn(),
     paymentBreakdown: {
       campaignBudget: 2325000,
@@ -91,6 +96,9 @@ describe('CampaignsService', () => {
       raiseDispute: jest.fn(),
       countCampaignsByBrand: jest.fn().mockResolvedValue(0),
       countDisputedCampaignsByBrand: jest.fn().mockResolvedValue(0),
+      findReleaseByCampaignAndCreator: jest.fn(),
+      findSubmissionByCampaignAndCreator: jest.fn(),
+      findApplicationByCampaignAndCreator: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -140,6 +148,10 @@ describe('CampaignsService', () => {
     });
     jest.spyOn(User, 'update').mockResolvedValue([1]);
 
+    nicheModelMock = {
+      findAll: jest.fn().mockResolvedValue([{ id: 'n1', name: 'Fashion' }]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
@@ -150,6 +162,7 @@ describe('CampaignsService', () => {
         { provide: PandascrowService, useValue: pandascrowServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
         { provide: EmailService, useValue: emailServiceMock },
+        { provide: getModelToken(Niche), useValue: nicheModelMock },
       ],
     }).compile();
 
@@ -190,8 +203,10 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        creatorNicheIds: ['n1'],
         currency: 'USD',
       });
+
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
       expect(result).toEqual(mockCampaign);
@@ -234,6 +249,7 @@ describe('CampaignsService', () => {
         paymentStatus: 'unpaid',
         timeline: new Date('2026-07-31T23:59:59.999Z'),
         creatorNicheId: 'n1',
+        creatorNicheIds: ['n1'],
         currency: 'USD',
       });
     });

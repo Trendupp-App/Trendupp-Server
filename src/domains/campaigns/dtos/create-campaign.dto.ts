@@ -123,13 +123,20 @@ export class CreateCampaignDto {
   @IsNotEmpty()
   timeline: string;
 
-  @ApiProperty({
-    description: 'ID of the targeted creator niche',
-    example: 'a00d1390-63d3-4a5e-8f07-b10f837fb5ad',
-  })
   @IsUUID(4)
-  @IsNotEmpty()
-  creatorNicheId: string;
+  @IsOptional()
+  creatorNicheId?: string;
+
+  @ApiProperty({
+    description: 'IDs of the targeted creator niches',
+    example: ['a00d1390-63d3-4a5e-8f07-b10f837fb5ad'],
+    type: [String],
+    required: false,
+  })
+  @IsArray()
+  @IsUUID(4, { each: true })
+  @IsOptional()
+  creatorNicheIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Campaign cover image file',
