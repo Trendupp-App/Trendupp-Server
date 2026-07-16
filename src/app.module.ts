@@ -19,6 +19,7 @@ import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
 import { DisputesModule } from './domains/disputes/disputes.module';
 import { NotificationsModule } from './domains/notifications/notifications.module';
+import { NewsModule } from './domains/news/news.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { NotificationsModule } from './domains/notifications/notifications.modul
     ProfileModule,
     DisputesModule,
     NotificationsModule,
+    NewsModule,
   ],
   controllers: [AppController],
   providers: [
