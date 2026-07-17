@@ -110,7 +110,7 @@ call, naturally single-fire).
 | `refund.failed` | critical | security | brand **and** finance_admins | `processPendingRefunds` catch — transfer failed | `<refundId>:failed`, `<refundId>:failed:finance` |
 | `refund.bank_details_required` | high | security | brand (actionable → `/settings/payout`) | `processPendingRefunds` — refund parked, brand has no bank details | `<refundId>:bank_details` |
 
-### Social connections — gate: security, **in-app only** (account-change confirmations)
+### Social connections — gate: security (account-change confirmations)
 
 | Type | Priority | Recipients | Trigger | Dedupe |
 |---|---|---|---|---|
