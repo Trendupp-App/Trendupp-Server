@@ -1,4 +1,10 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface InstagramTokenResponse {
@@ -11,52 +17,45 @@ export interface InstagramUserProfile {
   username: string;
 }
 
+export interface InstagramFollowerStats {
+  id: string;
+  username: string;
+  followerCount: number;
+}
+
 @Injectable()
 export class InstagramAuthService {
   private readonly logger = new Logger(InstagramAuthService.name);
   private readonly appId: string | undefined;
   private readonly appSecret: string | undefined;
-  private readonly isMockMode: boolean;
+  private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.appId = this.configService.get<string>('instagram.appId');
     this.appSecret = this.configService.get<string>('instagram.appSecret');
 
-    this.isMockMode = !this.appId || !this.appSecret;
+    this.isConfigured = Boolean(this.appId && this.appSecret);
 
-    if (this.isMockMode) {
+    if (!this.isConfigured) {
       this.logger.warn(
-        'Instagram credentials (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET) are missing. Instagram Auth will run in MOCK mode.',
+        'Instagram credentials (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET) are missing. Instagram requests will fail until they are set.',
       );
     } else {
       this.logger.log('Instagram Auth Service initialized successfully.');
     }
   }
 
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<InstagramTokenResponse> {
-    if (this.isMockMode || code.startsWith('mock_') || code.startsWith('{')) {
-      this.logger.warn(`MOCK mode: Simulating token exchange for code: ${code}`);
-
-      let userId = 'mock-instagram-user-id-123456789';
-      if (code.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(code) as Record<string, unknown>;
-          const idVal = parsed.id ?? parsed.userId ?? parsed.sub;
-          if (typeof idVal === 'string' || typeof idVal === 'number') {
-            userId = String(idVal);
-          }
-        } catch {
-          // Fallback
-        }
-      } else if (code.startsWith('mock_')) {
-        userId = `mock-instagram-user-id-${code.replace('mock_', '')}`;
-      }
-
-      return {
-        accessToken: `mock-instagram-access-token-${userId}`,
-        userId,
-      };
+  /** No mock mode: every call requires real platform credentials. */
+  private assertConfigured(): void {
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'Instagram integration is not configured on this server (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET)',
+      );
     }
+  }
+
+  async exchangeCodeForToken(code: string, redirectUri: string): Promise<InstagramTokenResponse> {
+    this.assertConfigured();
 
     try {
       const tokenUrl = 'https://api.instagram.com/oauth/access_token';
@@ -106,25 +105,13 @@ export class InstagramAuthService {
         'Instagram exchangeCodeForToken error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to authenticate with Instagram');
     }
   }
 
   async getUserProfile(accessToken: string): Promise<InstagramUserProfile> {
-    if (this.isMockMode || accessToken.startsWith('mock-instagram-access-token-')) {
-      this.logger.warn('MOCK mode: Simulating user profile fetch.');
-
-      let id = 'mock-instagram-user-id-123456789';
-      let username = 'mock_instagram_user';
-
-      const parts = accessToken.split('mock-instagram-access-token-');
-      if (parts.length > 1 && parts[1]) {
-        id = parts[1];
-        username = `mock_instagram_user_${id}`;
-      }
-
-      return { id, username };
-    }
+    this.assertConfigured();
 
     try {
       const fields = 'id,username';
@@ -160,7 +147,53 @@ export class InstagramAuthService {
         'Instagram getUserProfile error',
         error instanceof Error ? error.stack : error,
       );
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Failed to retrieve Instagram user profile info');
+    }
+  }
+
+  /**
+   * Fetch follower count + handle to *verify* an Instagram connection.
+   * `followers_count` is only returned for Professional (Business/Creator)
+   * accounts on the Instagram Graph API; for personal accounts it is absent
+   * and we default to 0.
+   */
+  async getFollowerStats(accessToken: string): Promise<InstagramFollowerStats> {
+    this.assertConfigured();
+
+    try {
+      const fields = 'user_id,username,followers_count,account_type';
+      const profileUrl = `https://graph.instagram.com/me?fields=${fields}&access_token=${accessToken}`;
+
+      const response = await fetch(profileUrl, { method: 'GET' });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Instagram stats fetch failed: Status ${response.status} - ${errorText}`);
+        throw new UnauthorizedException('Failed to fetch Instagram follower stats');
+      }
+
+      const responseBody = (await response.json()) as Record<string, unknown>;
+      const rawId = responseBody.user_id ?? responseBody.id;
+      const id = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId) : '';
+      const username = responseBody.username as string;
+      const followerCount = Number(responseBody.followers_count ?? 0);
+
+      if (!id || !username) {
+        this.logger.error(
+          `Instagram stats payload missing fields: ${JSON.stringify(responseBody)}`,
+        );
+        throw new UnauthorizedException('Invalid stats payload from Instagram');
+      }
+
+      return { id, username, followerCount };
+    } catch (error) {
+      this.logger.error(
+        'Instagram getFollowerStats error',
+        error instanceof Error ? error.stack : error,
+      );
+      if (error instanceof HttpException) throw error;
+      throw new UnauthorizedException('Failed to retrieve Instagram follower stats');
     }
   }
 }

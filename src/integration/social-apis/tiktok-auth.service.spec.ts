@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { TiktokAuthService } from './tiktok-auth.service';
-import { UnauthorizedException } from '@nestjs/common';
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 
 describe('TiktokAuthService', () => {
   let service: TiktokAuthService;
@@ -27,8 +27,8 @@ describe('TiktokAuthService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('exchangeCodeForToken (mock mode)', () => {
-    it('should bypass verification if client key/secret are missing', async () => {
+  describe('without credentials (no mock mode)', () => {
+    it('throws ServiceUnavailable instead of fabricating identities', async () => {
       const configMockNoIds = {
         get: jest.fn().mockReturnValue(null),
       } as unknown as jest.Mocked<ConfigService>;
@@ -38,36 +38,16 @@ describe('TiktokAuthService', () => {
       }).compile();
 
       const serviceNoIds = moduleNoIds.get<TiktokAuthService>(TiktokAuthService);
-      const result = await serviceNoIds.exchangeCodeForToken('any-code', 'http://localhost:3000');
 
-      expect(result.accessToken).toBe('mock-tiktok-access-token-mock-tiktok-open-id-123456789');
-      expect(result.openId).toBe('mock-tiktok-open-id-123456789');
-    });
-
-    it('should parse custom open ID if code starts with mock_ prefix', async () => {
-      const result = await service.exchangeCodeForToken('mock_user123', 'http://localhost:3000');
-      expect(result.openId).toBe('mock-tiktok-open-id-user123');
-      expect(result.accessToken).toBe('mock-tiktok-access-token-mock-tiktok-open-id-user123');
-    });
-
-    it('should parse custom JSON input in mock mode', async () => {
-      const mockCode = JSON.stringify({ openId: 'custom-id-xyz' });
-      const result = await service.exchangeCodeForToken(mockCode, 'http://localhost:3000');
-      expect(result.openId).toBe('custom-id-xyz');
-    });
-  });
-
-  describe('getUserProfile (mock mode)', () => {
-    it('should return mock profile data in mock mode', async () => {
-      const profile = await service.getUserProfile('mock-tiktok-access-token-user123');
-      expect(profile.openId).toBe('user123');
-      expect(profile.displayName).toBe('Mock TikTok Creator');
-    });
-
-    it('should return brand profile if openId contains brand keyword', async () => {
-      const profile = await service.getUserProfile('mock-tiktok-access-token-brand_user');
-      expect(profile.openId).toBe('brand_user');
-      expect(profile.displayName).toBe('Mock TikTok Brand');
+      await expect(
+        serviceNoIds.exchangeCodeForToken('any-code', 'http://localhost:3000'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      await expect(serviceNoIds.getUserProfile('any-token')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      await expect(serviceNoIds.getFollowerStats('any-token')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
     });
   });
 

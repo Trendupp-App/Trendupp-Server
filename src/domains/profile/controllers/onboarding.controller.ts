@@ -43,6 +43,7 @@ import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-repr
 import { UpdateSocialsDto } from '../../users/dtos/update-socials.dto';
 import { UpdatePayoutDto } from '../../users/dtos/update-payout.dto';
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard';
+import { computeTier } from '../../socials/constants/social-platforms';
 
 @ApiTags('onboarding')
 @ApiSecurity('onboarding-key')
@@ -326,16 +327,7 @@ export class OnboardingController {
       currentTwitterFollowers || 0,
     );
 
-    let tier = 'Nano Creator';
-    if (maxFollowers >= 1000000) {
-      tier = 'Mega Creator';
-    } else if (maxFollowers >= 200000) {
-      tier = 'Macro Creator';
-    } else if (maxFollowers >= 10000) {
-      tier = 'Micro Creator';
-    }
-
-    updates.assignedTier = tier;
+    updates.assignedTier = computeTier(maxFollowers);
 
     await this.usersService.update(user.id, updates);
 

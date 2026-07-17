@@ -101,6 +101,20 @@ export interface NotificationPayloads {
   };
   'campaign.completed': { campaignId: string; campaignTitle: string };
 
+  // ── Social connections ────────────────────────────────────────────────────
+  'social.connected': {
+    platform: string;
+    platformLabel: string;
+    username: string;
+    followerCount: number;
+    tier: string;
+  };
+  'social.disconnected': {
+    platform: string;
+    platformLabel: string;
+    tier: string;
+  };
+
   // ── Disputes ──────────────────────────────────────────────────────────────
   'dispute.raised': { disputeId: string; campaignId: string; reason: string };
   'dispute.activated': { disputeId: string; campaignId: string };

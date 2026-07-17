@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { InstagramAuthService } from './instagram-auth.service';
-import { UnauthorizedException } from '@nestjs/common';
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 
 describe('InstagramAuthService', () => {
   let service: InstagramAuthService;
@@ -27,8 +27,8 @@ describe('InstagramAuthService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('exchangeCodeForToken (mock mode)', () => {
-    it('should bypass verification if app ID/secret are missing', async () => {
+  describe('without credentials (no mock mode)', () => {
+    it('throws ServiceUnavailable instead of fabricating identities', async () => {
       const configMockNoIds = {
         get: jest.fn().mockReturnValue(null),
       } as unknown as jest.Mocked<ConfigService>;
@@ -38,32 +38,16 @@ describe('InstagramAuthService', () => {
       }).compile();
 
       const serviceNoIds = moduleNoIds.get<InstagramAuthService>(InstagramAuthService);
-      const result = await serviceNoIds.exchangeCodeForToken('any-code', 'http://localhost:3000');
 
-      expect(result.accessToken).toBe(
-        'mock-instagram-access-token-mock-instagram-user-id-123456789',
+      await expect(
+        serviceNoIds.exchangeCodeForToken('any-code', 'http://localhost:3000'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      await expect(serviceNoIds.getUserProfile('any-token')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
       );
-      expect(result.userId).toBe('mock-instagram-user-id-123456789');
-    });
-
-    it('should parse custom user ID if code starts with mock_ prefix', async () => {
-      const result = await service.exchangeCodeForToken('mock_user123', 'http://localhost:3000');
-      expect(result.userId).toBe('mock-instagram-user-id-user123');
-      expect(result.accessToken).toBe('mock-instagram-access-token-mock-instagram-user-id-user123');
-    });
-
-    it('should parse custom JSON input in mock mode', async () => {
-      const mockCode = JSON.stringify({ id: 'custom-insta-id-xyz' });
-      const result = await service.exchangeCodeForToken(mockCode, 'http://localhost:3000');
-      expect(result.userId).toBe('custom-insta-id-xyz');
-    });
-  });
-
-  describe('getUserProfile (mock mode)', () => {
-    it('should return mock profile data in mock mode', async () => {
-      const profile = await service.getUserProfile('mock-instagram-access-token-user123');
-      expect(profile.id).toBe('user123');
-      expect(profile.username).toBe('mock_instagram_user_user123');
+      await expect(serviceNoIds.getFollowerStats('any-token')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
     });
   });
 

@@ -4,6 +4,13 @@
 
 **Method:** Full backend exploration (all 9 domains + 6 integrations), three independent architecture designs (DX-first, reliability-first, product-first) synthesized into one recommendation, plus a completeness audit of the touchpoint inventory.
 
+> **Status (July 2026): Phases 1–2 are BUILT and merged.** The `notifications` module,
+> migration, queue worker, REST API, and 22 wired notification types (applications,
+> submissions, payouts, refunds, disputes) are live on the `notifications-system` branch.
+> §1 below is a **historical snapshot** of the codebase before the build.
+> See [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) for what exists now;
+> this document remains the reference for design rationale and Phases 3–5.
+
 ---
 
 ## 1. Current state (what exists today)
@@ -17,7 +24,7 @@
 | Cron jobs | `account-lifecycle.scheduler.ts`, `payout.scheduler.ts` | `@Cron` fires on **every PM2 instance** (`ecosystem.config.js` uses `instances: 'max'`) — no dedup guard. Deletion warnings re-send daily for ~29 days (no sent-flag). |
 | Stream Chat | `src/integration/stream/stream.service.ts` | Dispute channels only (create/freeze). No system messages, no sendMessage method. Not a notification rail. |
 | In-app notifications | — | **None.** No table, no module, no push. |
-| Explicit TODO | `payout.scheduler.ts:37` | "I should send email after getting clarity from stakeholders" — payout notifications are wanted but unbuilt. |
+| Explicit TODO | `payout.scheduler.ts:37` | "I should send email after getting clarity from stakeholders" — payout notifications are wanted but unbuilt. ✅ **Resolved:** the TODO is removed and the scheduler now fires `payout.released`, `payout.failed`, `payout.escrow_pending`, `campaign.completed`, and the three `refund.*` notifications. |
 
 Synthetic emails: TikTok/Instagram signups get `tiktok_<id>@trendupp.tiktok` / `instagram_<id>@trendupp.instagram` addresses (`auth.service.ts:421,513`) — **undeliverable**. For these users in-app must be the primary channel and email sends must be skipped.
 

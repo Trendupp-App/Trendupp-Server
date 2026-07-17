@@ -168,6 +168,29 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
 
+  // ── Social connections (account-change confirmations — never suppressible) ─
+  'social.connected': {
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'low',
+    title: (d) => `${d.platformLabel} connected`,
+    body: (d) =>
+      // platform handles may already carry a leading @ (e.g. YouTube customUrl)
+      `@${String(d.username).replace(/^@+/, '')} was verified with ${Number(d.followerCount).toLocaleString('en-NG')} followers. Your creator tier is now ${d.tier}.`,
+    actionUrl: () => `/settings/socials`,
+    emailSubject: (d) => `Your ${d.platformLabel} account is now connected — Trendupp`,
+  },
+  'social.disconnected': {
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'low',
+    title: (d) => `${d.platformLabel} disconnected`,
+    body: (d) =>
+      `Your ${d.platformLabel} account was disconnected. Your creator tier is now ${d.tier}. If this wasn't you, contact support.`,
+    actionUrl: () => `/settings/socials`,
+    emailSubject: (d) => `Your ${d.platformLabel} account was disconnected — Trendupp`,
+  },
+
   // ── Disputes (contractual process — never suppressible) ───────────────────
   'dispute.raised': {
     category: 'security',

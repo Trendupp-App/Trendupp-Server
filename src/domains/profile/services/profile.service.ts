@@ -16,6 +16,7 @@ import { SupportTicketRepository } from '../repository/support-ticket.repository
 import { IssueCategory } from '../entities/issue-category.entity';
 import { IssueCategoryRepository } from '../repository/issue-category.repository';
 import * as bcrypt from 'bcryptjs';
+import { computeTier } from '../../socials/constants/social-platforms';
 
 @Injectable()
 export class ProfileService {
@@ -245,16 +246,7 @@ export class ProfileService {
       currentTwitterFollowers || 0,
     );
 
-    let tier = 'Nano Creator';
-    if (maxFollowers >= 1000000) {
-      tier = 'Mega Creator';
-    } else if (maxFollowers >= 200000) {
-      tier = 'Macro Creator';
-    } else if (maxFollowers >= 10000) {
-      tier = 'Micro Creator';
-    }
-
-    updates.assignedTier = tier;
+    updates.assignedTier = computeTier(maxFollowers);
 
     await this.usersService.update(userId, updates);
 
