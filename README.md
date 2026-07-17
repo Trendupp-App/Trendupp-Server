@@ -67,6 +67,12 @@ npm run build
 Once the server is running, visit:
 `http://localhost:3000/docs`
 
+Interactive Swagger/OpenAPI docs grouped by tag — including `socials`
+(OAuth-verified social account connections: list / connect / refresh /
+disconnect) and `notifications` (in-app feed, unread badge count, seen/read
+receipts). The catalog of all notification types and their gating rules lives
+in [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md).
+
 ## 🧪 Testing
 ```bash
 # Unit tests
