@@ -114,6 +114,7 @@ export class CampaignsController {
         title: dto.title,
         goal: dto.goal,
         totalBudget: dto.totalBudget,
+        creatorCategoryIds: dto.creatorCategoryIds,
         creatorCategoryId: dto.creatorCategoryId,
         preferredPlatformIds: dto.preferredPlatformIds,
         timeline: dto.timeline,

@@ -40,12 +40,42 @@ export class CreateCampaignDto {
   totalBudget: number;
 
   @ApiProperty({
-    description: 'ID of the creator category targeted',
-    example: 'b5c03d87-18dd-419b-a4db-d06670c485ad',
+    description: 'IDs of the creator categories targeted',
+    example: ['b5c03d87-18dd-419b-a4db-d06670c485ad'],
+    type: [String],
   })
-  @IsUUID(4)
+  @Transform(({ value }: { value: unknown }): string[] => {
+    if (Array.isArray(value)) {
+      return value.map((v: unknown) => String(v).trim());
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.map((v: unknown) => String(v).trim());
+        }
+      } catch {
+        // not JSON — continue
+      }
+      if (trimmed.includes(',')) {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return [trimmed];
+    }
+    return [];
+  })
+  @IsArray()
+  @IsUUID(4, { each: true })
   @IsNotEmpty()
-  creatorCategoryId: string;
+  creatorCategoryIds: string[];
+
+  @IsUUID(4)
+  @IsOptional()
+  creatorCategoryId?: string;
 
   @ApiProperty({
     description: 'IDs of the preferred social media platforms',

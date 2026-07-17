@@ -25,13 +25,15 @@ export const getLoggerConfig = (env: string, logtailSourceToken: string) => {
     }),
   ];
 
-  if (env === 'production' && logtailSourceToken) {
+  const isProd = env === 'production' || env === 'staging';
+
+  if (isProd && logtailSourceToken) {
     const logtail = new Logtail(logtailSourceToken);
     logTransports.push(new LogtailTransport(logtail));
   }
 
   return {
-    level: env === 'production' ? 'info' : 'debug',
+    level: isProd ? 'info' : 'debug',
     transports: logTransports,
   };
 };

@@ -5,7 +5,6 @@ import { CampaignRepository } from '../repository/campaign.repository';
 import { Campaign } from '../entities/campaign.entity';
 import { S3Service } from '../../../integration/s3/s3.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
 import { User } from '../../users/entities/user.entity';
 import { CreateReviewDto } from '../dtos/create-review.dto';
 import { CampaignApplication } from '../entities/campaign-application.entity';
@@ -17,17 +16,18 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { EmailService } from '../../../integration/email/email.service';
 import { getModelToken } from '@nestjs/sequelize';
 import { Niche } from '../../users/entities/niche.entity';
+import { CreatorCategory } from '../entities/creator-category.entity';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let s3ServiceMock: jest.Mocked<S3Service>;
-  let urlValidatorMock: jest.Mocked<UrlValidatorService>;
   let usersServiceMock: jest.Mocked<UsersService>;
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
   let emailServiceMock: jest.Mocked<EmailService>;
   let nicheModelMock: Record<string, unknown>;
+  let creatorCategoryModelMock: Record<string, unknown>;
 
   const mockCampaign = {
     id: 'c1',
@@ -36,6 +36,7 @@ describe('CampaignsService', () => {
     goal: 'Create Content',
     totalBudget: 3000000,
     creatorCategoryId: 'cc1',
+    creatorCategoryIds: ['cc1'],
     creatorNicheId: 'n1',
     creatorNicheIds: ['n1'],
     timeline: new Date('2026-07-31T23:59:59.999Z'),
@@ -105,12 +106,6 @@ describe('CampaignsService', () => {
       uploadFile: jest.fn().mockResolvedValue('https://mock-s3-url.com/image.jpg'),
     } as unknown as jest.Mocked<S3Service>;
 
-    urlValidatorMock = {
-      validateUrl: jest
-        .fn()
-        .mockResolvedValue({ isLive: true, platform: 'YouTube', checkedAt: new Date() }),
-    } as unknown as jest.Mocked<UrlValidatorService>;
-
     usersServiceMock = {
       findOne: jest.fn().mockResolvedValue({
         id: 'b1',
@@ -152,17 +147,21 @@ describe('CampaignsService', () => {
       findAll: jest.fn().mockResolvedValue([{ id: 'n1', name: 'Fashion' }]),
     };
 
+    creatorCategoryModelMock = {
+      findAll: jest.fn().mockResolvedValue([{ id: 'cc1', name: 'Nano' }]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: S3Service, useValue: s3ServiceMock },
-        { provide: UrlValidatorService, useValue: urlValidatorMock },
         { provide: UsersService, useValue: usersServiceMock },
         { provide: PandascrowService, useValue: pandascrowServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
         { provide: EmailService, useValue: emailServiceMock },
         { provide: getModelToken(Niche), useValue: nicheModelMock },
+        { provide: getModelToken(CreatorCategory), useValue: creatorCategoryModelMock },
       ],
     }).compile();
 
@@ -179,7 +178,7 @@ describe('CampaignsService', () => {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        creatorCategoryId: 'cc1',
+        creatorCategoryIds: ['cc1'],
         preferredPlatformIds: ['p1'],
         timeline: '2026-07-31T23:59:59.999Z',
         creatorNicheId: 'n1',
@@ -196,6 +195,7 @@ describe('CampaignsService', () => {
         goal: 'Create Content',
         totalBudget: 3000000,
         creatorCategoryId: 'cc1',
+        creatorCategoryIds: ['cc1'],
         brandId: 'b1',
         coverImage: undefined,
         status: 'draft',
@@ -217,7 +217,7 @@ describe('CampaignsService', () => {
         title: 'Summer Campaign',
         goal: 'Create Content',
         totalBudget: 3000000,
-        creatorCategoryId: 'cc1',
+        creatorCategoryIds: ['cc1'],
         preferredPlatformIds: ['p1'],
         timeline: '2026-07-31T23:59:59.999Z',
         creatorNicheId: 'n1',
@@ -241,6 +241,7 @@ describe('CampaignsService', () => {
         goal: 'Create Content',
         totalBudget: 3000000,
         creatorCategoryId: 'cc1',
+        creatorCategoryIds: ['cc1'],
         brandId: 'b1',
         coverImage: 'https://mock-s3-url.com/image.jpg',
         amplificationAsset: undefined,
@@ -1199,33 +1200,16 @@ describe('CampaignsService', () => {
       campaignRepoMock.findSubmissionById.mockResolvedValue(mockSubmission as any);
       campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
 
-      urlValidatorMock.validateUrl.mockResolvedValue({
-        isLive: true,
-        platform: 'Instagram',
-        checkedAt: new Date('2026-06-29'),
-      });
-
       await service.submitLivePost('c1', 'sub1', 'creator1', {
         instagram: 'https://instagram.com/p/live',
       });
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(urlValidatorMock.validateUrl).toHaveBeenCalledWith('https://instagram.com/p/live');
-
       expect(mockSubmission.update).toHaveBeenCalledWith({
         liveLink: {
-          instagram: {
-            url: 'https://instagram.com/p/live',
-            isLive: true,
-            checkedAt: expect.any(Date) as Date,
-          },
+          instagram: 'https://instagram.com/p/live',
         },
-        urlIsLive: true,
-        urlCheckedAt: expect.any(Date) as Date,
         status: 'livelink_available',
       });
-
-      // expect(mockApplication.update).toHaveBeenCalledWith({ status: 'approved' });
     });
   });
 
@@ -1577,12 +1561,6 @@ describe('CampaignsService', () => {
       campaignRepoMock.findById.mockResolvedValue(mockCampaignWithGoal);
       campaignRepoMock.createSubmission.mockResolvedValue(mockNewSubmission);
       campaignRepoMock.findSubmissionById.mockResolvedValueOnce(mockNewSubmission);
-
-      urlValidatorMock.validateUrl.mockResolvedValue({
-        isLive: true,
-        platform: 'Instagram',
-        checkedAt: new Date(),
-      });
 
       const result = await service.submitLivePost('c1', 'app1', 'creator1', {
         instagram: 'https://instagram.com/p/123',

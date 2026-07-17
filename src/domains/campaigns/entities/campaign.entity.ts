@@ -42,6 +42,16 @@ export class Campaign extends BaseEntity<Campaign> {
   @BelongsTo(() => CreatorCategory)
   declare creatorCategory?: CreatorCategory;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: [],
+    field: 'creator_category_ids',
+  })
+  declare creatorCategoryIds: string[];
+
+  declare creatorCategories?: CreatorCategory[];
+
   @ForeignKey(() => Niche)
   @Column({ type: DataType.UUID, allowNull: true, field: 'creator_niche_id' })
   declare creatorNicheId?: string;

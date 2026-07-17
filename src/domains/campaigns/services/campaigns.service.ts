@@ -12,7 +12,6 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { S3Service } from '../../../integration/s3/s3.service';
-import { UrlValidatorService } from '../../../integration/url-validator/url-validator.service';
 import { Fee } from '../entities/fee.entity';
 import { CreateFeeDto } from '../dtos/create-fee.dto';
 import { PaginatedResult } from '../../../shared/utils/pagination.utils';
@@ -33,13 +32,14 @@ export class CampaignsService {
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly s3Service: S3Service,
-    private readonly urlValidatorService: UrlValidatorService,
     private readonly usersService: UsersService,
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
+    @InjectModel(CreatorCategory)
+    private readonly creatorCategoryModel: typeof CreatorCategory,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -113,6 +113,20 @@ export class CampaignsService {
         campaign.setDataValue('creatorNiches' as any, []);
         campaign.setDataValue('creatorNiche' as any, null);
       }
+
+      // Populate creatorCategories from the JSONB array
+      if (campaign.creatorCategoryIds && campaign.creatorCategoryIds.length > 0) {
+        const categories = await this.creatorCategoryModel.findAll({
+          where: {
+            id: {
+              [Op.in]: campaign.creatorCategoryIds,
+            },
+          },
+        });
+        campaign.setDataValue('creatorCategories' as any, categories);
+      } else {
+        campaign.setDataValue('creatorCategories' as any, []);
+      }
     }
     return campaign;
   }
@@ -128,7 +142,8 @@ export class CampaignsService {
       title: string;
       goal: string;
       totalBudget: number;
-      creatorCategoryId: string;
+      creatorCategoryIds: string[];
+      creatorCategoryId?: string;
       preferredPlatformIds: string[];
       timeline: string;
       creatorNicheId?: string;
@@ -158,18 +173,35 @@ export class CampaignsService {
     }
     const currency = brand.country?.currency || 'USD';
 
-    const { preferredPlatformIds, timeline, creatorNicheId, creatorNicheIds, ...campaignData } =
-      data;
+    const {
+      preferredPlatformIds,
+      timeline,
+      creatorNicheId,
+      creatorNicheIds,
+      creatorCategoryIds,
+      creatorCategoryId,
+      ...campaignData
+    } = data;
 
     const resolvedNicheIds = creatorNicheIds || (creatorNicheId ? [creatorNicheId] : []);
     const resolvedNicheId = creatorNicheId || (resolvedNicheIds && resolvedNicheIds[0]) || null;
+
+    const resolvedCategoryIds =
+      creatorCategoryIds && creatorCategoryIds.length > 0
+        ? creatorCategoryIds
+        : creatorCategoryId
+          ? [creatorCategoryId]
+          : [];
+    const resolvedCategoryId =
+      creatorCategoryId || (resolvedCategoryIds && resolvedCategoryIds[0]) || null;
 
     const campaign = await this.campaignRepository.create({
       ...campaignData,
       creatorNicheId: resolvedNicheId as string,
       creatorNicheIds: resolvedNicheIds,
+      creatorCategoryId: resolvedCategoryId as string,
+      creatorCategoryIds: resolvedCategoryIds,
       timeline: timeline ? new Date(timeline) : undefined,
-
       brandId,
       coverImage,
       amplificationAsset,
@@ -195,6 +227,7 @@ export class CampaignsService {
       title?: string;
       goal?: string;
       totalBudget?: number;
+      creatorCategoryIds?: string[];
       creatorCategoryId?: string;
       preferredPlatformIds?: string[];
       timeline?: string;
@@ -240,8 +273,15 @@ export class CampaignsService {
       amplificationAsset = data.amplificationAsset;
     }
 
-    const { preferredPlatformIds, timeline, creatorNicheId, creatorNicheIds, ...campaignData } =
-      data;
+    const {
+      preferredPlatformIds,
+      timeline,
+      creatorNicheId,
+      creatorNicheIds,
+      creatorCategoryIds,
+      creatorCategoryId,
+      ...campaignData
+    } = data;
 
     const updates: Record<string, unknown> = {
       ...campaignData,
@@ -264,6 +304,22 @@ export class CampaignsService {
 
       updates.creatorNicheId = resolvedNicheId;
       updates.creatorNicheIds = resolvedNicheIds;
+    }
+
+    if (creatorCategoryIds !== undefined || creatorCategoryId !== undefined) {
+      const resolvedCategoryIds =
+        creatorCategoryIds !== undefined
+          ? creatorCategoryIds
+          : creatorCategoryId
+            ? [creatorCategoryId]
+            : [];
+      const resolvedCategoryId =
+        creatorCategoryId !== undefined
+          ? creatorCategoryId
+          : (resolvedCategoryIds && resolvedCategoryIds[0]) || null;
+
+      updates.creatorCategoryId = resolvedCategoryId;
+      updates.creatorCategoryIds = resolvedCategoryIds;
     }
 
     if (files?.coverImage) {
@@ -314,7 +370,9 @@ export class CampaignsService {
       if (!campaign.title) errors.push('title is required');
       if (!campaign.goal) errors.push('goal is required');
       if (!campaign.totalBudget) errors.push('totalBudget is required');
-      if (!campaign.creatorCategoryId) errors.push('creatorCategory is required');
+      if (!campaign.creatorCategoryIds || campaign.creatorCategoryIds.length === 0) {
+        errors.push('creatorCategory is required');
+      }
       if (!campaign.timeline) errors.push('timeline is required');
       if (!campaign.creatorNicheIds || campaign.creatorNicheIds.length === 0) {
         errors.push('creatorNiche is required');
@@ -1189,11 +1247,7 @@ export class CampaignsService {
       );
     }
 
-    // Run Tier 1 url check on each URL inside the liveLink object
-    const processedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> = {};
-    let overallIsLive = true;
-    let checkedAt = new Date();
-
+    // Basic URL format validation only — live-check deferred to a future integration
     for (const [platform, url] of Object.entries(liveLink)) {
       if (typeof url !== 'string') {
         throw new BadRequestException(`URL for platform "${platform}" must be a string`);
@@ -1203,33 +1257,17 @@ export class CampaignsService {
       } catch {
         throw new BadRequestException(`URL for platform "${platform}" is invalid: "${url}"`);
       }
-
-      const { isLive, checkedAt: checkTime } = await this.urlValidatorService.validateUrl(url);
-      if (!isLive) {
-        overallIsLive = false;
-      }
-      checkedAt = checkTime;
-
-      processedLinks[platform] = {
-        url,
-        isLive,
-        checkedAt: checkTime,
-      };
     }
 
-    // Update submission
+    // Update submission — store the raw liveLink as submitted; urlIsLive / urlCheckedAt left null
     await submission.update({
-      liveLink: processedLinks as unknown as Record<string, string>,
-      urlIsLive: overallIsLive,
-      urlCheckedAt: checkedAt,
+      liveLink: liveLink,
       status: 'livelink_available',
     });
 
-    // Update campaign level convenience status
+    // Notify brand
     const campaign = await this.campaignRepository.findById(campaignId);
     if (campaign) {
-      await campaign.update({ urlIsLive: overallIsLive });
-
       await this.notificationsService.notify({
         type: 'submission.live_posted',
         recipientId: campaign.brandId,
@@ -1329,82 +1367,7 @@ export class CampaignsService {
 
     const submissions = await this.campaignRepository.findSubmissionsByCampaignId(campaignId);
 
-    // Re-validate completed live links in background
-    const liveSubs = submissions.filter((s) => s.status === 'done' && s.liveLink);
-    if (liveSubs.length > 0) {
-      const results = await Promise.allSettled(
-        liveSubs.map(async (sub) => {
-          let liveLinkObj: Record<string, unknown> | null = null;
-          if (typeof sub.liveLink === 'string') {
-            try {
-              liveLinkObj = JSON.parse(sub.liveLink) as Record<string, unknown>;
-            } catch {
-              liveLinkObj = { link: sub.liveLink };
-            }
-          } else if (sub.liveLink && typeof sub.liveLink === 'object') {
-            liveLinkObj = sub.liveLink;
-          }
-
-          let overallIsLive = true;
-          let latestCheckedAt = new Date();
-          const updatedLinks: Record<string, { url: string; isLive: boolean; checkedAt: Date }> =
-            {};
-
-          if (liveLinkObj && typeof liveLinkObj === 'object') {
-            const entries = Object.entries(liveLinkObj);
-            if (entries.length > 0) {
-              for (const [platform, linkData] of entries) {
-                let url = '';
-                if (typeof linkData === 'string') {
-                  url = linkData;
-                } else if (linkData && typeof linkData === 'object') {
-                  const dataObj = linkData as Record<string, unknown>;
-                  if (typeof dataObj.url === 'string') {
-                    url = dataObj.url;
-                  }
-                }
-
-                if (url) {
-                  const { isLive, checkedAt } = await this.urlValidatorService.validateUrl(url);
-                  if (!isLive) {
-                    overallIsLive = false;
-                  }
-                  latestCheckedAt = checkedAt;
-                  updatedLinks[platform] = {
-                    url,
-                    isLive,
-                    checkedAt,
-                  };
-                }
-              }
-            } else {
-              overallIsLive = false;
-            }
-          } else {
-            overallIsLive = false;
-          }
-
-          await sub.update({
-            liveLink: updatedLinks as unknown as Record<string, string>,
-            urlIsLive: overallIsLive,
-            urlCheckedAt: latestCheckedAt,
-          });
-          return { id: sub.id, isLive: overallIsLive };
-        }),
-      );
-
-      // Update campaign level convenience status using the most recent submission's liveness check
-      const latestSub = liveSubs[0]; // Ordered by createdAt DESC
-      if (latestSub) {
-        const latestResult = results[0];
-        if (latestResult && latestResult.status === 'fulfilled') {
-          await campaign.update({ urlIsLive: latestResult.value.isLive });
-        }
-      }
-    }
-
-    // Refresh and return latest
-    return this.campaignRepository.findSubmissionsByCampaignId(campaignId);
+    return submissions;
   }
 
   // ─── Fee Management Actions ────────────────────────────────────────────────
