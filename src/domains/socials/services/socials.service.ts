@@ -14,10 +14,10 @@ import { SocialConnectionRepository } from '../repository/social-connection.repo
 import { SocialVerificationService } from './social-verification.service';
 import { ConnectSocialDto } from '../dtos/connect-social.dto';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { SocialPlatformSettingRepository } from '../repository/social-platform-setting.repository';
 import {
   computeTier,
   isSocialPlatform,
-  MIN_FOLLOWERS,
   PLATFORM_LABELS,
   SOCIAL_PLATFORMS,
   SocialPlatform,
@@ -56,6 +56,7 @@ export class SocialsService {
 
   constructor(
     private readonly repo: SocialConnectionRepository,
+    private readonly settingsRepo: SocialPlatformSettingRepository,
     private readonly verification: SocialVerificationService,
     private readonly usersService: UsersService,
     private readonly notificationsService: NotificationsService,
@@ -63,10 +64,14 @@ export class SocialsService {
 
   /** Full set of platform cards (connected or not) for the Connect Socials screen. */
   async list(userId: string): Promise<SocialConnectionView[]> {
-    const connections = await this.repo.findByUser(userId);
+    const [connections, minFollowers] = await Promise.all([
+      this.repo.findByUser(userId),
+      this.settingsRepo.getMinFollowers(),
+    ]);
     return SOCIAL_PLATFORMS.map((platform) =>
       this.toView(
         platform,
+        minFollowers[platform],
         connections.find((c) => c.platform === platform),
       ),
     );
@@ -94,7 +99,8 @@ export class SocialsService {
       }
     }
 
-    const min = MIN_FOLLOWERS[platform];
+    // Runtime-editable threshold from social_platform_settings (code defaults as fallback)
+    const min = (await this.settingsRepo.getMinFollowers())[platform];
     if (verified.followerCount < min) {
       throw new UnprocessableEntityException(
         `${PLATFORM_LABELS[platform]} requires at least ${min.toLocaleString()} followers to connect. ` +
@@ -211,7 +217,11 @@ export class SocialsService {
     return value;
   }
 
-  private toView(platform: SocialPlatform, conn?: SocialConnection): SocialConnectionView {
+  private toView(
+    platform: SocialPlatform,
+    minFollowers: number,
+    conn?: SocialConnection,
+  ): SocialConnectionView {
     return {
       platform,
       label: PLATFORM_LABELS[platform],
@@ -220,7 +230,7 @@ export class SocialsService {
       username: conn?.username ?? null,
       followerCount: conn?.followerCount ?? 0,
       avatarUrl: conn?.avatarUrl ?? null,
-      minFollowers: MIN_FOLLOWERS[platform],
+      minFollowers,
       connectedAt: conn?.createdAt ?? null,
     };
   }

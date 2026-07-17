@@ -30,10 +30,10 @@ export const PLATFORM_LABELS: Record<SocialPlatform, string> = {
 };
 
 /**
- * Minimum follower/subscriber count required to connect each platform.
- * Mirrors the thresholds shown on the mobile/web "Connect Socials" screen
- * (TikTok 1,000+, YouTube 500+, X 500+). Instagram is assumed 1,000 — adjust
- * here if product decides otherwise; this is the single source of truth.
+ * FALLBACK minimum follower/subscriber counts per platform.
+ * The live values come from the social_platform_settings table (editable at
+ * runtime, seeded with these numbers) — these constants apply only for
+ * platforms missing a DB row. See SocialPlatformSettingRepository.
  */
 export const MIN_FOLLOWERS: Record<SocialPlatform, number> = {
   [SocialPlatform.INSTAGRAM]: 1000,

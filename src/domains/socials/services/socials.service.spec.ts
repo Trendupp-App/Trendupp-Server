@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { SocialsService } from './socials.service';
 import { SocialConnectionRepository } from '../repository/social-connection.repository';
+import { SocialPlatformSettingRepository } from '../repository/social-platform-setting.repository';
 import { SocialVerificationService } from './social-verification.service';
 import { UsersService } from '../../users/services/users.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
@@ -30,6 +31,7 @@ const conn = (over: Partial<SocialConnection>): SocialConnection =>
 describe('SocialsService', () => {
   let service: SocialsService;
   let repo: jest.Mocked<SocialConnectionRepository>;
+  let settingsRepo: jest.Mocked<SocialPlatformSettingRepository>;
   let verification: jest.Mocked<SocialVerificationService>;
   let users: jest.Mocked<UsersService>;
   let notifications: jest.Mocked<NotificationsService>;
@@ -44,6 +46,16 @@ describe('SocialsService', () => {
       upsert: jest.fn().mockResolvedValue(conn({})),
       removeByUserAndPlatform: jest.fn().mockResolvedValue(1),
     } as unknown as jest.Mocked<SocialConnectionRepository>;
+
+    settingsRepo = {
+      // Seed values from the social_platform_settings migration
+      getMinFollowers: jest.fn().mockResolvedValue({
+        instagram: 1000,
+        tiktok: 1000,
+        youtube: 500,
+        twitter: 500,
+      }),
+    } as unknown as jest.Mocked<SocialPlatformSettingRepository>;
 
     verification = {
       verify: jest.fn(),
@@ -62,6 +74,7 @@ describe('SocialsService', () => {
       providers: [
         SocialsService,
         { provide: SocialConnectionRepository, useValue: repo },
+        { provide: SocialPlatformSettingRepository, useValue: settingsRepo },
         { provide: SocialVerificationService, useValue: verification },
         { provide: UsersService, useValue: users },
         { provide: NotificationsService, useValue: notifications },
@@ -173,6 +186,28 @@ describe('SocialsService', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
     expect(repo.upsert).not.toHaveBeenCalled();
     expect(users.update).not.toHaveBeenCalled();
+  });
+
+  it('connect honors a lowered minimum from social_platform_settings', async () => {
+    // DB override (e.g. dev environment): YouTube minimum dropped to 0
+    settingsRepo.getMinFollowers.mockResolvedValue({
+      instagram: 1000,
+      tiktok: 1000,
+      youtube: 0,
+      twitter: 500,
+    });
+    verification.verify.mockResolvedValue({
+      platformUserId: 'yt-1',
+      username: 'fresh_channel',
+      followerCount: 0,
+      accessToken: 'tok',
+    });
+    repo.findByUser.mockResolvedValue([]);
+
+    await expect(
+      service.connect(userId, 'youtube', { code: 'c', redirectUri: 'r' }),
+    ).resolves.toBeDefined();
+    expect(repo.upsert).toHaveBeenCalled();
   });
 
   it('connect rejects an unsupported platform before any OAuth call', async () => {
