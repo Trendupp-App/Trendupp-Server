@@ -2,7 +2,7 @@ import * as Joi from 'joi';
 
 export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
-    .valid('development', 'production', 'test', 'provision')
+    .valid('development', 'staging', 'production', 'test', 'provision')
     .default('development'),
   PORT: Joi.number().default(3000),
 
@@ -17,7 +17,7 @@ export const validationSchema = Joi.object({
   DB_NAME: Joi.string().required(),
 
   // Redis
-  REDIS_HOST: Joi.string().required(),
+  REDIS_HOST: Joi.string().optional().default('127.0.0.1'),
   REDIS_PORT: Joi.number().default(6379),
 
   // BetterStack (Logtail)

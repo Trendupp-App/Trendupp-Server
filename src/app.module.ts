@@ -69,12 +69,25 @@ import { NewsModule } from './domains/news/news.module';
     // Task Queue (Redis - BullMQ)
     BullModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get<string>('redis.host'),
-          port: configService.get<number>('redis.port'),
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isDev = configService.get<string>('env') === 'development';
+        return {
+          connection: {
+            host: isDev ? '127.0.0.1' : configService.get<string>('redis.host'),
+            port: isDev ? 6379 : configService.get<number>('redis.port'),
+            // In development, connect lazily and stop retrying after the first failure
+            // so the server starts cleanly without a local Redis instance.
+            // NotificationsService already has a try/catch fallback dispatcher for when
+            // the queue is unreachable, so notifications still work inline.
+            ...(isDev && {
+              lazyConnect: true,
+              enableOfflineQueue: false,
+
+              retryStrategy: () => null, // give up after first failure — no ECONNREFUSED spam
+            }),
+          },
+        };
+      },
     }),
 
     // Rate Limiting
