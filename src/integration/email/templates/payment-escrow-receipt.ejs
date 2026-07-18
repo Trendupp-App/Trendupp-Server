@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Receipt – Trendupp</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f7;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      color: #333333;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #f4f4f7;
+      padding: 40px 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    /* ── Header ─────────────────────────────────────── */
+    .header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      padding: 36px 40px 28px;
+      text-align: center;
+    }
+    .header .logo-text {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+    .header .logo-text span {
+      color: #e94560;
+    }
+    .header .badge {
+      display: inline-block;
+      margin-top: 12px;
+      background-color: rgba(233, 69, 96, 0.15);
+      border: 1px solid rgba(233, 69, 96, 0.4);
+      color: #e94560;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 20px;
+    }
+    /* ── Success banner ──────────────────────────────── */
+    .success-banner {
+      background: linear-gradient(135deg, #0d7a5f 0%, #0a9b72 100%);
+      padding: 20px 40px;
+      text-align: center;
+    }
+    .success-banner .check {
+      font-size: 36px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .success-banner p {
+      margin: 0;
+      color: #ffffff;
+      font-size: 15px;
+      opacity: 0.92;
+    }
+    /* ── Body ────────────────────────────────────────── */
+    .body {
+      padding: 36px 40px;
+    }
+    .greeting {
+      font-size: 16px;
+      color: #333333;
+      margin: 0 0 8px;
+    }
+    .intro {
+      font-size: 14px;
+      color: #555555;
+      line-height: 1.6;
+      margin: 0 0 28px;
+    }
+    .intro strong {
+      color: #0a9b72;
+    }
+    /* ── Receipt card ────────────────────────────────── */
+    .receipt-card {
+      border: 1px solid #e8e8ee;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .receipt-header {
+      background-color: #f8f9fc;
+      padding: 14px 20px;
+      border-bottom: 1px solid #e8e8ee;
+    }
+    .receipt-header h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .receipt-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .receipt-table tr:not(:last-child) td {
+      border-bottom: 1px solid #f0f0f5;
+    }
+    .receipt-table td {
+      padding: 13px 20px;
+      font-size: 13.5px;
+    }
+    .receipt-table td:first-child {
+      color: #888888;
+      font-weight: 500;
+      width: 38%;
+    }
+    .receipt-table td:last-child {
+      color: #1a1a2e;
+      font-weight: 600;
+      font-family: 'Courier New', Courier, monospace;
+      word-break: break-all;
+    }
+    .receipt-table td.label {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    .receipt-table td.value-normal {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    .amount-value {
+      color: #0a9b72 !important;
+      font-size: 15px !important;
+    }
+    /* ── CTA ─────────────────────────────────────────── */
+    .cta-section {
+      text-align: center;
+      margin: 28px 0 4px;
+    }
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #e94560 0%, #c73652 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 36px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    /* ── Footer ──────────────────────────────────────── */
+    .footer {
+      background-color: #f8f9fc;
+      border-top: 1px solid #e8e8ee;
+      padding: 24px 40px;
+      text-align: center;
+    }
+    .footer p {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: #aaaaaa;
+      line-height: 1.6;
+    }
+    .footer a {
+      color: #aaaaaa;
+      text-decoration: underline;
+    }
+    .footer .divider {
+      border: none;
+      border-top: 1px solid #e8e8ee;
+      margin: 16px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+
+      <!-- Header -->
+      <div class="header">
+        <div class="logo-text">Trendu<span>pp</span></div>
+        <div class="badge">Payment Receipt</div>
+      </div>
+
+      <!-- Success Banner -->
+      <div class="success-banner">
+        <div class="check">✓</div>
+        <p>Your payment has been successfully received and is now securely held in escrow.</p>
+      </div>
+
+      <!-- Body -->
+      <div class="body">
+        <p class="greeting">Hi <%= firstName %>,</p>
+        <p class="intro">
+          Thank you for funding your escrow on Trendupp. Your payment of
+          <strong>
+            <%
+              const symbols = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
+              const sym = symbols[currency] || (currency + ' ');
+              const formatted = Number(amount).toLocaleString('en-NG');
+            %>
+            <%= sym %><%= formatted %>
+          </strong>
+          has been successfully received and is now securely held in our protected escrow account.
+        </p>
+
+        <!-- Receipt Card -->
+        <div class="receipt-card">
+          <div class="receipt-header">
+            <h2>Payment Receipt</h2>
+          </div>
+          <table class="receipt-table">
+            <% if (transactionRef) { %>
+            <tr>
+              <td class="label">Reference:</td>
+              <td><%= transactionRef %></td>
+            </tr>
+            <% } %>
+            <% if (escrowId) { %>
+            <tr>
+              <td class="label">Escrow ID:</td>
+              <td><%= escrowId %></td>
+            </tr>
+            <% } %>
+            <tr>
+              <td class="label">Amount Secured:</td>
+              <td class="amount-value"><%= sym %><%= formatted %></td>
+            </tr>
+            <tr>
+              <td class="label">Campaign:</td>
+              <td class="value-normal"><%= campaignTitle %></td>
+            </tr>
+            <tr>
+              <td class="label">Escrow Type:</td>
+              <td class="value-normal">Onetime</td>
+            </tr>
+            <tr>
+              <td class="label">Recipient / Seller:</td>
+              <td class="value-normal">Trendupp Africa</td>
+            </tr>
+            <tr>
+              <td class="label">Date &amp; Time:</td>
+              <td class="value-normal">
+                <%
+                  const dateStr = paidAt
+                    ? new Date(paidAt).toLocaleString('en-NG', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', hour12: true
+                      })
+                    : new Date().toLocaleString('en-NG', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', hour12: true
+                      });
+                %>
+                <%= dateStr %>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- CTA -->
+        <% if (actionUrl) { %>
+        <div class="cta-section">
+          <a href="<%= appUrl %><%= actionUrl %>" class="cta-button">View Campaign</a>
+        </div>
+        <% } %>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <hr class="divider" />
+        <p>You can manage which emails you receive in your <a href="<%= appUrl %>/settings/notifications">notification settings</a>.</p>
+        <p>&copy; <%= new Date().getFullYear() %> Trendupp. All rights reserved.</p>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

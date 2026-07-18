@@ -17,6 +17,7 @@ import { EmailService } from '../../../integration/email/email.service';
 import { getModelToken } from '@nestjs/sequelize';
 import { Niche } from '../../users/entities/niche.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
+import { Fee } from '../entities/fee.entity';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -28,6 +29,7 @@ describe('CampaignsService', () => {
   let emailServiceMock: jest.Mocked<EmailService>;
   let nicheModelMock: Record<string, unknown>;
   let creatorCategoryModelMock: Record<string, unknown>;
+  let feeModelMock: Record<string, unknown>;
 
   const mockCampaign = {
     id: 'c1',
@@ -151,6 +153,11 @@ describe('CampaignsService', () => {
       findAll: jest.fn().mockResolvedValue([{ id: 'cc1', name: 'Nano' }]),
     };
 
+    // Returns the Pandascrow USD fee rate (5%) by default (mockCampaign.currency = 'USD')
+    feeModelMock = {
+      findOne: jest.fn().mockResolvedValue({ value: 0.05 }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
@@ -162,6 +169,7 @@ describe('CampaignsService', () => {
         { provide: EmailService, useValue: emailServiceMock },
         { provide: getModelToken(Niche), useValue: nicheModelMock },
         { provide: getModelToken(CreatorCategory), useValue: creatorCategoryModelMock },
+        { provide: getModelToken(Fee), useValue: feeModelMock },
       ],
     }).compile();
 

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+// import { Cron, CronExpression } from '@nestjs/schedule'; // PAUSED — uncomment with the @Cron decorator below to re-enable
 import { Op } from 'sequelize';
 import { InjectModel } from '@nestjs/sequelize';
 import { User } from '../../users/entities/user.entity';
@@ -25,7 +25,9 @@ export class AccountLifecycleScheduler {
     private readonly emailService: EmailService,
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  // @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  // PAUSED: Stakeholders have requested account lifecycle deletion be held.
+  // Uncomment the @Cron decorator above to re-enable the daily scheduled run.
   async processInactiveAccounts(): Promise<void> {
     this.logger.log('Running daily inactive-account lifecycle check...');
 

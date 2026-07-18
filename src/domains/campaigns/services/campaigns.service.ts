@@ -40,23 +40,37 @@ export class CampaignsService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(CreatorCategory)
     private readonly creatorCategoryModel: typeof CreatorCategory,
+    @InjectModel(Fee)
+    private readonly feeModel: typeof Fee,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async calculateBreakdown(budget: number): Promise<{
+  async calculateBreakdown(
+    budget: number,
+    currency: string,
+  ): Promise<{
     campaignBudget: number;
     trenduppFee: number;
     vat: number;
+    pandascrowFee: number;
     totalToPay: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
-    // Under the new billing system, the input budget is the exact total paid by the advertiser.
-    // Deductions: 15% Trendupp Fee and 7.5% VAT (Option B on total funded) are deducted from this total.
+    // Trendupp commission (15%) and VAT (7.5%) are deducted from the brand's total payment
     const trenduppFee = Math.round(budget * 0.15);
     const vat = Math.round(budget * 0.075);
-    const campaignBudget = budget - (trenduppFee + vat);
+
+    // Look up Pandascrow platform fee rate from the fees table
+    // NGN → Pandascrow routes via Paystack (3%), USD → via Stripe (5%)
+    const feeKey =
+      currency === 'NGN' ? 'Pandascrow Gateway Fee (NGN)' : 'Pandascrow Gateway Fee (USD)';
+    const feeRecord = await this.feeModel.findOne({ where: { name: feeKey } });
+    const pandascrowRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
+    const pandascrowFee = Math.round(budget * pandascrowRate);
+
+    // Creator pool = total paid − Trendupp fee − VAT − Pandascrow platform fee
+    const campaignBudget = budget - trenduppFee - vat - pandascrowFee;
 
     const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
       {
@@ -71,12 +85,19 @@ export class CampaignsService {
         value: 0.075,
         amount: vat,
       },
+      {
+        name: `Pandascrow Gateway Fee (${currency})`,
+        type: 'percentage',
+        value: pandascrowRate,
+        amount: pandascrowFee,
+      },
     ];
 
     return {
       campaignBudget,
       trenduppFee,
       vat,
+      pandascrowFee,
       totalToPay: budget,
       breakdownItems,
     };
@@ -84,7 +105,10 @@ export class CampaignsService {
 
   async populateBreakdown(campaign: Campaign, requestingUserId?: string): Promise<Campaign> {
     if (campaign) {
-      const breakdown = await this.calculateBreakdown(campaign.totalBudget);
+      const breakdown = await this.calculateBreakdown(
+        campaign.totalBudget,
+        campaign.currency ?? 'USD',
+      );
       campaign.paymentBreakdown = breakdown;
 
       // Attach application count
@@ -419,7 +443,7 @@ export class CampaignsService {
       throw new NotFoundException('Brand user profile not found');
     }
 
-    const breakdown = await this.calculateBreakdown(campaign.totalBudget);
+    const breakdown = await this.calculateBreakdown(campaign.totalBudget, campaign.currency);
 
     // Initialize escrow on Pandascrow
     const deliveryDateStr = new Date(campaign.timeline!).toISOString().split('T')[0];
@@ -431,13 +455,13 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'app@trendupp.com', //brand.email,
+        email: 'finance@trendupp.com', //brand.email,
         phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
-        email: 'finance@trendupp.com',
-        phone: '',
+        email: 'app@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
+        phone: '+2347068168809',
       },
     });
 
@@ -448,26 +472,14 @@ export class CampaignsService {
       paymentStatus: 'pending',
     });
 
-    // Calculate expected gateway fee
-    let gatewayFee = 0;
-    if (campaign.currency === 'NGN') {
-      gatewayFee = Math.round(breakdown.totalToPay * 0.015);
-      if (breakdown.totalToPay >= 2500) {
-        gatewayFee += 100;
-      }
-      if (gatewayFee > 2000) {
-        gatewayFee = 2000;
-      }
-    } else {
-      gatewayFee = Math.round(breakdown.totalToPay * 0.039);
-    }
-
     // Create pending payment record
+    // gatewayFee = Pandascrow platform fee already computed inside calculateBreakdown
+    // (3% for NGN/Paystack, 5% for USD/Stripe)
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
       amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
-      gatewayFee,
+      gatewayFee: breakdown.pandascrowFee,
       paymentStatus: 'pending',
       currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
@@ -899,12 +911,18 @@ export class CampaignsService {
     }
 
     const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
-    // If not paid yet, calculate the expected available pool from totalBudget dynamically.
-    // Creator Pool = totalBudget - (15% commission + 7.5% VAT) = totalBudget * 0.775
-    const amountAvailable =
-      payment && payment.paymentStatus === 'paid'
-        ? payment.amount
-        : Math.round(campaign.totalBudget * 0.775);
+    // If not paid yet, derive the expected creator pool via the same breakdown logic.
+    // This correctly accounts for Pandascrow platform fee (3% NGN, 5% USD).
+    let amountAvailable: number;
+    if (payment && payment.paymentStatus === 'paid') {
+      amountAvailable = payment.amount;
+    } else {
+      const estimatedBreakdown = await this.calculateBreakdown(
+        campaign.totalBudget,
+        campaign.currency,
+      );
+      amountAvailable = estimatedBreakdown.campaignBudget;
+    }
 
     let selectedTotal = 0;
     for (const appId of applicationIds) {

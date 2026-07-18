@@ -84,8 +84,7 @@ export class PandascrowService {
     const body = {
       uuid: this.accountUuid,
       escrow_type: 'onetime',
-      // initiator_role: 'seller',
-      initiator_role: 'buyer',
+      initiator_role: 'seller', // Trendupp manages OTP & release; escrow.paid webhook fires back correctly
       initiator_id: this.accountUuid,
       title: payload.title,
       currency: payload.currency.toUpperCase(),
