@@ -4,6 +4,8 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { AdminAuthService } from '../services/admin-auth.service';
 import { AdminLoginDto } from '../dtos/admin-login.dto';
+import { AdminForgotPasswordDto } from '../dtos/admin-forgot-password.dto';
+import { AdminVerifyOtpDto } from '../dtos/admin-verify-otp.dto';
 import { AdminResetPasswordDto } from '../dtos/admin-reset-password.dto';
 import { AdminChangePasswordDto } from '../dtos/admin-change-password.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -37,17 +39,27 @@ export class AdminAuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: THROTTLE_LIMITS.OTP_SEND })
   @ApiOperation({ summary: 'Request admin password reset code (sends 6-digit OTP)' })
-  @ApiResponse({ status: 200, description: 'Password reset code sent' })
-  async forgotPassword(@Body('email') email: string, @Req() req: Request) {
+  @ApiResponse({ status: 200, description: 'Password reset code sent and returned in response' })
+  async forgotPassword(@Body() dto: AdminForgotPasswordDto, @Req() req: Request) {
     const ipAddress = (req.ip as string) || (req.headers['x-forwarded-for'] as string) || '';
     const userAgent = (req.headers['user-agent'] as string) || '';
-    return this.adminAuthService.forgotPassword(email, ipAddress, userAgent);
+    return this.adminAuthService.forgotPassword(dto, ipAddress, userAgent);
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: THROTTLE_LIMITS.OTP_VERIFY })
+  @ApiOperation({ summary: 'Verify admin password reset OTP code' })
+  @ApiResponse({ status: 200, description: 'OTP verification successful' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired OTP code' })
+  async verifyOtp(@Body() dto: AdminVerifyOtpDto) {
+    return this.adminAuthService.verifyOtp(dto);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: THROTTLE_LIMITS.OTP_VERIFY })
-  @ApiOperation({ summary: 'Reset admin password using verification OTP code' })
+  @ApiOperation({ summary: 'Reset admin password using email and new password' })
   @ApiResponse({ status: 200, description: 'Password reset completed successfully' })
   async resetPassword(@Body() dto: AdminResetPasswordDto, @Req() req: Request) {
     const ipAddress = (req.ip as string) || (req.headers['x-forwarded-for'] as string) || '';
@@ -60,7 +72,7 @@ export class AdminAuthController {
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent', 'admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change admin password (requires current password)' })
+  @ApiOperation({ summary: 'Change admin password (email, current password, and new password)' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   async changePassword(
     @CurrentUser() user: User,

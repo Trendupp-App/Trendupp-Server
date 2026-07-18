@@ -13,18 +13,19 @@ import { OtpService } from '../../auth/services/otp.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { AuditLogService } from './audit-log.service';
 import { AdminLoginDto } from '../dtos/admin-login.dto';
+import { AdminForgotPasswordDto } from '../dtos/admin-forgot-password.dto';
+import { AdminVerifyOtpDto } from '../dtos/admin-verify-otp.dto';
 import { AdminResetPasswordDto } from '../dtos/admin-reset-password.dto';
 import { AdminChangePasswordDto } from '../dtos/admin-change-password.dto';
 import { User } from '../../users/entities/user.entity';
 
 export const ADMIN_ROLES = new Set([
   'owner',
-  'superadmin',
+  'super_admin',
   'finance_admin',
   'moderator',
   'support_agent',
   'admin',
-  'super_admin',
 ]);
 
 export interface AdminAuthResponse {
@@ -104,11 +105,11 @@ export class AdminAuthService {
   }
 
   async forgotPassword(
-    emailInput: string,
+    dto: AdminForgotPasswordDto,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ message: string }> {
-    const email = emailInput.toLowerCase().trim();
+  ): Promise<{ message: string; code?: string }> {
+    const email = dto.email.toLowerCase().trim();
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
@@ -132,8 +133,18 @@ export class AdminAuthService {
     });
 
     return {
-      message: `If the email exists, a password reset OTP code has been sent. Code: ${otpRecord.code}`,
+      message: `Password reset OTP code generated: ${otpRecord.code}`,
+      code: otpRecord.code,
     };
+  }
+
+  async verifyOtp(dto: AdminVerifyOtpDto): Promise<{ message: string }> {
+    const email = dto.email.toLowerCase().trim();
+    const isValid = await this.otpService.verifyOtp(email, dto.code);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid or expired verification OTP code');
+    }
+    return { message: 'OTP verification successful.' };
   }
 
   async resetPassword(
@@ -142,21 +153,12 @@ export class AdminAuthService {
     userAgent?: string,
   ): Promise<{ message: string }> {
     const email = dto.email.toLowerCase().trim();
-    if (dto.newPassword !== dto.confirmPassword) {
-      throw new BadRequestException('Passwords do not match');
-    }
-
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Admin user not found');
     }
 
-    const isValid = await this.otpService.verifyOtp(email, dto.code);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid or expired verification OTP code');
-    }
-
-    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
     await this.usersService.update(user.id, { password: hashedPassword });
 
     await this.auditLogService.log({
@@ -175,13 +177,15 @@ export class AdminAuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<{ message: string }> {
-    if (dto.newPassword !== dto.confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match');
-    }
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.usersService.findByEmail(email);
 
-    const user = await this.usersService.findOne(adminId);
     if (!user || !user.password) {
       throw new NotFoundException('Admin user not found');
+    }
+
+    if (user.id !== adminId && user.email !== email) {
+      throw new BadRequestException('Email does not match authenticated user');
     }
 
     const isCurrentValid = await bcrypt.compare(dto.currentPassword, user.password);
@@ -190,10 +194,10 @@ export class AdminAuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
-    await this.usersService.update(adminId, { password: hashedPassword });
+    await this.usersService.update(user.id, { password: hashedPassword });
 
     await this.auditLogService.log({
-      adminId,
+      adminId: user.id,
       action: 'PASSWORD_CHANGED',
       ipAddress,
       userAgent,

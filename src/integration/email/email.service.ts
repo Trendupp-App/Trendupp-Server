@@ -243,14 +243,19 @@ export class EmailService {
     roleName: string,
     activationCode: string,
   ): Promise<void> {
+    const baseUrl =
+      this.configService.get<string>('ADMIN_INVITE_URL') ||
+      'https://trendupp-web.vercel.app/setup/invite';
+    const inviteUrl = `${baseUrl}/${activationCode}?email=${encodeURIComponent(to)}`;
+
     const result = await this.send({
       to,
       subject: 'You Have Been Invited to Trendupp Admin Portal',
       template: 'admin-invitation',
-      data: { adminName, roleName, activationCode },
+      data: { adminName, roleName, activationCode, inviteUrl },
     });
     if (result === 'mocked') {
-      this.logger.log(`Admin Invitation Code for ${to}: ${activationCode}`);
+      this.logger.log(`Admin Invitation Code for ${to}: ${activationCode} (Link: ${inviteUrl})`);
     }
   }
 }
