@@ -188,7 +188,18 @@ export class NotificationDispatcherService {
         to: user.email,
         subject: entry.emailSubject ? entry.emailSubject(data) : title,
         template: entry.emailTemplate ?? 'generic-notification',
-        data: { firstName: user.firstName, title, body, actionUrl, appUrl: this.appUrl },
+        data: {
+          // Spread the full notification payload first so bespoke templates
+          // (e.g. payment-escrow-receipt) can access type-specific fields like
+          // transactionRef, escrowId, amount, etc.
+          ...data,
+          // Standard vars always available in every template:
+          firstName: user.firstName,
+          title,
+          body,
+          actionUrl,
+          appUrl: this.appUrl,
+        },
         throwOnFailure: true,
       });
       await notification.update({ emailStatus: result });

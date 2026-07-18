@@ -98,6 +98,12 @@ export interface NotificationPayloads {
     campaignTitle: string;
     amount: number;
     currency?: string;
+    /** Pandascrow transaction reference — used in the payment receipt email. */
+    transactionRef?: string;
+    /** Pandascrow escrow ID — used in the payment receipt email. */
+    escrowId?: string;
+    /** ISO timestamp of when the payment was confirmed. */
+    paidAt?: string;
   };
   'campaign.completed': { campaignId: string; campaignTitle: string };
 

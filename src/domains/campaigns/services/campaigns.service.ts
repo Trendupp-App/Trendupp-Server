@@ -455,12 +455,12 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'aoahorizon@gmail.com', //brand.email,
+        email: 'finance@trendupp.com', //brand.email,
         phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
-        email: 'finance@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
+        email: 'app@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
         phone: '+2347068168809',
       },
     });

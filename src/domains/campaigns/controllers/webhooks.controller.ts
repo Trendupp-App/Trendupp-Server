@@ -141,6 +141,9 @@ export class WebhooksController {
           campaignTitle: campaign.title,
           amount: Number(payment.totalAmount ?? payment.amount),
           currency: campaign.currency,
+          transactionRef: payment.transactionRef ?? payment.paymentReference,
+          escrowId: payment.escrowId,
+          paidAt: new Date().toISOString(),
         },
         dedupeKey: `${campaign.id}:live`,
       });

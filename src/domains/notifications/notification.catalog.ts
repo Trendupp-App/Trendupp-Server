@@ -156,7 +156,8 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) =>
       `Your payment of ${money(d.amount, d.currency)} was confirmed and "${d.campaignTitle}" is now live. Creators can start applying.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `"${d.campaignTitle}" is live — Trendupp`,
+    emailSubject: (d) => `Payment confirmed — "${d.campaignTitle}" is now live`,
+    emailTemplate: 'payment-escrow-receipt',
   },
   'campaign.completed': {
     category: 'applicationUpdates',
