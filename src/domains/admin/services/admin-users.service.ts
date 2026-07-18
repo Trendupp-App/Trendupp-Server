@@ -36,25 +36,83 @@ export class AdminUsersService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
+  /** 7-day TTL used for admin invitation OTPs */
+  private readonly INVITE_OTP_EXPIRES_MINUTES = 7 * 24 * 60; // 10 080 minutes
+
   async inviteAdmin(
     callerId: string,
     dto: AdminInviteDto,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ message: string; admin: Partial<User> }> {
+  ): Promise<{ message: string; code: string; admin: Partial<User> }> {
     const email = dto.email.toLowerCase().trim();
 
     const existingUser = await this.usersService.findByEmail(email);
+
+    // ── RE-INVITE path ────────────────────────────────────────────────────────
+    // If the account already exists we treat this as a resend rather than a
+    // conflict, PROVIDED the account belongs to an admin role and the invite
+    // OTP (password-reset type) for that email still exists in the DB (i.e.
+    // the invited admin has NOT yet set up their password via the invite link).
     if (existingUser) {
-      throw new ConflictException('An account with this email address already exists.');
+      const existingOtp = await this.otpService.findPendingInviteOtp(email);
+
+      if (!existingOtp) {
+        // Account exists and invite OTP is gone → admin already completed setup
+        throw new ConflictException(
+          'An account with this email already exists and has been fully set up. ' +
+            'If you need to reset their access, use the suspend or delete options.',
+        );
+      }
+
+      // Wipe old OTP, issue a fresh 7-day one
+      const freshOtp = await this.otpService.generateOtp(
+        email,
+        'password-reset',
+        this.INVITE_OTP_EXPIRES_MINUTES,
+      );
+
+      const roleName =
+        existingUser.role?.name ||
+        (typeof existingUser.role === 'string' ? existingUser.role : dto.role);
+      const displayName = existingUser.role?.displayName || roleName;
+
+      try {
+        await this.emailService.sendAdminInvitationEmail(
+          email,
+          `${existingUser.firstName} ${existingUser.lastName}`.trim(),
+          displayName,
+          freshOtp.code,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to resend invitation email to ${email}: ${(err as Error).message}`,
+        );
+      }
+
+      this.logger.log(`Re-invite sent to existing pending admin ${email}`);
+
+      return {
+        message: `Invitation resent successfully. A new 7-day activation link has been emailed.`,
+        code: freshOtp.code,
+        admin: {
+          id: existingUser.id,
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          role: existingUser.role,
+          isActive: existingUser.isActive,
+        },
+      };
     }
 
+    // ── NEW INVITE path ───────────────────────────────────────────────────────
     const role = await this.roleModel.findOne({ where: { name: dto.role } });
     if (!role) {
       throw new NotFoundException(`Role '${dto.role}' does not exist.`);
     }
 
-    // Generate random temporary password
+    // Generate random temporary password (never shared; admin sets their own via invite link)
     const tempPassword = crypto.randomBytes(12).toString('hex') + 'A1!';
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -71,10 +129,13 @@ export class AdminUsersService {
       acceptedTerms: true,
     } as any);
 
-    // Generate OTP code for initial password setup / verification
-    const otpRecord = await this.otpService.generateOtp(email, 'password-reset');
+    // Generate 7-day OTP for initial password setup
+    const otpRecord = await this.otpService.generateOtp(
+      email,
+      'password-reset',
+      this.INVITE_OTP_EXPIRES_MINUTES,
+    );
 
-    // Send invitation email via EmailService
     try {
       await this.emailService.sendAdminInvitationEmail(
         email,
@@ -86,7 +147,6 @@ export class AdminUsersService {
       this.logger.error(`Failed to send invitation email to ${email}: ${(err as Error).message}`);
     }
 
-    // Audit logs
     await this.auditLogService.log({
       adminId: callerId,
       action: 'ADMIN_CREATED',
@@ -100,7 +160,8 @@ export class AdminUsersService {
     });
 
     return {
-      message: `Admin user invited successfully. Activation code: ${otpRecord.code}`,
+      message: `Admin user invited successfully. A 7-day activation link has been emailed.`,
+      code: otpRecord.code,
       admin: {
         id: newAdmin.id,
         email: newAdmin.email,
