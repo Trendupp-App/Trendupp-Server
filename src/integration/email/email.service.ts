@@ -226,7 +226,6 @@ export class EmailService {
           this.logger.log(`Subject: ${subject}`);
           this.logger.log('-----------------------------');
         }
-      } else {
         this.logger.log('--- [MOCK EMAIL SENT] ---');
         this.logger.log(`To: ${to}`);
         this.logger.log(`Subject: ${subject}`);
@@ -235,6 +234,23 @@ export class EmailService {
     } catch (error) {
       const stack = error instanceof Error ? error.stack : '';
       this.logger.error(`Failed to render creator block template for ${to}`, stack);
+    }
+  }
+
+  async sendAdminInvitationEmail(
+    to: string,
+    adminName: string,
+    roleName: string,
+    activationCode: string,
+  ): Promise<void> {
+    const result = await this.send({
+      to,
+      subject: 'You Have Been Invited to Trendupp Admin Portal',
+      template: 'admin-invitation',
+      data: { adminName, roleName, activationCode },
+    });
+    if (result === 'mocked') {
+      this.logger.log(`Admin Invitation Code for ${to}: ${activationCode}`);
     }
   }
 }
