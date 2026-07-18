@@ -6,13 +6,13 @@ import { OtpRepository } from '../repository/otp.repository';
 export class OtpService {
   constructor(private readonly otpRepository: OtpRepository) {}
 
-  async generateOtp(email: string, type: string): Promise<Otp> {
+  async generateOtp(email: string, type: string, expiresMinutes = 10): Promise<Otp> {
     await this.otpRepository.deleteByEmailAndType(email, type);
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     const otpExpiresAt = new Date();
-    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 100); //update it later to 10mins
+    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + expiresMinutes);
 
     return this.otpRepository.create({ email, code, type, otpExpiresAt });
   }
@@ -28,5 +28,9 @@ export class OtpService {
     await this.otpRepository.deleteById(otp.id);
 
     return true;
+  }
+
+  async findPendingInviteOtp(email: string, type = 'password-reset'): Promise<Otp | null> {
+    return this.otpRepository.findByEmailAndType(email, type);
   }
 }

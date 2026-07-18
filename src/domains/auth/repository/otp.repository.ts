@@ -33,6 +33,13 @@ export class OtpRepository {
     });
   }
 
+  async findByEmailAndType(email: string, type: string): Promise<Otp | null> {
+    return this.otpModel.findOne({
+      where: { email, type },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
   async deleteById(id: string): Promise<void> {
     await this.otpModel.destroy({
       where: { id },
