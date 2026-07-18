@@ -5,7 +5,7 @@ import { User } from '../../users/entities/user.entity';
 
 export type CampaignRefundStatus = 'pending' | 'completed' | 'failed' | 'pending_bank_details';
 
-@Table({ tableName: 'campaign_refunds' })
+@Table({ tableName: 'campaign_refunds', paranoid: false })
 export class CampaignRefund extends BaseEntity<CampaignRefund> {
   @ForeignKey(() => Campaign)
   @Column({ type: DataType.UUID, allowNull: false, field: 'campaign_id' })

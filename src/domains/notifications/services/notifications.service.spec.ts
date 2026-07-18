@@ -68,7 +68,8 @@ describe('NotificationsService', () => {
   });
 
   it('drops an unknown type without enqueueing', async () => {
-    await service.notify({ ...input, type: 'nonsense.type' as never });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    await service.notify({ ...input, type: 'nonsense.type' } as any);
 
     expect(queueMock.add).not.toHaveBeenCalled();
     expect(dispatcherMock.dispatch).not.toHaveBeenCalled();

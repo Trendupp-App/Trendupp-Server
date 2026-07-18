@@ -13,6 +13,6 @@ import { SocialApisModule } from '../../integration/social-apis/social-apis.modu
   imports: [SequelizeModule.forFeature([Otp]), UsersModule, SocialApisModule],
   providers: [OtpRepository, OtpService, AuthService, EmailService],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [AuthService, OtpService],
 })
 export class AuthModule {}
