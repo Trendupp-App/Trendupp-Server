@@ -336,3 +336,156 @@ export class AdminCreatorsListResponseDto {
   @ApiProperty({ type: PaginationMetaDto })
   meta: PaginationMetaDto;
 }
+
+// ── Creator Profile Details DTOs ──────────────────────────────────────────────
+
+export class CreatorProfileMetricsDto {
+  @ApiProperty({ example: 18 })
+  completedCampaigns: number;
+
+  @ApiProperty({ example: 2400000 })
+  totalEarnings: number;
+
+  @ApiProperty({ example: 95.8 })
+  onTimeSubmissionRate: number;
+
+  @ApiProperty({ example: 450000 })
+  totalFollowers: number;
+
+  @ApiProperty({ example: 1200 })
+  totalTokens: number;
+}
+
+export class CreatorProfileDetailsDto {
+  @ApiProperty({ example: 'uuid-1' })
+  id: string;
+
+  @ApiProperty({ example: 'Alex Okafor' })
+  fullName: string;
+
+  @ApiProperty({ example: '@alexokafor' })
+  username: string;
+
+  @ApiProperty({ example: 'amara@email.com' })
+  email: string;
+
+  @ApiProperty({ example: 'Nigeria' })
+  countryOfResidence: string;
+
+  @ApiProperty({ example: 'Lagos' })
+  state: string;
+
+  @ApiProperty({ example: 'Nigeria' })
+  nationality: string;
+
+  @ApiProperty({ example: 'Fashion content creator passionate about African aesthetics.' })
+  bio: string;
+
+  @ApiProperty({ example: 'Male' })
+  gender: string;
+
+  @ApiProperty({ example: '11-05-2000' })
+  dateOfBirth: string;
+
+  @ApiProperty({ example: 100 })
+  profileCompletion: number;
+
+  @ApiProperty({ example: 'Verified' })
+  bankAccountStatus: string;
+
+  @ApiProperty({ example: '2026-01-15T00:00:00.000Z' })
+  dateJoined: Date;
+
+  @ApiProperty({ example: 'Active' })
+  accountStatus: string;
+
+  @ApiProperty({ example: 'Micro' })
+  tier: string;
+
+  @ApiProperty({ example: 'Pending' })
+  verificationStatus: string;
+
+  @ApiProperty({ example: 'https://...', nullable: true })
+  avatarUrl: string | null;
+}
+
+export class CreatorSocialAccountDto {
+  @ApiProperty({ example: 'instagram' })
+  platform: string;
+
+  @ApiProperty({ example: '@alexokafor' })
+  username: string;
+
+  @ApiProperty({ example: 28600 })
+  followers: number;
+
+  @ApiProperty({ example: 'Today' })
+  lastSynced: string;
+}
+
+export class AdminCreatorProfileResponseDto {
+  @ApiProperty({ type: CreatorProfileMetricsDto })
+  metrics: CreatorProfileMetricsDto;
+
+  @ApiProperty({ type: CreatorProfileDetailsDto })
+  profileDetails: CreatorProfileDetailsDto;
+
+  @ApiProperty({ type: [CreatorSocialAccountDto] })
+  socialAccounts: CreatorSocialAccountDto[];
+}
+
+export class CreatorCampaignHistoryItemDto {
+  @ApiProperty({ example: 'camp-uuid-1' })
+  id: string;
+
+  @ApiProperty({ example: 'Summer Launch Campaign' })
+  campaignTitle: string;
+
+  @ApiProperty({ example: 'Nike Inc.' })
+  brandName: string;
+
+  @ApiProperty({ example: 'COMPLETED' })
+  status: string;
+
+  @ApiProperty({ example: 150000 })
+  fee: number;
+
+  @ApiProperty({ example: '2026-06-10T00:00:00.000Z' })
+  submittedAt: Date;
+}
+
+export class AdminCreatorCampaignHistoryResponseDto {
+  @ApiProperty({ type: [CreatorCampaignHistoryItemDto] })
+  data: CreatorCampaignHistoryItemDto[];
+
+  @ApiProperty({ type: PaginationMetaDto })
+  meta: PaginationMetaDto;
+}
+
+export class CreatorReviewItemDto {
+  @ApiProperty({ example: 'rev-uuid-1' })
+  id: string;
+
+  @ApiProperty({ example: 'Adidas' })
+  reviewerName: string;
+
+  @ApiProperty({ example: 5 })
+  rating: number;
+
+  @ApiProperty({ example: 'Excellent content delivered on time!' })
+  comment: string;
+
+  @ApiProperty({ example: '2026-06-20T10:00:00.000Z' })
+  createdAt: Date;
+}
+
+export class AdminCreatorReviewsResponseDto {
+  @ApiProperty({ type: [CreatorReviewItemDto] })
+  data: CreatorReviewItemDto[];
+
+  @ApiProperty({ example: 4.8 })
+  averageRating: number;
+
+  @ApiProperty({ example: 12 })
+  totalReviews: number;
+}

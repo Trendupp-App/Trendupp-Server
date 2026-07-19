@@ -12,8 +12,10 @@ import { AdminAuthService } from './services/admin-auth.service';
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminOverviewService } from './services/admin-overview.service';
 import { AdminCreatorsService } from './services/admin-creators.service';
+import { AdminNotesService } from './services/admin-notes.service';
 import { AuditLogRepository } from './repository/audit-log.repository';
 import { AuditLog } from './entities/audit-log.entity';
+import { AdminNote } from './entities/admin-note.entity';
 import { Role } from '../users/entities/role.entity';
 import { User } from '../users/entities/user.entity';
 import { Niche } from '../users/entities/niche.entity';
@@ -31,6 +33,7 @@ import { EmailModule } from '../../integration/email/email.module';
   imports: [
     SequelizeModule.forFeature([
       AuditLog,
+      AdminNote,
       Role,
       User,
       Niche,
@@ -54,6 +57,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminUsersService,
     AdminOverviewService,
     AdminCreatorsService,
+    AdminNotesService,
   ],
   controllers: [
     AdminController,
@@ -68,6 +72,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminUsersService,
     AdminOverviewService,
     AdminCreatorsService,
+    AdminNotesService,
   ],
 })
 export class AdminModule {}
