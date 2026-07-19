@@ -15,7 +15,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { User } from '../../users/entities/user.entity';
 import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 
-@ApiTags('admin-auth')
+@ApiTags('admin')
 @Controller('admin/auth')
 export class AdminAuthController {
   constructor(private readonly adminAuthService: AdminAuthService) {}
