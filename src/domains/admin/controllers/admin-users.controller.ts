@@ -131,7 +131,9 @@ export class AdminUsersController {
   @Get('audit-logs')
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'View immutable system access & action audit logs' })
+  @ApiOperation({
+    summary: 'coming soon!!!🔥🔥🔥 View immutable system access & action audit logs',
+  })
   @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully' })
   async getAuditLogs(@Query() query: QueryAuditLogsDto) {
     return this.auditLogService.findAll(query);
