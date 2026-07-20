@@ -7,6 +7,7 @@ import { AdminUsersController } from './controllers/admin-users.controller';
 import { AdminOverviewController } from './controllers/admin-overview.controller';
 import { AdminCreatorsController } from './controllers/admin-creators.controller';
 import { AdminBrandsController } from './controllers/admin-brands.controller';
+import { AdminCampaignsController } from './controllers/admin-campaigns.controller';
 import { RolesSeederService } from './services/roles-seeder.service';
 import { AuditLogService } from './services/audit-log.service';
 import { AdminAuthService } from './services/admin-auth.service';
@@ -14,6 +15,7 @@ import { AdminUsersService } from './services/admin-users.service';
 import { AdminOverviewService } from './services/admin-overview.service';
 import { AdminCreatorsService } from './services/admin-creators.service';
 import { AdminBrandsService } from './services/admin-brands.service';
+import { AdminCampaignsService } from './services/admin-campaigns.service';
 import { AdminNotesService } from './services/admin-notes.service';
 import { AuditLogRepository } from './repository/audit-log.repository';
 import { AuditLog } from './entities/audit-log.entity';
@@ -24,6 +26,8 @@ import { Niche } from '../users/entities/niche.entity';
 import { Industry } from '../users/entities/industry.entity';
 import { Nationality } from '../users/entities/nationality.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
+import { CreatorCategory } from '../campaigns/entities/creator-category.entity';
+import { Platform } from '../campaigns/entities/platform.entity';
 import { CampaignApplication } from '../campaigns/entities/campaign-application.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
 import { CampaignsModule } from '../campaigns/campaigns.module';
@@ -43,6 +47,8 @@ import { EmailModule } from '../../integration/email/email.module';
       Industry,
       Nationality,
       Campaign,
+      CreatorCategory,
+      Platform,
       CampaignApplication,
       Dispute,
     ]),
@@ -62,6 +68,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminOverviewService,
     AdminCreatorsService,
     AdminBrandsService,
+    AdminCampaignsService,
     AdminNotesService,
   ],
   controllers: [
@@ -71,6 +78,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminOverviewController,
     AdminCreatorsController,
     AdminBrandsController,
+    AdminCampaignsController,
   ],
   exports: [
     RolesSeederService,
@@ -79,6 +87,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminOverviewService,
     AdminCreatorsService,
     AdminBrandsService,
+    AdminCampaignsService,
     AdminNotesService,
   ],
 })
