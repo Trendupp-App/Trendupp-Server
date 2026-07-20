@@ -122,6 +122,19 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
 
+  @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image_url' })
+  declare coverImageUrl?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'paid',
+  })
+  declare type: string;
+
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'token_reward' })
+  declare tokenReward?: number;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'amplification_asset' })
   declare amplificationAsset?: string;
 
