@@ -287,14 +287,23 @@ export class UpdateCampaignDto {
       return value.map((v: unknown) => String(v).trim());
     }
     if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '') return undefined;
       try {
-        const parsed: unknown = JSON.parse(value);
+        const parsed: unknown = JSON.parse(trimmed);
         if (Array.isArray(parsed)) {
           return parsed.map((v: unknown) => String(v).trim());
         }
       } catch {
-        return [value.trim()];
+        // not JSON — continue
       }
+      if (trimmed.includes(',')) {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return [trimmed];
     }
     return undefined;
   })

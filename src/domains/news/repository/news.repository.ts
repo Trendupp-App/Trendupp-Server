@@ -23,7 +23,7 @@ export class NewsRepository {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'profilePicture'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
         { model: Industry, as: 'industry', attributes: ['id', 'name'] },
       ],
@@ -84,7 +84,7 @@ export class NewsRepository {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'profilePicture'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
         { model: Industry, as: 'industry', attributes: ['id', 'name'] },
       ],

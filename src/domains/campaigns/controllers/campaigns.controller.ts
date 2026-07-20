@@ -119,6 +119,7 @@ export class CampaignsController {
         preferredPlatformIds: dto.preferredPlatformIds,
         timeline: dto.timeline,
         creatorNicheId: dto.creatorNicheId,
+        creatorNicheIds: dto.creatorNicheIds,
         campaignBrief: dto.campaignBrief,
         contentGuidelines,
         amplificationAsset: dto.amplificationAsset,
