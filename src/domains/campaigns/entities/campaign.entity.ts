@@ -122,18 +122,32 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
   declare coverImage?: string;
 
-  @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image_url' })
-  declare coverImageUrl?: string;
+  @Column(DataType.VIRTUAL)
+  get coverImageUrl(): string | undefined {
+    return this.coverImage;
+  }
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: false,
-    defaultValue: 'paid',
-  })
-  declare type: string;
+  set coverImageUrl(value: string | undefined) {
+    this.coverImage = value;
+  }
 
-  @Column({ type: DataType.INTEGER, allowNull: true, field: 'token_reward' })
-  declare tokenReward?: number;
+  @Column(DataType.VIRTUAL)
+  get type(): string {
+    return this.getDataValue('type') || 'paid';
+  }
+
+  set type(value: string) {
+    this.setDataValue('type', value);
+  }
+
+  @Column(DataType.VIRTUAL)
+  get tokenReward(): number | undefined {
+    return this.getDataValue('tokenReward');
+  }
+
+  set tokenReward(value: number | undefined) {
+    this.setDataValue('tokenReward', value);
+  }
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'amplification_asset' })
   declare amplificationAsset?: string;
