@@ -163,6 +163,34 @@ export class CreateCampaignDto {
     type: [String],
     required: false,
   })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: unknown) => String(v).trim());
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '') return undefined;
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.map((v: unknown) => String(v).trim());
+        }
+      } catch {
+        // not JSON — continue
+      }
+      if (trimmed.includes(',')) {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsArray()
   @IsUUID(4, { each: true })
   @IsOptional()
