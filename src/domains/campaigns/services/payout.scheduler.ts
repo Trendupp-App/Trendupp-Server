@@ -286,7 +286,8 @@ export class PayoutScheduler {
           const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
             refund.campaignId,
           );
-          if (campaignPayment?.escrowStatus !== 'funded') {
+          const es = (campaignPayment?.escrowStatus || '').toLowerCase();
+          if (es !== 'completed' && es !== 'funded') {
             this.logger.warn(
               `Escrow not yet released/completed for campaign ${refund.campaignId} ` +
                 `(refund ID: ${refund.id}). Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
