@@ -457,7 +457,7 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'aoahorizon@gmail.com', //brand.email,
+        email: 'app@trendupp.com', //brand.email,
         phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {

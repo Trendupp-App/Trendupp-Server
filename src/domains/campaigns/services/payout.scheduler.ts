@@ -27,7 +27,6 @@ export class PayoutScheduler {
    * Cron job that checks for creator payouts that are due (scheduled release date has passed).
    * Runs daily at midnight. EVERY_5_SECONDS
    */
-  // @Cron(CronExpression.EVERY_5_SECONDS)
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async processPendingPayouts() {
     this.logger.log('Starting daily payout check for creators...');
@@ -64,9 +63,10 @@ export class PayoutScheduler {
           const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
             release.campaignId,
           );
-          if (campaignPayment?.escrowStatus !== 'completed') {
+          const es = (campaignPayment?.escrowStatus || '').toLowerCase();
+          if (es !== 'completed' && es !== 'funded') {
             this.logger.warn(
-              `Escrow not yet released for campaign ${release.campaignId} ` +
+              `Escrow not yet funded/completed for campaign ${release.campaignId} ` +
                 `(release ID: ${release.id}). ` +
                 `Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
                 `Parking as escrow_pending — will retry after escrow.completed webhook.`,
@@ -89,6 +89,10 @@ export class PayoutScheduler {
             });
             continue;
           }
+
+          // Lock the record status immediately before making the external API call
+          // to prevent concurrent cron executions / race conditions.
+          await release.update({ status: 'processing' });
 
           // Trigger payout request from Trendupp's Pandascrow wallet to creator's bank account
           const success = await this.pandascrowService.requestPayout({
@@ -282,7 +286,8 @@ export class PayoutScheduler {
           const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
             refund.campaignId,
           );
-          if (campaignPayment?.escrowStatus !== 'completed') {
+          const es = (campaignPayment?.escrowStatus || '').toLowerCase();
+          if (es !== 'completed' && es !== 'funded') {
             this.logger.warn(
               `Escrow not yet released/completed for campaign ${refund.campaignId} ` +
                 `(refund ID: ${refund.id}). Escrow status: ${campaignPayment?.escrowStatus ?? 'unknown'}. ` +
