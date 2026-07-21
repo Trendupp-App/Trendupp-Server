@@ -84,7 +84,7 @@ export class PandascrowService {
     const body = {
       uuid: this.accountUuid,
       escrow_type: 'onetime',
-      initiator_role: 'seller', // Trendupp manages OTP & release; escrow.paid webhook fires back correctly
+      initiator_role: 'buyer', // Trendupp manages OTP & release; escrow.paid webhook fires back correctly
       initiator_id: this.accountUuid,
       title: payload.title,
       currency: payload.currency.toUpperCase(),
@@ -140,6 +140,87 @@ export class PandascrowService {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Pandascrow escrow initialization exception: ${errMsg}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches escrow transaction details and status from Pandascrow.
+   */
+  async getEscrowDetails(escrowId: string): Promise<{
+    escrow_id: string | number;
+    status: string;
+    amount?: number;
+    currency?: string;
+  }> {
+    if (!this.apiKey || !this.accountUuid) {
+      this.logger.warn('Pandascrow credentials missing. Returning simulated funded escrow status.');
+      return {
+        escrow_id: escrowId,
+        status: 'funded',
+      };
+    }
+
+    try {
+      const url = `${this.apiUrl}/escrow/single?uuid=${encodeURIComponent(
+        this.accountUuid,
+      )}&escrow_id=${encodeURIComponent(escrowId)}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Token: this.apiKey,
+        },
+      });
+
+      const rawText = await response.text();
+      this.logger.log(`Pandascrow getEscrowDetails response (${response.status}): ${rawText}`);
+
+      if (!response.ok) {
+        this.logger.error(`Pandascrow getEscrowDetails failed (${response.status}): ${rawText}`);
+        throw new Error(
+          `Pandascrow getEscrowDetails failed: ${response.status} - ${rawText || response.statusText}`,
+        );
+      }
+
+      const jsonStart = rawText.indexOf('{');
+      if (jsonStart === -1) {
+        this.logger.warn(`Non-JSON response received from Pandascrow: ${rawText}`);
+        return {
+          escrow_id: escrowId,
+          status: 'pending',
+        };
+      }
+
+      const cleanJson = rawText.substring(jsonStart);
+      type SingleEscrowWrapper = {
+        escrow?: {
+          _id?: string | number;
+          status?: string;
+          amount?: string | number;
+          currency?: string;
+        };
+      };
+      const resData = JSON.parse(cleanJson) as PandascrowResponse<
+        SingleEscrowWrapper | SingleEscrowWrapper[]
+      >;
+
+      const rawData = resData.data;
+      const escrowObj = Array.isArray(rawData) ? rawData[0]?.escrow : rawData?.escrow;
+
+      const rawStatus = escrowObj?.status;
+      const parsedStatus = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : 'pending';
+
+      return {
+        escrow_id: escrowObj?._id ?? escrowId,
+        status: parsedStatus,
+        amount: escrowObj?.amount !== undefined ? Number(escrowObj.amount) : undefined,
+        currency: escrowObj?.currency,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Pandascrow getEscrowDetails exception: ${errMsg}`);
       throw error;
     }
   }

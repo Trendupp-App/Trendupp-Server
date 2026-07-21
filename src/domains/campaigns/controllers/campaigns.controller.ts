@@ -248,6 +248,21 @@ export class CampaignsController {
     };
   }
 
+  @Post(':id/verify-payment')
+  @Throttle({ default: THROTTLE_LIMITS.CAMPAIGN_CREATE })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify campaign payment via Pandascrow status lookup (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaign payment verified successfully' })
+  async verifyPayment(@Param('id') id: string, @CurrentUser() user: User) {
+    const result = await this.campaignsService.verifyPayment(id, user.id);
+    return result;
+  }
+
   // ─── Public / Authenticated campaign listings ─────────────────────────────
 
   @Get()
