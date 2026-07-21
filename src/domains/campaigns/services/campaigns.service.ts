@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { Campaign } from '../entities/campaign.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
@@ -29,6 +30,7 @@ import { InjectModel } from '@nestjs/sequelize';
 
 @Injectable()
 export class CampaignsService {
+  private readonly logger = new Logger(CampaignsService.name);
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly s3Service: S3Service,
@@ -455,13 +457,13 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'finance@trendupp.com', //brand.email,
+        email: 'aoahorizon@gmail.com', //brand.email,
         phone: '+2347068168809', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
         email: 'app@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
-        phone: '+2347068168809',
+        phone: '+2349128050215',
       },
     });
 
@@ -498,6 +500,109 @@ export class CampaignsService {
     return {
       campaign: populated!,
       payment,
+    };
+  }
+
+  /**
+   * Verifies campaign payment directly via Pandascrow status lookup.
+   * Performs idempotency checks so that duplicate calls or concurrent webhook calls
+   * do not duplicate updates or notification emails.
+   */
+  async verifyPayment(
+    campaignId: string,
+    brandId: string,
+  ): Promise<{
+    message: string;
+    campaign: Campaign;
+    payment: Payment;
+    alreadyVerified: boolean;
+  }> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    if (campaign.brandId !== brandId) {
+      throw new ForbiddenException('You do not own this campaign');
+    }
+
+    const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+    if (!payment) {
+      throw new NotFoundException('No payment record found for this campaign');
+    }
+
+    // ── 1. Idempotency Check ─────────────────────────────────────────────────
+    // If the campaign is already live or payment is already paid, return cleanly.
+    if (campaign.status === 'live' || payment.paymentStatus === 'paid') {
+      this.logger.log(
+        `[verifyPayment] Campaign ${campaignId} is already verified and marked paid. Returning cleanly.`,
+      );
+      return {
+        message: 'Campaign payment is already verified and live.',
+        campaign,
+        payment,
+        alreadyVerified: true,
+      };
+    }
+
+    // ── 2. Pandascrow Status Check ──────────────────────────────────────────
+    let isFunded = false;
+
+    if (payment.escrowId) {
+      try {
+        console.log({ payment: payment.escrowId });
+        const escrowDetails = await this.pandascrowService.getEscrowDetails(payment.escrowId);
+
+        console.log({ escrowDetails });
+        const st = (escrowDetails.status || '').toLowerCase();
+        isFunded = st === 'funded' || st === 'paid' || st === 'completed';
+      } catch (err) {
+        this.logger.error(
+          `[verifyPayment] Error fetching escrow details for escrowId ${payment.escrowId}: ${err}`,
+        );
+      }
+    }
+
+    if (!isFunded) {
+      throw new BadRequestException(
+        'Payment has not been confirmed by the payment gateway yet. Please complete payment and try again.',
+      );
+    }
+
+    // ── 3. Perform Updates & Send Notifications ─────────────────────────────
+    await payment.update({
+      paymentStatus: 'paid',
+      escrowStatus: 'funded',
+    });
+
+    await campaign.update({
+      paymentStatus: 'paid',
+      status: 'live',
+      approvedAt: new Date(),
+    });
+
+    await this.notificationsService.notify({
+      type: 'campaign.payment_confirmed',
+      recipientId: campaign.brandId,
+      data: {
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        amount: Number(payment.totalAmount ?? payment.amount),
+        currency: campaign.currency,
+        transactionRef: payment.transactionRef ?? payment.paymentReference,
+        escrowId: payment.escrowId,
+        paidAt: new Date().toISOString(),
+      },
+      dedupeKey: `${campaign.id}:live`,
+    });
+
+    const updatedCampaign = (await this.campaignRepository.findById(campaignId))!;
+
+    return {
+      message: 'Payment verified successfully. Campaign is now live!',
+      campaign: updatedCampaign,
+      payment,
+      alreadyVerified: false,
     };
   }
 
