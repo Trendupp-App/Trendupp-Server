@@ -419,7 +419,6 @@ export class CampaignsService {
       ) {
         errors.push('contentGuidelines are required');
       }
-      if (!campaign.usageRights) errors.push('usageRights text is required');
       if (!campaign.campaignBrief) errors.push('campaignBrief is required');
 
       if (campaign.goal === 'Amplify Content' && !campaign.amplificationAsset) {
