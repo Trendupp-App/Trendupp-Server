@@ -90,15 +90,20 @@ export class PushService {
       });
 
       const invalidTokens: string[] = [];
-      response.responses.forEach((result, index) => {
-        if (result.success) return;
-        const code = result.error?.code ?? 'unknown';
-        if (INVALID_TOKEN_CODES.has(code)) {
-          invalidTokens.push(tokens[index]);
-        } else {
-          this.logger.warn(`FCM send failed (${code}): ${result.error?.message ?? ''}`);
-        }
-      });
+      response.responses.forEach(
+        (
+          result: { success: boolean; error?: { code?: string; message?: string } },
+          index: number,
+        ) => {
+          if (result.success) return;
+          const code = result.error?.code ?? 'unknown';
+          if (INVALID_TOKEN_CODES.has(code)) {
+            invalidTokens.push(tokens[index]);
+          } else {
+            this.logger.warn(`FCM send failed (${code}): ${result.error?.message ?? ''}`);
+          }
+        },
+      );
 
       return { sent: response.successCount, failed: response.failureCount, invalidTokens };
     } catch (error: unknown) {

@@ -108,16 +108,6 @@ export class CampaignsController {
       }
     }
 
-    // Multipart form-data delivers objects as JSON strings.
-    let timeline = dto.timeline as Record<string, unknown> | string | undefined;
-    if (typeof timeline === 'string') {
-      try {
-        timeline = JSON.parse(timeline) as Record<string, unknown>;
-      } catch {
-        timeline = undefined;
-      }
-    }
-
     const campaign = await this.campaignsService.create(
       user.id,
       {
@@ -127,7 +117,6 @@ export class CampaignsController {
         creatorCategoryIds: dto.creatorCategoryIds,
         creatorCategoryId: dto.creatorCategoryId,
         preferredPlatformIds: dto.preferredPlatformIds,
-        timeline,
         creatorNicheId: dto.creatorNicheId,
         creatorNicheIds: dto.creatorNicheIds,
         campaignBrief: dto.campaignBrief,
