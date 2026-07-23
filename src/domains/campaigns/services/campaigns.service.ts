@@ -173,7 +173,7 @@ export class CampaignsService {
       creatorCategoryIds: string[];
       creatorCategoryId?: string;
       preferredPlatformIds: string[];
-      timeline: string;
+      timeline?: Record<string, unknown>;
       creatorNicheId?: string;
       creatorNicheIds?: string[];
       campaignBrief?: string;
@@ -229,7 +229,7 @@ export class CampaignsService {
       creatorNicheIds: resolvedNicheIds,
       creatorCategoryId: resolvedCategoryId as string,
       creatorCategoryIds: resolvedCategoryIds,
-      timeline: timeline ? new Date(timeline) : undefined,
+      timeline,
       brandId,
       coverImage,
       amplificationAsset,
