@@ -173,7 +173,7 @@ export class CampaignsService {
       creatorCategoryIds: string[];
       creatorCategoryId?: string;
       preferredPlatformIds: string[];
-      timeline: string;
+      timeline?: Record<string, any>;
       creatorNicheId?: string;
       creatorNicheIds?: string[];
       campaignBrief?: string;
@@ -229,7 +229,7 @@ export class CampaignsService {
       creatorNicheIds: resolvedNicheIds,
       creatorCategoryId: resolvedCategoryId as string,
       creatorCategoryIds: resolvedCategoryIds,
-      timeline: timeline ? new Date(timeline) : undefined,
+      timeline: timeline ?? undefined,
       brandId,
       coverImage,
       amplificationAsset,
@@ -467,12 +467,12 @@ export class CampaignsService {
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
         email: 'app@trendupp.com', //brand.email,
-        phone: '+2347068168809', //brand.phoneNumber || '',
+        phone: '', //brand.phoneNumber || '',
       },
       sellerDetails: {
         name: 'Trendupp Platform',
         email: 'app@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
-        phone: '+2349128050215',
+        phone: '',
       },
     });
 

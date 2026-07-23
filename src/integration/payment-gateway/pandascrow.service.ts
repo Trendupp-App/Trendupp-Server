@@ -96,12 +96,12 @@ export class PandascrowService {
       buyer_details: {
         name: payload.buyerDetails.name,
         email: payload.buyerDetails.email,
-        phone: payload.buyerDetails.phone || '+2348000000000',
+        phone: payload.buyerDetails.phone,
       },
       seller_details: {
         name: payload.sellerDetails.name,
         email: payload.sellerDetails.email,
-        phone: payload.sellerDetails.phone || '+2348000000000',
+        phone: payload.sellerDetails.phone,
       },
     };
 
