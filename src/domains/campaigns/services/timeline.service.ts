@@ -399,4 +399,171 @@ export class TimelineService {
 
     return current;
   }
+
+  /**
+   * Formats individual application timeline for a creator with SLA duration and overdue status labels.
+   */
+  formatCreatorTimeline(
+    application: {
+      id: string;
+      creatorId: string;
+      creator?: { firstName?: string; lastName?: string; username?: string; avatarUrl?: string };
+      timeline?: ApplicationTimeline | null;
+      status?: string;
+    },
+    campaignGoal: string = 'Create Content',
+  ): FormattedCreatorTimeline {
+    const rawTimeline = application.timeline || this.initCreatorApplicationTimeline(campaignGoal);
+    const creatorName = application.creator
+      ? `${application.creator.firstName || ''} ${application.creator.lastName || ''}`.trim() ||
+        application.creator.username ||
+        'Creator'
+      : 'Creator';
+    const avatarUrl = application.creator?.avatarUrl || null;
+
+    let overdueCount = 0;
+    const stages: Record<string, FormattedCreatorStage> = {};
+    const now = new Date();
+
+    for (const [key, stage] of Object.entries(rawTimeline)) {
+      let statusLabel: FormattedCreatorStage['statusLabel'] = 'Not started';
+      let durationText = 'Not started';
+
+      if (stage.status === 'skipped') {
+        statusLabel = 'Skipped';
+        durationText = 'N/A';
+      } else if (stage.status === 'completed') {
+        if (stage.startedDate && stage.endedDate) {
+          const diffMs =
+            new Date(stage.endedDate).getTime() - new Date(stage.startedDate).getTime();
+          const days = Math.round((diffMs / (1000 * 60 * 60 * 24)) * 10) / 10;
+          durationText = days === 1 ? '1 day' : `${days} days`;
+        } else {
+          durationText = 'Completed';
+        }
+
+        const isDelayed = stage.endedDate && stage.intendedFor && this.isStageDelayed(stage);
+        if (isDelayed) {
+          statusLabel = 'Delayed';
+          overdueCount++;
+        } else {
+          statusLabel = 'On time';
+        }
+      } else if (stage.status === 'in_progress' || stage.status === 'extended') {
+        if (stage.startedDate) {
+          const diffMs = now.getTime() - new Date(stage.startedDate).getTime();
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          durationText = hours < 24 ? `${hours}h so far` : `${Math.floor(hours / 24)}d so far`;
+        } else {
+          durationText = 'In progress';
+        }
+
+        if (stage.endedDate && now > new Date(stage.endedDate)) {
+          statusLabel = 'Delayed';
+          overdueCount++;
+        } else {
+          statusLabel = stage.status === 'extended' ? 'Extended' : 'In progress';
+        }
+      } else if (stage.status === 'disputed') {
+        statusLabel = 'Disputed';
+        durationText = 'Disputed';
+      }
+
+      stages[key] = {
+        stageKey: key,
+        goal: stage.goal,
+        status: stage.status,
+        statusLabel,
+        intendedFor: stage.intendedFor,
+        durationText,
+        startedDate: stage.startedDate,
+        endedDate: stage.endedDate,
+        extendedDays: stage.extendedDays,
+      };
+    }
+
+    const summaryStatus =
+      overdueCount > 0
+        ? `${overdueCount} stage${overdueCount > 1 ? 's' : ''} over the expected time`
+        : 'On time';
+
+    return {
+      applicationId: application.id,
+      creatorId: application.creatorId,
+      creatorName,
+      avatarUrl,
+      summaryStatus,
+      stages,
+    };
+  }
+
+  /**
+   * Formats creators_timeline array for all accepted/selected applicants of a campaign.
+   */
+  formatCreatorsTimeline(
+    applications: {
+      id: string;
+      creatorId: string;
+      creator?: { firstName?: string; lastName?: string; username?: string; avatarUrl?: string };
+      timeline?: ApplicationTimeline | null;
+      status?: string;
+    }[],
+    campaignGoal: string = 'Create Content',
+  ): FormattedCreatorTimeline[] {
+    const accepted = (applications || []).filter(
+      (app) => app.status === 'accepted' || app.status === 'approved' || app.status === 'selected',
+    );
+    return accepted.map((app) => this.formatCreatorTimeline(app, campaignGoal));
+  }
+
+  private isStageDelayed(stage: StageTimelineItem): boolean {
+    if (!stage.startedDate || !stage.endedDate) return false;
+    const actualDurationHours =
+      (new Date(stage.endedDate).getTime() - new Date(stage.startedDate).getTime()) /
+      (1000 * 60 * 60);
+
+    let maxExpectedHours = 120;
+    if (stage.intendedFor) {
+      if (stage.intendedFor.includes('48 hours')) {
+        maxExpectedHours = 48;
+      } else if (stage.intendedFor.includes('2–3 days') || stage.intendedFor.includes('2-3 days')) {
+        maxExpectedHours = 72;
+      } else if (stage.intendedFor.includes('3–5 days') || stage.intendedFor.includes('3-5 days')) {
+        maxExpectedHours = 120;
+      } else if (stage.intendedFor.includes('30 days')) {
+        maxExpectedHours = 720;
+      }
+    }
+    maxExpectedHours += (stage.extendedDays || 0) * 24;
+
+    return actualDurationHours > maxExpectedHours;
+  }
+}
+
+export interface FormattedCreatorStage {
+  stageKey: string;
+  goal: string;
+  status: string;
+  statusLabel:
+    | 'On time'
+    | 'Delayed'
+    | 'In progress'
+    | 'Not started'
+    | 'Skipped'
+    | 'Disputed'
+    | 'Extended';
+  intendedFor: string | null;
+  durationText: string;
+  startedDate: string | null;
+  endedDate: string | null;
+  extendedDays?: number;
+}
+
+export interface FormattedCreatorTimeline {
+  applicationId: string;
+  creatorId: string;
+  creatorName: string;
+  avatarUrl: string | null;
+  summaryStatus: string;
+  stages: Record<string, FormattedCreatorStage>;
 }

@@ -646,6 +646,18 @@ export class CampaignsService {
     const result = await this.campaignRepository.findAll(query, prioritizeNicheIds);
     result.data = await this.populateBreakdowns(result.data, user?.id);
 
+    // Ensure all live/active campaigns have stage 0-2 timeline populated for creator countdown cards
+    result.data.forEach((c) => {
+      if (!c.timeline && (c.status === 'live' || c.status === 'active')) {
+        const approvedAt = c.approvedAt
+          ? new Date(c.approvedAt)
+          : c.createdAt
+            ? new Date(c.createdAt)
+            : new Date();
+        c.setDataValue('timeline' as any, this.timelineService.initCampaignTimeline(approvedAt));
+      }
+    });
+
     // For virtual statuses, override the status field in the response so the
     // frontend receives the filter name it sent, not the raw DB value.
     // NOTE: 'active' is now a real DB column value so no override needed.
@@ -689,6 +701,13 @@ export class CampaignsService {
     const rawAsset = campaign.amplificationAsset;
 
     await this.populateBreakdown(campaign, requestingUser?.id);
+
+    // Format creators_timeline for accepted/selected applicants
+    const creatorsTimeline = this.timelineService.formatCreatorsTimeline(
+      campaign.applications || [],
+      campaign.goal,
+    );
+    campaign.setDataValue('creators_timeline' as any, creatorsTimeline);
 
     // If authorized, restore the real asset link. Otherwise, it remains masked (null).
     if (isAuthorized && rawAsset) {
