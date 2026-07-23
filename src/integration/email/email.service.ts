@@ -12,28 +12,37 @@ export interface SendEmailOptions {
   template: string;
   data: Record<string, unknown>;
   /**
-   * When true, SES delivery failures are thrown to the caller (used by the
+   * When true, delivery failures are thrown to the caller (used by the
    * notification queue worker so failures are recorded/retryable). Defaults
    * to false: the legacy behavior of falling back to a console mock so
-   * request-path flows (signup OTP) are never blocked by SES.
+   * request-path flows (signup OTP) are never blocked by the provider.
    */
   throwOnFailure?: boolean;
 }
 
 export type SendEmailResult = 'sent' | 'mocked';
 
+type EmailProvider = 'ses' | 'zeptomail';
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private sesClient: SESClient | null = null;
+  private readonly provider: EmailProvider;
   private readonly fromEmail: string;
+  private readonly fromName: string;
   private readonly templateDir: string;
 
+  // SES transport
+  private sesClient: SESClient | null = null;
+
+  // ZeptoMail transport
+  private readonly zeptoApiUrl: string;
+  private readonly zeptoToken?: string;
+
   constructor(private configService: ConfigService) {
-    const region = this.configService.get<string>('aws.ses.region');
-    const accessKey = this.configService.get<string>('aws.ses.accessKey');
-    const secretKey = this.configService.get<string>('aws.ses.secretKey');
-    this.fromEmail = this.configService.get<string>('aws.ses.fromEmail', 'noreply@trendupp.com');
+    this.provider = this.configService.get<EmailProvider>('email.provider', 'ses');
+    this.fromEmail = this.configService.get<string>('email.fromEmail', 'noreply@trendupp.com');
+    this.fromName = this.configService.get<string>('email.fromName', 'Trendupp');
 
     // Set the template directory with fallback for dev/compilation environments
     const possiblePaths = [
@@ -49,26 +58,43 @@ export class EmailService {
     }
     this.templateDir = resolvedPath;
 
+    // --- ZeptoMail config ---
+    this.zeptoApiUrl = this.configService.get<string>(
+      'email.zeptomail.apiUrl',
+      'https://api.zeptomail.com/v1.1/email',
+    );
+    this.zeptoToken = this.configService.get<string>('email.zeptomail.token');
+
+    // --- SES config ---
+    const region = this.configService.get<string>('aws.ses.region');
+    const accessKey = this.configService.get<string>('aws.ses.accessKey');
+    const secretKey = this.configService.get<string>('aws.ses.secretKey');
     if (region && accessKey && secretKey) {
       this.sesClient = new SESClient({
         region,
-        credentials: {
-          accessKeyId: accessKey,
-          secretAccessKey: secretKey,
-        },
+        credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
       });
-      this.logger.log('AWS SES Client initialized');
+    }
+
+    if (this.isProviderReady()) {
+      this.logger.log(`Email service initialized (provider: ${this.provider})`);
     } else {
       this.logger.warn(
-        'AWS SES credentials missing. Email service running in MOCK mode (Logging to console).',
+        `Email provider "${this.provider}" is not configured. ` +
+          'Email service running in MOCK mode (logging to console).',
       );
     }
   }
 
+  /** True when the active provider has the credentials it needs to deliver. */
+  private isProviderReady(): boolean {
+    return this.provider === 'zeptomail' ? !!this.zeptoToken : !!this.sesClient;
+  }
+
   /**
-   * Generic templated send — the single render/SES/mock-fallback path every
-   * email goes through. Only template rendering errors are always thrown;
-   * SES delivery errors throw only when `throwOnFailure` is set.
+   * Generic templated send — the single render / deliver / mock-fallback path
+   * every email goes through. Only template rendering errors are always thrown;
+   * delivery errors throw only when `throwOnFailure` is set.
    */
   async send(options: SendEmailOptions): Promise<SendEmailResult> {
     const { to, subject, template, data, throwOnFailure = false } = options;
@@ -84,37 +110,85 @@ export class EmailService {
       throw error;
     }
 
-    if (!this.sesClient) {
-      // No SES credentials — pure mock mode
+    if (!this.isProviderReady()) {
+      // No provider credentials — pure mock mode.
       this.logMockEmail(to, subject);
       return 'mocked';
     }
 
     try {
-      const command = new SendEmailCommand({
-        Destination: { ToAddresses: [to] },
-        Message: {
-          Body: { Html: { Data: htmlBody } },
-          Subject: { Data: subject },
-        },
-        Source: this.fromEmail,
-      });
-      await this.sesClient.send(command);
-      this.logger.log(`Email "${subject}" sent successfully to ${to}`);
+      await this.deliver(to, subject, htmlBody);
+      this.logger.log(`Email "${subject}" sent successfully to ${to} via ${this.provider}`);
       return 'sent';
-    } catch (sesError) {
-      const message = sesError instanceof Error ? sesError.message : String(sesError);
+    } catch (deliveryError) {
+      const message =
+        deliveryError instanceof Error ? deliveryError.message : String(deliveryError);
       if (throwOnFailure) {
-        this.logger.error(`AWS SES could not deliver email to ${to}: ${message}`);
-        throw sesError;
+        this.logger.error(`Email delivery to ${to} failed (${this.provider}): ${message}`);
+        throw deliveryError;
       }
-      // SES rejected the send (e.g. sandbox mode — recipient not verified).
-      // Fall back to console logging so request-path flows are not blocked.
+      // Provider rejected the send. Fall back to console logging so
+      // request-path flows are not blocked.
       this.logger.warn(
-        `AWS SES could not deliver email to ${to} (falling back to mock mode): ${message}`,
+        `Email delivery to ${to} failed (${this.provider}), falling back to mock mode: ${message}`,
       );
       this.logMockEmail(to, subject);
       return 'mocked';
+    }
+  }
+
+  /** Dispatch a rendered email to the active provider. Throws on failure. */
+  private async deliver(to: string, subject: string, htmlBody: string): Promise<void> {
+    if (this.provider === 'zeptomail') {
+      await this.deliverViaZeptoMail(to, subject, htmlBody);
+      return;
+    }
+    await this.deliverViaSes(to, subject, htmlBody);
+  }
+
+  private async deliverViaSes(to: string, subject: string, htmlBody: string): Promise<void> {
+    if (!this.sesClient) {
+      throw new Error('SES client is not initialized');
+    }
+    const command = new SendEmailCommand({
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Body: { Html: { Data: htmlBody } },
+        Subject: { Data: subject },
+      },
+      Source: this.fromEmail,
+    });
+    await this.sesClient.send(command);
+  }
+
+  private async deliverViaZeptoMail(to: string, subject: string, htmlBody: string): Promise<void> {
+    if (!this.zeptoToken) {
+      throw new Error('ZeptoMail token is not configured');
+    }
+    // Tokens copied from the ZeptoMail console sometimes already include the
+    // scheme prefix; accept both forms.
+    const authorization = this.zeptoToken.startsWith('Zoho-enczapikey')
+      ? this.zeptoToken
+      : `Zoho-enczapikey ${this.zeptoToken}`;
+
+    const response = await fetch(this.zeptoApiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: authorization,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        from: { address: this.fromEmail, name: this.fromName },
+        to: [{ email_address: { address: to } }],
+        subject,
+        htmlbody: htmlBody,
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`ZeptoMail responded ${response.status}: ${detail}`);
     }
   }
 
@@ -133,7 +207,7 @@ export class EmailService {
       data: { otp },
     });
     if (result === 'mocked') {
-      // Dev environments without SES rely on this log to complete signup/login.
+      // Dev environments without a provider rely on this log to complete signup/login.
       this.logger.log(`OTP Code for ${to}: ${otp}`);
     }
   }
@@ -157,84 +231,21 @@ export class EmailService {
   }
 
   async sendStrikeWarningEmail(to: string, firstName: string, strikesCount: number): Promise<void> {
-    const subject = `Trendupp Strike Warning: ${strikesCount} strike(s) recorded`;
-
-    try {
-      const templatePath = join(this.templateDir, 'strike-warning.ejs');
-      const htmlBody = await ejs.renderFile(templatePath, { firstName, strikesCount });
-
-      if (this.sesClient) {
-        try {
-          const command = new SendEmailCommand({
-            Destination: { ToAddresses: [to] },
-            Message: {
-              Body: { Html: { Data: htmlBody } },
-              Subject: { Data: subject },
-            },
-            Source: this.fromEmail,
-          });
-          await this.sesClient.send(command);
-          this.logger.log(`Strike warning email sent to ${to}`);
-        } catch (sesError) {
-          const message = sesError instanceof Error ? sesError.message : String(sesError);
-          this.logger.warn(
-            `AWS SES could not deliver strike warning to ${to} (falling back to mock): ${message}`,
-          );
-          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
-          this.logger.log(`To: ${to}`);
-          this.logger.log(`Subject: ${subject}`);
-          this.logger.log('-----------------------------');
-        }
-      } else {
-        this.logger.log('--- [MOCK EMAIL SENT] ---');
-        this.logger.log(`To: ${to}`);
-        this.logger.log(`Subject: ${subject}`);
-        this.logger.log('--------------------------');
-      }
-    } catch (error) {
-      const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to render strike warning template for ${to}`, stack);
-    }
+    await this.send({
+      to,
+      subject: `Trendupp Strike Warning: ${strikesCount} strike(s) recorded`,
+      template: 'strike-warning',
+      data: { firstName, strikesCount },
+    });
   }
 
   async sendCreatorBlockEmail(to: string, firstName: string): Promise<void> {
-    const subject = 'Your Trendupp Account Has Been Blocked';
-
-    try {
-      const templatePath = join(this.templateDir, 'creator-blocked.ejs');
-      const htmlBody = await ejs.renderFile(templatePath, { firstName });
-
-      if (this.sesClient) {
-        try {
-          const command = new SendEmailCommand({
-            Destination: { ToAddresses: [to] },
-            Message: {
-              Body: { Html: { Data: htmlBody } },
-              Subject: { Data: subject },
-            },
-            Source: this.fromEmail,
-          });
-          await this.sesClient.send(command);
-          this.logger.log(`Creator blocked email sent to ${to}`);
-        } catch (sesError) {
-          const message = sesError instanceof Error ? sesError.message : String(sesError);
-          this.logger.warn(
-            `AWS SES could not deliver creator block email to ${to} (falling back to mock): ${message}`,
-          );
-          this.logger.log('--- [FALLBACK MOCK EMAIL] ---');
-          this.logger.log(`To: ${to}`);
-          this.logger.log(`Subject: ${subject}`);
-          this.logger.log('-----------------------------');
-        }
-        this.logger.log('--- [MOCK EMAIL SENT] ---');
-        this.logger.log(`To: ${to}`);
-        this.logger.log(`Subject: ${subject}`);
-        this.logger.log('--------------------------');
-      }
-    } catch (error) {
-      const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to render creator block template for ${to}`, stack);
-    }
+    await this.send({
+      to,
+      subject: 'Your Trendupp Account Has Been Blocked',
+      template: 'creator-blocked',
+      data: { firstName },
+    });
   }
 
   async sendAdminInvitationEmail(
