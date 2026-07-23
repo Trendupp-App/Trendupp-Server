@@ -92,5 +92,6 @@ export default () => ({
     secretKey: process.env.PANDASCROW_SECRET_KEY,
     apiUrl: process.env.PANDASCROW_API_URL || 'https://sandbox.pandascrow.io',
     accountUuid: process.env.PANDASCROW_ACCOUNT_UUID,
+    callbackUrl: process.env.PAYMENT_CALLBACK_URL,
   },
 });

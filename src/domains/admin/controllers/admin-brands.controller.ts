@@ -223,7 +223,7 @@ export class AdminBrandsController {
     @Body() dto: UpdateAdminNoteDto,
   ): Promise<AdminNoteResponseDto> {
     const adminId = admin.id;
-    return this.adminNotesService.updateNote(noteId, adminId, dto);
+    return this.adminNotesService.updateNote(adminId, noteId, dto);
   }
 
   @Delete('brands/:id/notes/:noteId')
@@ -237,6 +237,6 @@ export class AdminBrandsController {
     @CurrentUser() admin: User,
   ): Promise<void> {
     const adminId = admin.id;
-    await this.adminNotesService.deleteNote(noteId, adminId);
+    await this.adminNotesService.deleteNote(adminId, noteId);
   }
 }

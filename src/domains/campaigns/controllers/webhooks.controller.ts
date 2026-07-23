@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { CampaignRepository } from '../repository/campaign.repository';
+import { TimelineService } from '../services/timeline.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 
@@ -31,6 +32,7 @@ export class WebhooksController {
 
   constructor(
     private readonly campaignRepository: CampaignRepository,
+    private readonly timelineService: TimelineService,
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -123,10 +125,13 @@ export class WebhooksController {
           `Escrow paid for campaign ${campaign.id} but status is '${campaign.status}' (expected 'pending_payment'). Proceeding to set live anyway.`,
         );
       }
+      const approvedAt = new Date();
+      const initialTimeline = this.timelineService.initCampaignTimeline(approvedAt);
       await campaign.update({
         paymentStatus: 'paid',
         status: 'live',
-        approvedAt: new Date(),
+        approvedAt,
+        timeline: initialTimeline,
       });
       this.logger.log(
         `Campaign ${campaign.id} transitioned pending_payment → live after payment confirmation.`,

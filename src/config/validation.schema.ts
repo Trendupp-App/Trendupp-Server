@@ -86,4 +86,5 @@ export const validationSchema = Joi.object({
   PANDASCROW_SECRET_KEY: Joi.string().allow('').optional(),
   PANDASCROW_API_URL: Joi.string().uri().allow('').optional(),
   PANDASCROW_ACCOUNT_UUID: Joi.string().allow('').optional(),
+  PAYMENT_CALLBACK_URL: Joi.string().uri().allow('').optional(),
 });
