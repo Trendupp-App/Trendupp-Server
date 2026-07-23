@@ -51,6 +51,7 @@ export class PandascrowService {
   private readonly secretKey: string;
   private readonly apiUrl: string;
   private readonly accountUuid: string;
+  private readonly callbackUrl: string;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('pandascrow.apiKey') || '';
@@ -58,6 +59,7 @@ export class PandascrowService {
     this.apiUrl =
       this.configService.get<string>('pandascrow.apiUrl') || 'https://sandbox.pandascrow.io';
     this.accountUuid = this.configService.get<string>('pandascrow.accountUuid') || '';
+    this.callbackUrl = this.configService.get<string>('pandascrow.callbackUrl') || '';
   }
 
   /**
@@ -93,6 +95,7 @@ export class PandascrowService {
       delivery_date: payload.deliveryDate,
       who_pay_fees: 'seller', // Trendupp pays fees
       amount: payload.amount,
+      ...(this.callbackUrl && { callback_url: this.callbackUrl }),
       buyer_details: {
         name: payload.buyerDetails.name,
         email: payload.buyerDetails.email,

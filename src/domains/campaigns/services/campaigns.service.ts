@@ -534,6 +534,7 @@ export class CampaignsService {
       throw new ForbiddenException('You do not own this campaign');
     }
 
+    //find paymenrnt with escowid and campId
     const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
     if (!payment) {
       throw new NotFoundException('No payment record found for this campaign');
@@ -573,7 +574,7 @@ export class CampaignsService {
 
     if (!isFunded) {
       throw new BadRequestException(
-        'Payment has not been confirmed by the payment gateway yet. Please complete payment and try again.',
+        'Payment has not been confirmed by the payment gateway yet, we are taking a moment to confirm it.',
       );
     }
 
