@@ -5,7 +5,9 @@ import { UniqueConstraintError } from 'sequelize';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { EmailService } from '../../../integration/email/email.service';
+import { PushService } from '../../../integration/push/push.service';
 import { NotificationRepository } from '../repository/notification.repository';
+import { DeviceTokenRepository } from '../repository/device-token.repository';
 import { NOTIFICATION_CATALOG } from '../notification.catalog';
 import { CatalogEntry, NotifyInput } from '../notification.types';
 
@@ -31,7 +33,9 @@ export class NotificationDispatcherService {
 
   constructor(
     private readonly notificationRepository: NotificationRepository,
+    private readonly deviceTokenRepository: DeviceTokenRepository,
     private readonly emailService: EmailService,
+    private readonly pushService: PushService,
     private readonly configService: ConfigService,
     @InjectModel(User)
     private readonly userModel: typeof User,
@@ -69,32 +73,40 @@ export class NotificationDispatcherService {
    * bypass or forget it.
    *
    * Policy (see NOTIFICATION_SYSTEM_PLAN.md §5):
-   * - 'security' entries bypass all toggles.
+   * - 'security' entries bypass all toggles (except pushNotifications, below).
    * - In-app: written when the category toggle is on; critical/high
    *   notifications land in the feed even when the category is off
    *   (the user opted out of noise, not of history).
    * - Email: category toggle AND the emailNotifications master toggle.
+   * - Push: mirrors the in-app decision AND the pushNotifications master
+   *   toggle. The toggle is honored even for security notifications — push is
+   *   an interruption channel, and the user still gets the in-app row and
+   *   email; it's "don't buzz my phone", not "hide this from me".
    */
   resolveChannels(
     user: Pick<User, 'notificationSettings'>,
     entry: CatalogEntry,
-  ): { inApp: boolean; email: boolean } {
+  ): { inApp: boolean; email: boolean; push: boolean } {
     const wantsInApp = entry.channels.includes('inApp');
     const wantsEmail = entry.channels.includes('email');
 
-    if (entry.category === 'security') {
-      return { inApp: wantsInApp, email: wantsEmail };
-    }
-
     const settings = (user.notificationSettings ?? {}) as Record<string, boolean>;
     // Missing key (pre-migration rows) counts as enabled, matching the JSONB defaults.
+    const pushMasterOn = settings.pushNotifications !== false;
+
+    if (entry.category === 'security') {
+      return { inApp: wantsInApp, email: wantsEmail, push: wantsInApp && pushMasterOn };
+    }
+
     const categoryOn = settings[entry.category] !== false;
     const emailMasterOn = settings.emailNotifications !== false;
     const isImportant = entry.priority === 'critical' || entry.priority === 'high';
 
+    const inApp = wantsInApp && (categoryOn || isImportant);
     return {
-      inApp: wantsInApp && (categoryOn || isImportant),
+      inApp,
       email: wantsEmail && categoryOn && emailMasterOn,
+      push: inApp && pushMasterOn,
     };
   }
 
@@ -174,6 +186,10 @@ export class NotificationDispatcherService {
       throw error;
     }
 
+    if (channels.push) {
+      await this.sendPush(user.id, input.type, title, body, actionUrl);
+    }
+
     if (!channels.email) {
       return; // emailStatus stays 'skipped' (the default) — auditable, not silent.
     }
@@ -209,6 +225,46 @@ export class NotificationDispatcherService {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Email leg failed for notification ${notification.id}: ${message}`);
       await notification.update({ emailStatus: 'failed', emailError: message });
+    }
+  }
+
+  /**
+   * Push leg. Best-effort by design: the in-app row is already written, so a
+   * push failure is logged, never thrown. Tokens FCM reports as dead are
+   * pruned so the table tracks live installs only.
+   */
+  private async sendPush(
+    userId: string,
+    type: string,
+    title: string,
+    body: string,
+    actionUrl: string | null,
+  ): Promise<void> {
+    if (!this.pushService.isConfigured) return;
+
+    try {
+      const devices = await this.deviceTokenRepository.findAllForUser(userId);
+      if (devices.length === 0) return;
+
+      const result = await this.pushService.sendToTokens(
+        devices.map((d) => d.token),
+        {
+          title,
+          body,
+          // FCM data values must be strings; the mobile app routes on these.
+          data: { type, actionUrl: actionUrl ?? '' },
+        },
+      );
+
+      if (result.invalidTokens.length > 0) {
+        await this.deviceTokenRepository.removeTokens(result.invalidTokens);
+        this.logger.debug(
+          `Pruned ${result.invalidTokens.length} dead device token(s) for user ${userId}.`,
+        );
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Push leg failed for "${type}" to user ${userId}: ${message}`);
     }
   }
 }

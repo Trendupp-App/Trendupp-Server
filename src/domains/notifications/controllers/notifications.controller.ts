@@ -1,7 +1,10 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Patch,
+  Post,
   Param,
   Query,
   UseGuards,
@@ -16,7 +19,9 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { User } from '../../users/entities/user.entity';
 import { NotificationRepository } from '../repository/notification.repository';
+import { DeviceTokenRepository } from '../repository/device-token.repository';
 import { ListNotificationsDto } from '../dtos/list-notifications.dto';
+import { RegisterDeviceDto, UnregisterDeviceDto } from '../dtos/register-device.dto';
 import {
   NotificationItemDto,
   PaginatedNotificationsDto,
@@ -30,7 +35,38 @@ import { THROTTLE_LIMITS } from '../../../shared/constants/throttle.constants';
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationRepository: NotificationRepository) {}
+  constructor(
+    private readonly notificationRepository: NotificationRepository,
+    private readonly deviceTokenRepository: DeviceTokenRepository,
+  ) {}
+
+  @Post('devices')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Register this device for push notifications',
+    description:
+      'Idempotent: called by the mobile app after sign-in and on every FCM token refresh. ' +
+      'Re-registering a token that belongs to another account reassigns it to the caller ' +
+      '(same device, different login).',
+  })
+  @ApiResponse({ status: 204, description: 'Device registered' })
+  async registerDevice(@CurrentUser() user: User, @Body() dto: RegisterDeviceDto) {
+    await this.deviceTokenRepository.register(user.id, dto.token, dto.platform);
+  }
+
+  @Delete('devices')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Unregister this device from push notifications',
+    description:
+      'Called by the mobile app on logout so the next account on this device does not ' +
+      'receive the previous account’s pushes. No-op if the token is unknown or not owned ' +
+      'by the caller.',
+  })
+  @ApiResponse({ status: 204, description: 'Device unregistered (or was not registered)' })
+  async unregisterDevice(@CurrentUser() user: User, @Body() dto: UnregisterDeviceDto) {
+    await this.deviceTokenRepository.removeByToken(user.id, dto.token);
+  }
 
   @Get()
   @ApiOperation({
