@@ -33,6 +33,18 @@ export const validationSchema = Joi.object({
   AWS_SES_SECRET_KEY: Joi.string().optional(),
   AWS_SES_FROM_EMAIL: Joi.string().email().optional(),
 
+  // Email transport
+  EMAIL_PROVIDER: Joi.string().valid('ses', 'zeptomail').default('ses'),
+  EMAIL_FROM: Joi.string().email().optional(),
+  EMAIL_FROM_NAME: Joi.string().optional(),
+  ZEPTOMAIL_API_URL: Joi.string().uri().optional(),
+  // Required only when ZeptoMail is the active provider.
+  ZEPTOMAIL_TOKEN: Joi.string().when('EMAIL_PROVIDER', {
+    is: 'zeptomail',
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+
   // Security
   ALLOWED_ORIGINS: Joi.string().default('*'),
   JWT_SECRET: Joi.string().default('trendupp-default-secret-key-for-development-and-testing'),
@@ -53,6 +65,9 @@ export const validationSchema = Joi.object({
   // Instagram OAuth
   INSTAGRAM_APP_ID: Joi.string().allow('').optional(),
   INSTAGRAM_APP_SECRET: Joi.string().allow('').optional(),
+
+  // Firebase Cloud Messaging (push notifications)
+  FIREBASE_SERVICE_ACCOUNT_BASE64: Joi.string().allow('').optional(),
 
   // YouTube OAuth (social connect)
   YOUTUBE_CLIENT_ID: Joi.string().allow('').optional(),

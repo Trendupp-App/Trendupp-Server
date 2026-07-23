@@ -7,7 +7,9 @@ import { getModelToken } from '@nestjs/sequelize';
 import { UniqueConstraintError } from 'sequelize';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
 import { NotificationRepository } from '../repository/notification.repository';
+import { DeviceTokenRepository } from '../repository/device-token.repository';
 import { EmailService } from '../../../integration/email/email.service';
+import { PushService } from '../../../integration/push/push.service';
 import { User } from '../../users/entities/user.entity';
 import { NOTIFICATION_CATALOG } from '../notification.catalog';
 import { CatalogEntry, NotificationType } from '../notification.types';
@@ -35,7 +37,9 @@ const makeUser = (overrides: Record<string, unknown> = {}) => ({
 describe('NotificationDispatcherService', () => {
   let service: NotificationDispatcherService;
   let repositoryMock: jest.Mocked<NotificationRepository>;
+  let deviceTokenRepositoryMock: jest.Mocked<DeviceTokenRepository>;
   let emailServiceMock: jest.Mocked<EmailService>;
+  let pushServiceMock: any;
   let userModelMock: any;
   let notificationRowMock: any;
 
@@ -44,16 +48,26 @@ describe('NotificationDispatcherService', () => {
     repositoryMock = {
       create: jest.fn().mockResolvedValue(notificationRowMock),
     } as unknown as jest.Mocked<NotificationRepository>;
+    deviceTokenRepositoryMock = {
+      findAllForUser: jest.fn().mockResolvedValue([{ token: 'fcm-token-1' }]),
+      removeTokens: jest.fn().mockResolvedValue(0),
+    } as unknown as jest.Mocked<DeviceTokenRepository>;
     emailServiceMock = {
       send: jest.fn().mockResolvedValue('sent'),
     } as unknown as jest.Mocked<EmailService>;
+    pushServiceMock = {
+      isConfigured: true,
+      sendToTokens: jest.fn().mockResolvedValue({ sent: 1, failed: 0, invalidTokens: [] }),
+    };
     userModelMock = { findAll: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationDispatcherService,
         { provide: NotificationRepository, useValue: repositoryMock },
+        { provide: DeviceTokenRepository, useValue: deviceTokenRepositoryMock },
         { provide: EmailService, useValue: emailServiceMock },
+        { provide: PushService, useValue: pushServiceMock },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('https://trendupp.com') },
@@ -92,34 +106,40 @@ describe('NotificationDispatcherService', () => {
       name: string;
       entry: CatalogEntry;
       settings: Record<string, boolean> | null;
-      expected: { inApp: boolean; email: boolean };
+      expected: { inApp: boolean; email: boolean; push: boolean };
     }[] = [
       {
-        name: 'defaults: both channels on',
+        name: 'defaults: all channels on',
         entry: entry({}),
         settings: { ...defaultSettings },
-        expected: { inApp: true, email: true },
+        expected: { inApp: true, email: true, push: true },
       },
       {
         name: 'category off suppresses medium/low entirely',
         entry: entry({ priority: 'medium' }),
         settings: { ...defaultSettings, applicationUpdates: false },
-        expected: { inApp: false, email: false },
+        expected: { inApp: false, email: false, push: false },
       },
       {
-        name: 'category off still lands critical in-app (no email)',
+        name: 'category off still lands critical in-app (no email; push follows in-app)',
         entry: entry({ priority: 'critical' }),
         settings: { ...defaultSettings, applicationUpdates: false },
-        expected: { inApp: true, email: false },
+        expected: { inApp: true, email: false, push: true },
       },
       {
         name: 'email master toggle off suppresses only email',
         entry: entry({}),
         settings: { ...defaultSettings, emailNotifications: false },
-        expected: { inApp: true, email: false },
+        expected: { inApp: true, email: false, push: true },
       },
       {
-        name: 'security category bypasses all toggles',
+        name: 'push master toggle off suppresses only push',
+        entry: entry({}),
+        settings: { ...defaultSettings, pushNotifications: false },
+        expected: { inApp: true, email: true, push: false },
+      },
+      {
+        name: 'security category bypasses category/email toggles',
         entry: entry({ category: 'security' }),
         settings: {
           ...defaultSettings,
@@ -127,19 +147,25 @@ describe('NotificationDispatcherService', () => {
           paymentAlerts: false,
           emailNotifications: false,
         },
-        expected: { inApp: true, email: true },
+        expected: { inApp: true, email: true, push: true },
+      },
+      {
+        name: 'security still honors the push master toggle',
+        entry: entry({ category: 'security' }),
+        settings: { ...defaultSettings, pushNotifications: false },
+        expected: { inApp: true, email: true, push: false },
       },
       {
         name: 'missing settings (pre-migration user) count as enabled',
         entry: entry({}),
         settings: null,
-        expected: { inApp: true, email: true },
+        expected: { inApp: true, email: true, push: true },
       },
       {
         name: 'in-app-only entry never emails',
         entry: entry({ channels: ['inApp'] }),
         settings: { ...defaultSettings },
-        expected: { inApp: true, email: false },
+        expected: { inApp: true, email: false, push: true },
       },
     ];
 
@@ -236,6 +262,54 @@ describe('NotificationDispatcherService', () => {
       expect(repositoryMock.create).toHaveBeenCalledWith(
         expect.objectContaining({ dedupeKey: 'application.accepted:release-1:user-1' }),
       );
+    });
+
+    it('sends a push to the recipient device tokens with routing data', async () => {
+      userModelMock.findAll.mockResolvedValue([makeUser()]);
+
+      await service.dispatch(input);
+
+      expect(pushServiceMock.sendToTokens).toHaveBeenCalledWith(
+        ['fcm-token-1'],
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'application.accepted' }),
+        }),
+      );
+    });
+
+    it('prunes tokens FCM reports as dead', async () => {
+      userModelMock.findAll.mockResolvedValue([makeUser()]);
+      pushServiceMock.sendToTokens.mockResolvedValue({
+        sent: 0,
+        failed: 1,
+        invalidTokens: ['fcm-token-1'],
+      });
+
+      await service.dispatch(input);
+
+      expect(deviceTokenRepositoryMock.removeTokens).toHaveBeenCalledWith(['fcm-token-1']);
+    });
+
+    it('skips push entirely when the user disabled pushNotifications', async () => {
+      userModelMock.findAll.mockResolvedValue([
+        makeUser({
+          notificationSettings: { ...defaultSettings, pushNotifications: false },
+        }),
+      ]);
+
+      await service.dispatch(input);
+
+      expect(pushServiceMock.sendToTokens).not.toHaveBeenCalled();
+      expect(repositoryMock.create).toHaveBeenCalled();
+    });
+
+    it('a push failure never breaks the dispatch (in-app + email still land)', async () => {
+      userModelMock.findAll.mockResolvedValue([makeUser()]);
+      deviceTokenRepositoryMock.findAllForUser.mockRejectedValue(new Error('db hiccup'));
+
+      await expect(service.dispatch(input)).resolves.toBeUndefined();
+
+      expect(emailServiceMock.send).toHaveBeenCalled();
     });
 
     it('does nothing for a fully suppressed recipient', async () => {
