@@ -70,6 +70,11 @@ export default () => ({
     appId: process.env.INSTAGRAM_APP_ID,
     appSecret: process.env.INSTAGRAM_APP_SECRET,
   },
+  firebase: {
+    // Base64-encoded service-account JSON (Firebase console → Project settings
+    // → Service accounts → Generate new private key, then `base64 -i key.json`).
+    serviceAccountBase64: process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+  },
   youtube: {
     clientId: process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET,

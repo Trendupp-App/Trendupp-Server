@@ -66,6 +66,9 @@ export const validationSchema = Joi.object({
   INSTAGRAM_APP_ID: Joi.string().allow('').optional(),
   INSTAGRAM_APP_SECRET: Joi.string().allow('').optional(),
 
+  // Firebase Cloud Messaging (push notifications)
+  FIREBASE_SERVICE_ACCOUNT_BASE64: Joi.string().allow('').optional(),
+
   // YouTube OAuth (social connect)
   YOUTUBE_CLIENT_ID: Joi.string().allow('').optional(),
   YOUTUBE_CLIENT_SECRET: Joi.string().allow('').optional(),
