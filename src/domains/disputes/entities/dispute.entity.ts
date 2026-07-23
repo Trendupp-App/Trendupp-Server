@@ -40,11 +40,11 @@ export class Dispute extends BaseEntity<Dispute> {
   declare streamChannelId?: string;
 
   @Column({
-    type: DataType.ENUM('release_to_creator', 'refund_to_brand', 'split'),
+    type: DataType.ENUM('release_to_creator', 'refund_to_brand', 'split', 'extend_days'),
     allowNull: true,
     field: 'escrow_action',
   })
-  declare escrowAction?: 'release_to_creator' | 'refund_to_brand' | 'split';
+  declare escrowAction?: 'release_to_creator' | 'refund_to_brand' | 'split' | 'extend_days';
 
   @Column({ type: DataType.DATE, allowNull: true, field: 'resolved_at' })
   declare resolvedAt?: Date;

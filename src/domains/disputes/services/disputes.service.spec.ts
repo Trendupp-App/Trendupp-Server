@@ -9,6 +9,7 @@ import { DisputeRepository } from '../repository/dispute.repository';
 import { CampaignRepository } from '../../campaigns/repository/campaign.repository';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { TimelineService } from '../../campaigns/services/timeline.service';
 
 describe('DisputesService', () => {
   let service: DisputesService;
@@ -54,6 +55,7 @@ describe('DisputesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DisputesService,
+        TimelineService,
         { provide: DisputeRepository, useValue: disputeRepoMock },
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: StreamService, useValue: streamServiceMock },

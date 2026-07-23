@@ -12,6 +12,7 @@ import { CreateDisputeDto } from '../dtos/create-dispute.dto';
 import { ActivateDisputeDto } from '../dtos/activate-dispute.dto';
 import { ResolveDisputeDto } from '../dtos/resolve-dispute.dto';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { TimelineService } from '../../campaigns/services/timeline.service';
 
 @Injectable()
 export class DisputesService {
@@ -20,6 +21,7 @@ export class DisputesService {
     private readonly campaignRepository: CampaignRepository,
     private readonly streamService: StreamService,
     private readonly notificationsService: NotificationsService,
+    private readonly timelineService: TimelineService,
   ) {}
 
   /**
@@ -358,6 +360,21 @@ export class DisputesService {
             releaseDate: new Date(),
           });
         }
+      }
+    } else if (dto.action === 'extend_days') {
+      const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+        dispute.campaignId,
+        dispute.creatorId,
+      );
+      if (application) {
+        const extendedTimeline = this.timelineService.extendDays(application.timeline, 3);
+        await application.update({ timeline: extendedTimeline });
+      }
+      if (release) {
+        await release.update({
+          status: 'pending',
+          errorDetails: `Dispute resolved via deadline extension (+3 days). Resolution notes: ${dto.resolutionNotes}`,
+        });
       }
     }
 

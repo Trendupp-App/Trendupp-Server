@@ -69,8 +69,8 @@ export class Campaign extends BaseEntity<Campaign> {
 
   declare creatorNiches?: Niche[];
 
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare timeline?: Date;
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare timeline?: Record<string, any>;
 
   @BelongsToMany(() => Platform, () => CampaignPlatform)
   declare preferredPlatforms?: Platform[];

@@ -572,7 +572,7 @@ export class AdminBrandsService {
       status: c.status,
       paymentStatus: c.paymentStatus,
       applicationsCount: c.applications ? c.applications.length : 0,
-      startDate: c.timeline || null,
+      startDate: c.approvedAt || c.createdAt || null,
       endDate: null,
       createdAt: c.createdAt,
     }));

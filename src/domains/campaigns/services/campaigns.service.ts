@@ -24,6 +24,7 @@ import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
+import { TimelineService } from './timeline.service';
 import { Niche } from '../../users/entities/niche.entity';
 import { Op } from 'sequelize';
 import { InjectModel } from '@nestjs/sequelize';
@@ -38,6 +39,7 @@ export class CampaignsService {
     private readonly pandascrowService: PandascrowService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
+    private readonly timelineService: TimelineService,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
     @InjectModel(CreatorCategory)
@@ -399,7 +401,6 @@ export class CampaignsService {
       if (!campaign.creatorCategoryIds || campaign.creatorCategoryIds.length === 0) {
         errors.push('creatorCategory is required');
       }
-      if (!campaign.timeline) errors.push('timeline is required');
       if (!campaign.creatorNicheIds || campaign.creatorNicheIds.length === 0) {
         errors.push('creatorNiche is required');
       }
@@ -448,7 +449,15 @@ export class CampaignsService {
     const breakdown = await this.calculateBreakdown(campaign.totalBudget, campaign.currency);
 
     // Initialize escrow on Pandascrow
-    const deliveryDateStr = new Date(campaign.timeline!).toISOString().split('T')[0];
+    const timelineObj = campaign.timeline as
+      | Record<string, { endedDate?: string }>
+      | null
+      | undefined;
+    const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
+    const rawDeliveryDate = endedDateStr
+      ? new Date(endedDateStr)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const deliveryDateStr = rawDeliveryDate.toISOString().split('T')[0];
     const escrow = await this.pandascrowService.initializeEscrow({
       title: campaign.title,
       description: campaign.campaignBrief!,
@@ -575,10 +584,14 @@ export class CampaignsService {
       escrowStatus: 'funded',
     });
 
+    const approvedAt = new Date();
+    const initialTimeline = this.timelineService.initCampaignTimeline(approvedAt);
+
     await campaign.update({
       paymentStatus: 'paid',
       status: 'live',
-      approvedAt: new Date(),
+      approvedAt,
+      timeline: initialTimeline,
     });
 
     await this.notificationsService.notify({
@@ -897,11 +910,18 @@ export class CampaignsService {
     }
 
     // Normal path: update application status
-    await application.update({ status });
-
-    // When a brand accepts an application, promote the campaign to active
+    const appUpdates: Record<string, any> = { status };
     if (status === 'accepted') {
-      await campaign.update({ status: 'active' });
+      appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
+    }
+    await application.update(appUpdates);
+
+    // When a brand accepts an application, promote the campaign to active and update stage2 timeline
+    if (status === 'accepted') {
+      const updatedCampaignTimeline = this.timelineService.completeApplicationReview(
+        campaign.timeline,
+      );
+      await campaign.update({ status: 'active', timeline: updatedCampaignTimeline });
     }
 
     if (status === 'accepted' || status === 'rejected') {
@@ -968,11 +988,18 @@ export class CampaignsService {
         await campaign.update({ status: 'live' });
       } else {
         // Normal path: update application status
-        await application.update({ status });
-
-        // When a brand accepts an application, promote the campaign to active
+        const appUpdates: Record<string, any> = { status };
         if (status === 'accepted') {
-          await campaign.update({ status: 'active' });
+          appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
+        }
+        await application.update(appUpdates);
+
+        // When a brand accepts an application, promote the campaign to active and complete stage2 review
+        if (status === 'accepted') {
+          const updatedCampaignTimeline = this.timelineService.completeApplicationReview(
+            campaign.timeline,
+          );
+          await campaign.update({ status: 'active', timeline: updatedCampaignTimeline });
         }
       }
 
@@ -1140,6 +1167,13 @@ export class CampaignsService {
         brandFeedback: null,
       });
 
+      if (typeof application?.update === 'function') {
+        const revisedTimeline = this.timelineService.recordRevisedDraftSubmission(
+          application.timeline,
+        );
+        await application.update({ timeline: revisedTimeline });
+      }
+
       const campaign = application.campaign ?? (await this.campaignRepository.findById(campaignId));
       if (campaign) {
         await this.notificationsService.notify({
@@ -1157,6 +1191,10 @@ export class CampaignsService {
         throw new ForbiddenException(`You can only submit drafts for accepted applications`);
       }
       // First draft submission
+      if (typeof application?.update === 'function') {
+        const draftTimeline = this.timelineService.recordDraftSubmission(application.timeline);
+        await application.update({ timeline: draftTimeline });
+      }
       const submission = await this.campaignRepository.createSubmission({
         campaignId,
         applicationId,
@@ -1297,6 +1335,15 @@ export class CampaignsService {
 
     await submission.update(updates);
 
+    const application = await this.campaignRepository.findApplicationById(submission.applicationId);
+    if (application) {
+      const updatedAppTimeline = this.timelineService.recordDraftVetting(
+        application.timeline,
+        decision,
+      );
+      await application.update({ timeline: updatedAppTimeline });
+    }
+
     await this.notificationsService.notify({
       type: decision === 'approved' ? 'submission.draft_approved' : 'submission.revision_requested',
       recipientId: submission.creatorId,
@@ -1399,11 +1446,12 @@ export class CampaignsService {
       });
     }
 
-    // Update application status to approved
-    // const application = await this.campaignRepository.findApplicationById(submission.applicationId);
-    // if (application) {
-    //   await application.update({ status: 'approved' });
-    // }
+    // Update application timeline for live post submission
+    const application = await this.campaignRepository.findApplicationById(submission.applicationId);
+    if (application && typeof application.update === 'function') {
+      const liveTimeline = this.timelineService.recordLivePostSubmission(application.timeline);
+      await application.update({ timeline: liveTimeline });
+    }
 
     const updated = await this.campaignRepository.findSubmissionById(submissionId);
     return updated!;
@@ -1444,6 +1492,16 @@ export class CampaignsService {
     // Schedule creator payout in 30 days
     const releaseDate = new Date();
     releaseDate.setDate(releaseDate.getDate() + 30); // 30 days from now
+
+    // Update application timeline for live post approval and payment release schedule
+    if (typeof application?.update === 'function') {
+      const approvedTimeline = this.timelineService.recordLivePostApproval(
+        application.timeline,
+        new Date(),
+        releaseDate,
+      );
+      await application.update({ timeline: approvedTimeline });
+    }
 
     // Fetch the campaign's payment record to carry the Pandascrow escrow ID
     // into the payment_release row — used by the payout cron to guard the bank transfer.

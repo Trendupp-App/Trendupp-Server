@@ -19,6 +19,8 @@ import { Niche } from '../../users/entities/niche.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
 import { Fee } from '../entities/fee.entity';
 
+import { TimelineService } from './timeline.service';
+
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
@@ -41,7 +43,7 @@ describe('CampaignsService', () => {
     creatorCategoryIds: ['cc1'],
     creatorNicheId: 'n1',
     creatorNicheIds: ['n1'],
-    timeline: new Date('2026-07-31T23:59:59.999Z'),
+    timeline: { stage1_application_window: { endedDate: '2026-07-31T23:59:59.999Z' } },
     status: 'draft',
     currentStep: 1,
     paymentStatus: 'unpaid',
@@ -161,6 +163,7 @@ describe('CampaignsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
+        TimelineService,
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: S3Service, useValue: s3ServiceMock },
         { provide: UsersService, useValue: usersServiceMock },
@@ -801,7 +804,10 @@ describe('CampaignsService', () => {
 
       await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'accepted');
 
-      expect(mockApp.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp.update).toHaveBeenCalledWith({
+        status: 'accepted',
+        timeline: expect.any(Object),
+      });
     });
   });
 
@@ -847,8 +853,14 @@ describe('CampaignsService', () => {
         'accepted',
       );
 
-      expect(mockApp1.update).toHaveBeenCalledWith({ status: 'accepted' });
-      expect(mockApp2.update).toHaveBeenCalledWith({ status: 'accepted' });
+      expect(mockApp1.update).toHaveBeenCalledWith({
+        status: 'accepted',
+        timeline: expect.any(Object),
+      });
+      expect(mockApp2.update).toHaveBeenCalledWith({
+        status: 'accepted',
+        timeline: expect.any(Object),
+      });
       expect(mockApp3.update).toHaveBeenCalledWith({ status: 'rejected' });
       expect(results.length).toBe(2);
     });
