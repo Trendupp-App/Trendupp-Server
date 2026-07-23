@@ -173,9 +173,11 @@ export class AdminSocialImpactService {
       const sectionsCompleted = `${step}/5 sections`;
 
       // Timeline difference for days left
+      const timelineObj = c.timeline as Record<string, { endedDate?: string }> | null | undefined;
+      const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
       let daysLeft = 4;
-      if (c.timeline) {
-        const diffMs = new Date(c.timeline).getTime() - Date.now();
+      if (endedDateStr) {
+        const diffMs = new Date(endedDateStr).getTime() - Date.now();
         daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
       }
 
@@ -648,7 +650,13 @@ export class AdminSocialImpactService {
       throw new BadRequestException('newDeadline parameter is required to extend deadline');
     }
 
-    await campaign.update({ timeline: new Date(dto.newDeadline) });
+    const newEndIso = new Date(dto.newDeadline).toISOString();
+    const updatedTimeline =
+      (campaign.timeline as Record<string, Record<string, string>> | null) || {};
+    if (updatedTimeline.stage1_application_window) {
+      updatedTimeline.stage1_application_window.endedDate = newEndIso;
+    }
+    await campaign.update({ timeline: updatedTimeline });
 
     await this.auditLogService.log({
       adminId,

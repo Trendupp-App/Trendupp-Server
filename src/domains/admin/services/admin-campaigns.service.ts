@@ -213,6 +213,9 @@ export class AdminCampaignsService {
         escrowBadge = 'REFUNDED';
       }
 
+      const timelineObj = c.timeline as Record<string, { endedDate?: string }> | null | undefined;
+      const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
+
       return {
         id: c.id,
         displayId,
@@ -228,7 +231,7 @@ export class AdminCampaignsService {
         applicationsCount: c.applications ? c.applications.length : 0,
         status: itemStatus,
         escrowStatus: escrowBadge,
-        endDate: c.timeline || null,
+        endDate: endedDateStr ? new Date(endedDateStr) : null,
         createdAt: c.createdAt,
       };
     });

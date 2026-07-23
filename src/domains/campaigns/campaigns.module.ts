@@ -24,6 +24,8 @@ import { EmailModule } from '../../integration/email/email.module';
 
 import { WebhooksController } from './controllers/webhooks.controller';
 import { PayoutScheduler } from './services/payout.scheduler';
+import { TimelineService } from './services/timeline.service';
+import { CampaignTimelineScheduler } from './services/campaign-timeline.scheduler';
 
 @Module({
   imports: [
@@ -49,8 +51,15 @@ import { PayoutScheduler } from './services/payout.scheduler';
     EmailModule,
   ],
 
-  providers: [CampaignRepository, CampaignsService, S3Service, PayoutScheduler],
+  providers: [
+    CampaignRepository,
+    CampaignsService,
+    S3Service,
+    PayoutScheduler,
+    TimelineService,
+    CampaignTimelineScheduler,
+  ],
   controllers: [CampaignsController, WebhooksController],
-  exports: [CampaignsService, CampaignRepository, SequelizeModule],
+  exports: [CampaignsService, CampaignRepository, SequelizeModule, TimelineService],
 })
 export class CampaignsModule {}

@@ -3,13 +3,13 @@ import { IsEnum, IsNotEmpty, IsOptional, IsString, IsNumber, Min } from 'class-v
 
 export class ResolveDisputeDto {
   @ApiProperty({
-    description: 'The action to take on the escrowed funds',
-    enum: ['release_to_creator', 'refund_to_brand', 'split'],
-    example: 'release_to_creator',
+    description: 'The action to take on the dispute or escrowed funds',
+    enum: ['release_to_creator', 'refund_to_brand', 'split', 'extend_days'],
+    example: 'extend_days',
   })
-  @IsEnum(['release_to_creator', 'refund_to_brand', 'split'])
+  @IsEnum(['release_to_creator', 'refund_to_brand', 'split', 'extend_days'])
   @IsNotEmpty()
-  action: 'release_to_creator' | 'refund_to_brand' | 'split';
+  action: 'release_to_creator' | 'refund_to_brand' | 'split' | 'extend_days';
 
   @ApiProperty({
     description: 'Arbitration notes/justification for the resolution',

@@ -8,7 +8,6 @@ import {
   Min,
   IsUUID,
   IsArray,
-  IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -145,13 +144,11 @@ export class CreateCampaignDto {
   @IsOptional()
   contentGuidelines?: { dos: string[]; donts: string[] };
 
-  @ApiProperty({
-    description: 'Timeline date for the campaign (ISO string)',
-    example: '2026-07-31T23:59:59.999Z',
+  @ApiPropertyOptional({
+    description: 'Timeline tracking object or string',
   })
-  @IsDateString()
-  @IsNotEmpty()
-  timeline: string;
+  @IsOptional()
+  timeline?: any;
 
   @IsUUID(4)
   @IsOptional()

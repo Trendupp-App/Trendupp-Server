@@ -387,7 +387,7 @@ describe('UsersService', () => {
             totalBudget: 1000,
             coverImage: 'img.png',
             status: 'live',
-            timeline: new Date('2026-06-30'),
+            timeline: { stage1_application_window: { endedDate: '2026-06-30T00:00:00.000Z' } },
           },
         ],
         toJSON: () => ({
@@ -426,7 +426,7 @@ describe('UsersService', () => {
             totalBudget: 1000,
             coverImage: 'img.png',
             status: 'live',
-            timeline: new Date('2026-06-30'),
+            timeline: { stage1_application_window: { endedDate: '2026-06-30T00:00:00.000Z' } },
           },
         ],
       });

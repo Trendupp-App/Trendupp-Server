@@ -54,6 +54,9 @@ export class CampaignApplication extends BaseEntity<CampaignApplication> {
   })
   declare status: string;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare timeline?: Record<string, any>;
+
   @HasMany(() => ContentSubmission)
   declare submissions?: ContentSubmission[];
 }
