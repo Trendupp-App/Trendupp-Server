@@ -519,6 +519,7 @@ export class CampaignsService {
   async verifyPayment(
     campaignId: string,
     brandId: string,
+    escrowId?: string,
   ): Promise<{
     message: string;
     campaign: Campaign;
@@ -534,8 +535,11 @@ export class CampaignsService {
       throw new ForbiddenException('You do not own this campaign');
     }
 
-    //find paymenrnt with escowid and campId
-    const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+    // Find payment record matching escrowId (if provided) or latest for this campaign
+    const payment = escrowId
+      ? await this.campaignRepository.findPaymentByCampaignAndEscrowId(campaignId, escrowId)
+      : await this.campaignRepository.findPaymentByCampaignId(campaignId);
+
     if (!payment) {
       throw new NotFoundException('No payment record found for this campaign');
     }
