@@ -117,7 +117,6 @@ export class CampaignsController {
         creatorCategoryIds: dto.creatorCategoryIds,
         creatorCategoryId: dto.creatorCategoryId,
         preferredPlatformIds: dto.preferredPlatformIds,
-        timeline: dto.timeline as Record<string, any> | undefined,
         creatorNicheId: dto.creatorNicheId,
         creatorNicheIds: dto.creatorNicheIds,
         campaignBrief: dto.campaignBrief,

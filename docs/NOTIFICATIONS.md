@@ -1,7 +1,7 @@
 # Trendupp Notification System
 
-Reference for the in-app + email notification system in `src/domains/notifications/`.
-For the original design rationale and future roadmap (push, SSE, digests), see
+Reference for the in-app + email + push notification system in `src/domains/notifications/`.
+For the original design rationale and future roadmap (SSE, digests), see
 [NOTIFICATION_SYSTEM_PLAN.md](../NOTIFICATION_SYSTEM_PLAN.md).
 
 ## How it works
@@ -33,6 +33,17 @@ Domain service ──▶ NotificationsService.notify(...)      one line, never t
 - **Synthetic addresses are skipped.** TikTok/Instagram signups have
   `*@trendupp.tiktok|instagram` placeholder emails; the email leg is skipped
   (`email_status='skipped'`) and in-app is their primary channel.
+- **Push (FCM) mirrors the in-app decision.** Whenever a notification lands
+  in-app AND the user's `pushNotifications` toggle is on, it is also pushed to
+  every registered device token (`device_tokens` table). The mobile app
+  registers tokens at `POST /notifications/devices` (after sign-in and on FCM
+  token refresh) and unregisters at `DELETE /notifications/devices` on logout.
+  Push is best-effort: failures are logged, never retried, and tokens FCM
+  reports as dead are pruned automatically. Requires
+  `FIREBASE_SERVICE_ACCOUNT_BASE64` (base64 service-account JSON); without it
+  the push leg no-ops with a boot-time warning. The `pushNotifications` toggle
+  is honored even for `security` notifications — push is an interruption
+  channel; the in-app row and email still deliver.
 
 Key files:
 

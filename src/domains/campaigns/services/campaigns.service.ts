@@ -229,7 +229,7 @@ export class CampaignsService {
       creatorNicheIds: resolvedNicheIds,
       creatorCategoryId: resolvedCategoryId as string,
       creatorCategoryIds: resolvedCategoryIds,
-      timeline: timeline ?? undefined,
+      timeline,
       brandId,
       coverImage,
       amplificationAsset,
