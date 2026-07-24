@@ -71,6 +71,22 @@ export class User extends BaseEntity<User> {
   declare instagramOpenId?: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'facebook_open_id',
+    unique: true,
+  })
+  declare facebookOpenId?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'apple_user_id',
+    unique: true,
+  })
+  declare appleUserId?: string;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
     allowNull: false,
@@ -172,6 +188,17 @@ export class User extends BaseEntity<User> {
     field: 'instagram_followers',
   })
   declare instagramFollowers: number;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'facebook_username' })
+  declare facebookUsername?: string | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+    allowNull: false,
+    field: 'facebook_followers',
+  })
+  declare facebookFollowers: number;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'tiktok_username' })
   declare tiktokUsername?: string | null;
@@ -343,7 +370,8 @@ export class User extends BaseEntity<User> {
         this.instagramUsername ||
         this.tiktokUsername ||
         this.youtubeUsername ||
-        this.twitterUsername
+        this.twitterUsername ||
+        this.facebookUsername
       ) {
         percentage += 20;
       }
@@ -357,7 +385,8 @@ export class User extends BaseEntity<User> {
         this.instagramUsername ||
         this.tiktokUsername ||
         this.youtubeUsername ||
-        this.twitterUsername
+        this.twitterUsername ||
+        this.facebookUsername
       ) {
         percentage += 20;
       }
@@ -375,12 +404,14 @@ export class User extends BaseEntity<User> {
     tiktok: boolean;
     youtube: boolean;
     twitter: boolean;
+    facebook: boolean;
   } {
     return {
       instagram: !!this.instagramUsername,
       tiktok: !!this.tiktokUsername,
       youtube: !!this.youtubeUsername,
       twitter: !!this.twitterUsername,
+      facebook: !!this.facebookUsername,
     };
   }
 

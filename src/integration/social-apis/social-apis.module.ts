@@ -4,6 +4,8 @@ import { TiktokAuthService } from './tiktok-auth.service';
 import { InstagramAuthService } from './instagram-auth.service';
 import { YoutubeAuthService } from './youtube-auth.service';
 import { TwitterAuthService } from './twitter-auth.service';
+import { FacebookAuthService } from './facebook-auth.service';
+import { AppleAuthService } from './apple-auth.service';
 
 @Module({
   providers: [
@@ -12,6 +14,8 @@ import { TwitterAuthService } from './twitter-auth.service';
     InstagramAuthService,
     YoutubeAuthService,
     TwitterAuthService,
+    FacebookAuthService,
+    AppleAuthService,
   ],
   exports: [
     GoogleAuthService,
@@ -19,6 +23,8 @@ import { TwitterAuthService } from './twitter-auth.service';
     InstagramAuthService,
     YoutubeAuthService,
     TwitterAuthService,
+    FacebookAuthService,
+    AppleAuthService,
   ],
 })
 export class SocialApisModule {}

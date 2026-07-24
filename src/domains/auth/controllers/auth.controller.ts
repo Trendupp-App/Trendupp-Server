@@ -31,6 +31,8 @@ import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
 import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
 import { InstagramLoginDto } from '../dtos/instagram-login.dto';
+import { FacebookLoginDto } from '../dtos/facebook-login.dto';
+import { AppleLoginDto } from '../dtos/apple-login.dto';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 
 @ApiTags('auth')
@@ -115,6 +117,42 @@ export class AuthController {
   })
   async instagramLogin(@Body() instagramLoginDto: InstagramLoginDto) {
     return this.authService.instagramLogin(instagramLoginDto);
+  }
+
+  @Post('facebook')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Login or signup with Facebook authorization code (Creators and Brands)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid Facebook code or exchange failure',
+  })
+  async facebookLogin(@Body() facebookLoginDto: FacebookLoginDto) {
+    return this.authService.facebookLogin(facebookLoginDto);
+  }
+
+  @Post('apple')
+  @Throttle({ default: THROTTLE_LIMITS.LOGIN })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Login or signup with a Sign in with Apple identity token (Creators and Brands)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login/Signup successful, returns JWT token + user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid Apple identity token',
+  })
+  async appleLogin(@Body() appleLoginDto: AppleLoginDto) {
+    return this.authService.appleLogin(appleLoginDto);
   }
 
   @Post('otp/send')

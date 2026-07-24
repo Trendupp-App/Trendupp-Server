@@ -21,9 +21,13 @@ import { SendOtpDto } from '../dtos/send-otp.dto';
 import { GoogleLoginDto } from '../dtos/google-login.dto';
 import { TiktokLoginDto } from '../dtos/tiktok-login.dto';
 import { InstagramLoginDto } from '../dtos/instagram-login.dto';
+import { FacebookLoginDto } from '../dtos/facebook-login.dto';
+import { AppleLoginDto } from '../dtos/apple-login.dto';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
+import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
+import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 
@@ -50,6 +54,7 @@ export interface AuthResponse {
       tiktok: boolean;
       youtube: boolean;
       twitter: boolean;
+      facebook: boolean;
     };
     username?: string;
     niches: any[];
@@ -99,7 +104,29 @@ export class AuthService {
     private readonly googleAuthService: GoogleAuthService,
     private readonly tiktokAuthService: TiktokAuthService,
     private readonly instagramAuthService: InstagramAuthService,
+    private readonly facebookAuthService: FacebookAuthService,
+    private readonly appleAuthService: AppleAuthService,
   ) {}
+
+  /**
+   * Shared role resolution for social signups: accepts a role UUID or name,
+   * defaulting to 'creator'.
+   */
+  private async resolveSignupRole(role?: string): Promise<Role> {
+    let roleRecord: Role | null = null;
+    if (role) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(role);
+      roleRecord = isUuid
+        ? await this.usersService.findRoleById(role)
+        : await this.usersService.findRoleByName(role);
+    } else {
+      roleRecord = await this.usersService.findRoleByName('creator');
+    }
+    if (!roleRecord) {
+      throw new NotFoundException('Account type does not exist');
+    }
+    return roleRecord;
+  }
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
     const { password, firstName, lastName, phoneNumber, role } = signupDto;
@@ -177,7 +204,13 @@ export class AuthService {
         industries: false,
         representative: false,
       };
-      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+      const defaultSocials = {
+        instagram: false,
+        tiktok: false,
+        youtube: false,
+        twitter: false,
+        facebook: false,
+      };
 
       return {
         message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
@@ -228,7 +261,13 @@ export class AuthService {
       industries: false,
       representative: false,
     };
-    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
 
     return {
       message: `Signup successful. Please verify your email with the OTP sent. Here is your OTP: ${otpRecord.code}`,
@@ -286,7 +325,13 @@ export class AuthService {
       industries: false,
       representative: false,
     };
-    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
 
     return {
       accessToken: token,
@@ -386,7 +431,13 @@ export class AuthService {
       industries: false,
       representative: false,
     };
-    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
 
     return {
       accessToken: token,
@@ -481,7 +532,13 @@ export class AuthService {
       industries: false,
       representative: false,
     };
-    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
 
     return {
       accessToken: token,
@@ -580,7 +637,158 @@ export class AuthService {
       industries: false,
       representative: false,
     };
-    const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role?.name || 'creator',
+        isEmailVerified: user.isEmailVerified,
+        acceptedPromotions: user.acceptedPromotions,
+        onboardingPercentage: userWithNiches?.onboardingPercentage ?? 0,
+        onboardingStepsCompleted: userWithNiches?.onboardingStepsCompleted ?? defaultSteps,
+        socialsConnected: userWithNiches?.socialsConnected ?? defaultSocials,
+        username: user.username,
+        niches: userWithNiches?.niches || [],
+      },
+    };
+  }
+
+  async facebookLogin(facebookLoginDto: FacebookLoginDto): Promise<AuthResponse> {
+    const { code, redirectUri, role } = facebookLoginDto;
+
+    const tokenResponse = await this.facebookAuthService.exchangeCodeForToken(code, redirectUri);
+    const profile = await this.facebookAuthService.getUserProfile(tokenResponse.accessToken);
+
+    const facebookOpenId = profile.id;
+    // Facebook shares the real email when the user grants it; otherwise fall
+    // back to a synthetic address (in-app becomes the primary channel).
+    const email = profile.email || `facebook_${facebookOpenId}@trendupp.facebook`;
+
+    let user = await this.usersService.findByFacebookOpenId(facebookOpenId);
+
+    if (!user && profile.email) {
+      // Same mailbox, existing account (e.g. signed up with Google) — link it.
+      user = await this.usersService.findByEmail(profile.email);
+      if (user) {
+        await this.usersService.update(user.id, { facebookOpenId, isEmailVerified: true });
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      if (facebookLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
+      const roleRecord = await this.resolveSignupRole(role);
+
+      user = await this.usersService.create({
+        email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        facebookOpenId,
+        roleId: roleRecord.id,
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: facebookLoginDto.acceptedPromotions || false,
+      });
+      user = await this.usersService.findOne(user.id);
+    } else if (!user.isEmailVerified) {
+      await this.usersService.update(user.id, { isEmailVerified: true });
+      user = await this.usersService.findOne(user.id);
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    await this.checkAndReactivateUser(user);
+    return this.buildSocialAuthResponse(user);
+  }
+
+  async appleLogin(appleLoginDto: AppleLoginDto): Promise<AuthResponse> {
+    const { identityToken, role } = appleLoginDto;
+
+    const identity = await this.appleAuthService.verifyIdentityToken(identityToken);
+    const appleUserId = identity.appleUserId;
+    // identity.email is real or a private-relay address (both deliverable);
+    // it can be absent on repeat logins — synthetic fallback covers that.
+    const email = identity.email || `apple_${appleUserId}@trendupp.apple`;
+
+    let user = await this.usersService.findByAppleUserId(appleUserId);
+
+    if (!user && identity.email) {
+      // Same mailbox, existing account — link the Apple identity to it.
+      user = await this.usersService.findByEmail(identity.email);
+      if (user) {
+        await this.usersService.update(user.id, { appleUserId, isEmailVerified: true });
+        user = await this.usersService.findOne(user.id);
+      }
+    }
+
+    if (!user) {
+      if (appleLoginDto.acceptedTerms !== true) {
+        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+      }
+
+      const roleRecord = await this.resolveSignupRole(role);
+
+      user = await this.usersService.create({
+        email,
+        // Apple only sends the name on the FIRST authorization — clients
+        // forward it then; later logins fall back to a placeholder.
+        firstName: appleLoginDto.firstName || 'Apple',
+        lastName: appleLoginDto.lastName || '',
+        appleUserId,
+        roleId: roleRecord.id,
+        isEmailVerified: true,
+        acceptedTerms: true,
+        acceptedPromotions: appleLoginDto.acceptedPromotions || false,
+      });
+      user = await this.usersService.findOne(user.id);
+    } else if (!user.isEmailVerified) {
+      await this.usersService.update(user.id, { isEmailVerified: true });
+      user = await this.usersService.findOne(user.id);
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    await this.checkAndReactivateUser(user);
+    return this.buildSocialAuthResponse(user);
+  }
+
+  /** Shared response assembly for the social login methods. */
+  private async buildSocialAuthResponse(user: User): Promise<AuthResponse> {
+    const userWithNiches = await this.usersService.findOneWithNiches(user.id);
+    const token = this.generateToken(user);
+    const defaultSteps = {
+      profile: false,
+      niches: false,
+      socials: false,
+      payout: false,
+      industries: false,
+      representative: false,
+    };
+    const defaultSocials = {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+      facebook: false,
+    };
 
     return {
       accessToken: token,
@@ -652,7 +860,13 @@ export class AuthService {
         industries: false,
         representative: false,
       };
-      const defaultSocials = { instagram: false, tiktok: false, youtube: false, twitter: false };
+      const defaultSocials = {
+        instagram: false,
+        tiktok: false,
+        youtube: false,
+        twitter: false,
+        facebook: false,
+      };
 
       return {
         accessToken: token,

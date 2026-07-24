@@ -58,6 +58,13 @@ export const validationSchema = Joi.object({
   INSTAGRAM_APP_ID: Joi.string().allow('').optional(),
   INSTAGRAM_APP_SECRET: Joi.string().allow('').optional(),
 
+  // Facebook OAuth (login + social connect)
+  FACEBOOK_APP_ID: Joi.string().allow('').optional(),
+  FACEBOOK_APP_SECRET: Joi.string().allow('').optional(),
+
+  // Sign in with Apple (comma-separated: iOS bundle id, web Services ID)
+  APPLE_CLIENT_IDS: Joi.string().allow('').optional(),
+
   // Firebase Cloud Messaging (push notifications)
   FIREBASE_SERVICE_ACCOUNT_BASE64: Joi.string().allow('').optional(),
 
