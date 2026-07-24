@@ -37,6 +37,7 @@ import { Dispute } from '../disputes/entities/dispute.entity';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { UsersModule } from '../users/users.module';
 import { NewsModule } from '../news/news.module';
+import { AdsModule } from '../ads/ads.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
 
@@ -62,6 +63,7 @@ import { EmailModule } from '../../integration/email/email.module';
     CampaignsModule,
     UsersModule,
     NewsModule,
+    AdsModule,
     AuthModule,
     EmailModule,
   ],
@@ -98,6 +100,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminCampaignsService,
     AdminSocialImpactService,
     AdminNotesService,
+    AdsModule,
   ],
 })
 export class AdminModule {}

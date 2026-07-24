@@ -701,6 +701,15 @@ export class CampaignRepository {
     });
   }
 
+  async findPaymentByCampaignAndEscrowId(
+    campaignId: string,
+    escrowId: string,
+  ): Promise<Payment | null> {
+    return this.paymentModel.findOne({
+      where: { campaignId, escrowId },
+    });
+  }
+
   async updatePayment(id: string, data: Partial<Attributes<Payment>>): Promise<void> {
     await this.paymentModel.update(data, {
       where: { id },

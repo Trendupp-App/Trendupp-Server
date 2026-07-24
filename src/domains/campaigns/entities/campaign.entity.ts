@@ -72,6 +72,15 @@ export class Campaign extends BaseEntity<Campaign> {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare timeline?: Record<string, any>;
 
+  @Column(DataType.VIRTUAL)
+  get creators_timeline(): any[] | undefined {
+    return this.getDataValue('creators_timeline');
+  }
+
+  set creators_timeline(value: any[] | undefined) {
+    this.setDataValue('creators_timeline', value);
+  }
+
   @BelongsToMany(() => Platform, () => CampaignPlatform)
   declare preferredPlatforms?: Platform[];
 
