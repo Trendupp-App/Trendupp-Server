@@ -1,5 +1,17 @@
-import { Controller, Get, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Query,
+  Body,
+  Req,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Request } from 'express';
 import { AdminCampaignsService } from '../services/admin-campaigns.service';
 import { CampaignsService } from '../../campaigns/services/campaigns.service';
 import {
@@ -7,9 +19,12 @@ import {
   AdminCampaignSummaryResponseDto,
   AdminCampaignsListResponseDto,
 } from '../dtos/admin-campaigns.dto';
+import { CancelAdminCampaignDto, PauseAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { User } from '../../users/entities/user.entity';
 
 @ApiTags('admin')
 @Controller('admin')
@@ -62,5 +77,58 @@ export class AdminCampaignsController {
   })
   async getActivityTimeline(@Param('id') id: string) {
     return this.campaignsService.getActivityTimeline(id);
+  }
+
+  @Patch('campaigns/:id/cancel')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Cancel a campaign as Admin (evaluates 100% payout for submission creators, 50% for non-submission accepted creators scheduled for 30 days, plus brand refund)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaign cancelled successfully' })
+  async cancelCampaign(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: CancelAdminCampaignDto,
+    @Req() req: Record<string, unknown>,
+  ) {
+    const reqObj = req as { ip?: string; headers?: Record<string, string> };
+    const ipAddress = reqObj.ip || reqObj.headers?.['x-forwarded-for'] || '';
+    const userAgent = reqObj.headers?.['user-agent'] || '';
+    return this.adminCampaignsService.cancelCampaign(user.id, id, dto, ipAddress, userAgent);
+  }
+
+  @Patch('campaigns/:id/pause')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pause a live or active campaign' })
+  @ApiResponse({ status: 200, description: 'Campaign paused successfully' })
+  async pauseCampaign(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: PauseAdminCampaignDto,
+    @Req() req: Record<string, unknown>,
+  ) {
+    const reqObj = req as { ip?: string; headers?: Record<string, string> };
+    const ipAddress = reqObj.ip || reqObj.headers?.['x-forwarded-for'] || '';
+    const userAgent = reqObj.headers?.['user-agent'] || '';
+    return this.adminCampaignsService.pauseCampaign(user.id, id, dto, ipAddress, userAgent);
+  }
+
+  @Patch('campaigns/:id/resume')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume a paused campaign back to live/active status' })
+  @ApiResponse({ status: 200, description: 'Campaign resumed successfully' })
+  async resumeCampaign(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Req() req: Record<string, unknown>,
+  ) {
+    const reqObj = req as { ip?: string; headers?: Record<string, string> };
+    const ipAddress = reqObj.ip || reqObj.headers?.['x-forwarded-for'] || '';
+    const userAgent = reqObj.headers?.['user-agent'] || '';
+    return this.adminCampaignsService.resumeCampaign(user.id, id, ipAddress, userAgent);
   }
 }

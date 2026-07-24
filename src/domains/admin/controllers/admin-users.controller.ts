@@ -36,6 +36,14 @@ export class AdminUsersController {
     private readonly auditLogService: AuditLogService,
   ) {}
 
+  @Get('roles')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get available staff roles and descriptions' })
+  async getRoles() {
+    return this.adminUsersService.getRoles();
+  }
+
   @Post('users/invite')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.CREATED)

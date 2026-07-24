@@ -27,6 +27,8 @@ import { PayoutScheduler } from './services/payout.scheduler';
 import { TimelineService } from './services/timeline.service';
 import { CampaignTimelineScheduler } from './services/campaign-timeline.scheduler';
 
+import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.entity';
+
 @Module({
   imports: [
     SequelizeModule.forFeature([
@@ -43,6 +45,7 @@ import { CampaignTimelineScheduler } from './services/campaign-timeline.schedule
       CampaignRefund,
       Dispute,
       Niche,
+      BrandCommissionTier,
     ]),
     UsersModule,
 

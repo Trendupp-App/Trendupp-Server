@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, Sequelize } from 'sequelize';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
@@ -6,6 +6,13 @@ import { User } from '../../users/entities/user.entity';
 import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
 import { Platform } from '../../campaigns/entities/platform.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
+import { ContentSubmission } from '../../campaigns/entities/content-submission.entity';
+import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
+import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity';
+import { Payment } from '../../campaigns/entities/payment.entity';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { AuditLogService } from './audit-log.service';
+import { CancelAdminCampaignDto, PauseAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
 import {
   QueryAdminCampaignsListDto,
   AdminCampaignSummaryResponseDto,
@@ -24,6 +31,18 @@ export class AdminCampaignsService {
     private readonly creatorCategoryModel: typeof CreatorCategory,
     @InjectModel(Platform)
     private readonly platformModel: typeof Platform,
+    @InjectModel(CampaignApplication)
+    private readonly applicationModel: typeof CampaignApplication,
+    @InjectModel(ContentSubmission)
+    private readonly contentSubmissionModel: typeof ContentSubmission,
+    @InjectModel(PaymentRelease)
+    private readonly paymentReleaseModel: typeof PaymentRelease,
+    @InjectModel(CampaignRefund)
+    private readonly campaignRefundModel: typeof CampaignRefund,
+    @InjectModel(Payment)
+    private readonly paymentModel: typeof Payment,
+    private readonly notificationsService: NotificationsService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   // ── 1. Summary KPI Cards Overview ──────────────────────────────────────────
@@ -246,6 +265,263 @@ export class AdminCampaignsService {
         limit,
         totalPages,
       },
+    };
+  }
+
+  // ── 3. Campaign Cancellation ───────────────────────────────────────────────
+
+  async cancelCampaign(
+    adminId: string,
+    campaignId: string,
+    dto: CancelAdminCampaignDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; campaign: Campaign; summary: any }> {
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
+    }
+
+    if (campaign.status === 'cancelled') {
+      throw new BadRequestException('Campaign is already cancelled.');
+    }
+
+    const cancellationDate = new Date();
+    // Payouts scheduled for 30 days from cancellation date
+    const releaseDate = new Date(cancellationDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    campaign.status = 'cancelled';
+    await campaign.save();
+
+    const payment = await this.paymentModel.findOne({
+      where: { campaignId, paymentStatus: { [Op.in]: ['paid', 'escrowed', 'completed'] } },
+    });
+    const escrowId = payment?.escrowId || null;
+
+    const acceptedApps = await this.applicationModel.findAll({
+      where: {
+        campaignId,
+        status: { [Op.in]: ['accepted', 'approved'] },
+      },
+    });
+
+    const submissions = await this.contentSubmissionModel.findAll({
+      where: { campaignId },
+    });
+
+    let totalCreatorPayouts = 0;
+    const creatorBreakdown: any[] = [];
+
+    for (const app of acceptedApps) {
+      const feeRequest = Number(app.feeRequest || 0);
+      const hasSubmission = submissions.some(
+        (s) => s.applicationId === app.id || s.creatorId === app.creatorId,
+      );
+
+      // Check 1: 100% payout if creator already submitted content (draft or live post)
+      // Check 2: 50% payout if creator accepted but has not submitted content yet
+      const percentage = hasSubmission ? 100 : 50;
+      const payoutAmount = Math.round(feeRequest * (percentage / 100));
+
+      if (payoutAmount > 0) {
+        await this.paymentReleaseModel.create({
+          campaignId,
+          creatorId: app.creatorId,
+          applicationId: app.id,
+          amount: payoutAmount,
+          releaseDate,
+          status: 'pending',
+          currency: campaign.currency || 'USD',
+          escrowId,
+        } as unknown as PaymentRelease);
+
+        totalCreatorPayouts += payoutAmount;
+
+        try {
+          await this.notificationsService.notify({
+            type: 'campaign.cancelled',
+            recipientId: app.creatorId,
+            actorId: adminId,
+            data: {
+              campaignId,
+              campaignTitle: campaign.title,
+              payoutAmount,
+              payoutPercentage: percentage,
+              releaseDate: releaseDate.toISOString(),
+              reason: dto.reason || 'Campaign was cancelled by platform administration.',
+            },
+          });
+        } catch {
+          // ignore notification error
+        }
+      }
+
+      creatorBreakdown.push({
+        creatorId: app.creatorId,
+        applicationId: app.id,
+        feeRequest,
+        payoutAmount,
+        payoutPercentage: percentage,
+        hasSubmission,
+      });
+    }
+
+    const totalBudget = Number(campaign.totalBudget || 0);
+    const remainingRefund = Math.max(0, totalBudget - totalCreatorPayouts);
+
+    if (remainingRefund > 0 && payment) {
+      await this.campaignRefundModel.create({
+        campaignId,
+        brandId: campaign.brandId,
+        amount: remainingRefund,
+        currency: campaign.currency || 'USD',
+        status: 'pending',
+        releaseDate,
+      } as unknown as CampaignRefund);
+
+      try {
+        await this.notificationsService.notify({
+          type: 'campaign.cancelled',
+          recipientId: campaign.brandId,
+          actorId: adminId,
+          data: {
+            campaignId,
+            campaignTitle: campaign.title,
+            refundAmount: remainingRefund,
+            releaseDate: releaseDate.toISOString(),
+            reason: dto.reason || 'Campaign was cancelled by platform administration.',
+          },
+        });
+      } catch {
+        // ignore notification error
+      }
+    }
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'CAMPAIGN_CANCELLED',
+      targetUserId: campaign.brandId,
+      ipAddress,
+      userAgent,
+      details: {
+        campaignId,
+        reason: dto.reason || null,
+        totalCreatorPayouts,
+        brandRefundAmount: remainingRefund,
+        scheduledReleaseDate: releaseDate.toISOString(),
+      },
+    });
+
+    return {
+      message:
+        'Campaign cancelled successfully. Creator payouts and brand refund scheduled for 30 days.',
+      campaign,
+      summary: {
+        totalBudget,
+        totalCreatorPayouts,
+        brandRefundAmount: remainingRefund,
+        scheduledReleaseDate: releaseDate.toISOString(),
+        creatorsEvaluated: creatorBreakdown.length,
+        creatorBreakdown,
+      },
+    };
+  }
+
+  // ── 4. Campaign Pause & Resume ──────────────────────────────────────────────
+
+  async pauseCampaign(
+    adminId: string,
+    campaignId: string,
+    dto: PauseAdminCampaignDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; campaign: Campaign }> {
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
+    }
+
+    if (campaign.status === 'paused') {
+      throw new BadRequestException('Campaign is already paused.');
+    }
+
+    campaign.status = 'paused';
+    await campaign.save();
+
+    try {
+      await this.notificationsService.notify({
+        type: 'campaign.paused',
+        recipientId: campaign.brandId,
+        actorId: adminId,
+        data: {
+          campaignId,
+          campaignTitle: campaign.title,
+          reason: dto.reason || 'Campaign was paused by platform administration.',
+        },
+      });
+    } catch {
+      // ignore notification error
+    }
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'CAMPAIGN_PAUSED',
+      targetUserId: campaign.brandId,
+      ipAddress,
+      userAgent,
+      details: { campaignId, reason: dto.reason || null },
+    });
+
+    return {
+      message: 'Campaign paused successfully.',
+      campaign,
+    };
+  }
+
+  async resumeCampaign(
+    adminId: string,
+    campaignId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; campaign: Campaign }> {
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
+    }
+
+    if (campaign.status !== 'paused') {
+      throw new BadRequestException('Campaign is not currently paused.');
+    }
+
+    campaign.status = 'live';
+    await campaign.save();
+
+    try {
+      await this.notificationsService.notify({
+        type: 'campaign.resumed',
+        recipientId: campaign.brandId,
+        actorId: adminId,
+        data: {
+          campaignId,
+          campaignTitle: campaign.title,
+        },
+      });
+    } catch {
+      // ignore notification error
+    }
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'CAMPAIGN_RESUMED',
+      targetUserId: campaign.brandId,
+      ipAddress,
+      userAgent,
+      details: { campaignId },
+    });
+
+    return {
+      message: 'Campaign resumed successfully.',
+      campaign,
     };
   }
 }

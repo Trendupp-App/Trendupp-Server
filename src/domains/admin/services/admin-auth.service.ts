@@ -80,6 +80,7 @@ export class AdminAuthService {
     }
 
     const token = this.generateToken(user);
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
 
     // Record audit log
     await this.auditLogService.log({

@@ -2,15 +2,20 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, IsIn } from 'class-validator';
 
 export class AdminInviteDto {
-  @ApiProperty({ example: 'Sarah', description: 'First name' })
+  @ApiPropertyOptional({ example: 'Adaeze Okonkwo', description: 'Full Name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'First name is required' })
-  firstName: string;
+  fullName?: string;
 
-  @ApiProperty({ example: 'Connor', description: 'Last name' })
+  @ApiPropertyOptional({ example: 'Adaeze', description: 'First name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Last name is required' })
-  lastName: string;
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Okonkwo', description: 'Last name' })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
 
   @ApiProperty({ example: 'sarah@trendupp.com', description: 'Admin email' })
   @IsEmail({}, { message: 'Please provide a valid email address' })
