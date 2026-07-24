@@ -83,19 +83,34 @@ export class PandascrowService {
       };
     }
 
+    const currencyUpper = payload.currency.toUpperCase();
+
+    // Dynamic callback URL construction:
+    // - Paystack (NGN): Paystack does NOT append /success, so append /success manually
+    // - Stripe (USD / non-NGN): Stripe automatically appends /success, so leave base URL without /success
+    let computedCallbackUrl = this.callbackUrl;
+    if (this.callbackUrl) {
+      const baseUrl = this.callbackUrl.replace(/\/+$/, '');
+      if (currencyUpper === 'NGN') {
+        computedCallbackUrl = `${baseUrl}/success`;
+      } else {
+        computedCallbackUrl = baseUrl;
+      }
+    }
+
     const body = {
       uuid: this.accountUuid,
       escrow_type: 'onetime',
       initiator_role: 'buyer', // Trendupp manages OTP & release; escrow.paid webhook fires back correctly
       initiator_id: this.accountUuid,
       title: payload.title,
-      currency: payload.currency.toUpperCase(),
+      currency: currencyUpper,
       description: payload.description,
       inspection_period: '7', // default 7 days
       delivery_date: payload.deliveryDate,
       who_pay_fees: 'seller', // Trendupp pays fees
       amount: payload.amount,
-      ...(this.callbackUrl && { callback_url: this.callbackUrl }),
+      ...(computedCallbackUrl && { callback_url: computedCallbackUrl }),
       buyer_details: {
         name: payload.buyerDetails.name,
         email: payload.buyerDetails.email,
