@@ -22,27 +22,16 @@ export interface SendEmailOptions {
 
 export type SendEmailResult = 'sent' | 'mocked';
 
-type EmailProvider = 'ses' | 'zeptomail';
-
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly provider: EmailProvider;
   private readonly fromEmail: string;
-  private readonly fromName: string;
   private readonly templateDir: string;
 
-  // SES transport
   private sesClient: SESClient | null = null;
 
-  // ZeptoMail transport
-  private readonly zeptoApiUrl: string;
-  private readonly zeptoToken?: string;
-
   constructor(private configService: ConfigService) {
-    this.provider = this.configService.get<EmailProvider>('email.provider', 'ses');
     this.fromEmail = this.configService.get<string>('email.fromEmail', 'noreply@trendupp.com');
-    this.fromName = this.configService.get<string>('email.fromName', 'Trendupp');
 
     // Set the template directory with fallback for dev/compilation environments
     const possiblePaths = [
@@ -58,14 +47,6 @@ export class EmailService {
     }
     this.templateDir = resolvedPath;
 
-    // --- ZeptoMail config ---
-    this.zeptoApiUrl = this.configService.get<string>(
-      'email.zeptomail.apiUrl',
-      'https://api.zeptomail.com/v1.1/email',
-    );
-    this.zeptoToken = this.configService.get<string>('email.zeptomail.token');
-
-    // --- SES config ---
     const region = this.configService.get<string>('aws.ses.region');
     const accessKey = this.configService.get<string>('aws.ses.accessKey');
     const secretKey = this.configService.get<string>('aws.ses.secretKey');
@@ -76,19 +57,13 @@ export class EmailService {
       });
     }
 
-    if (this.isProviderReady()) {
-      this.logger.log(`Email service initialized (provider: ${this.provider})`);
+    if (this.sesClient) {
+      this.logger.log('Email service initialized (SES)');
     } else {
       this.logger.warn(
-        `Email provider "${this.provider}" is not configured. ` +
-          'Email service running in MOCK mode (logging to console).',
+        'SES is not configured. Email service running in MOCK mode (logging to console).',
       );
     }
-  }
-
-  /** True when the active provider has the credentials it needs to deliver. */
-  private isProviderReady(): boolean {
-    return this.provider === 'zeptomail' ? !!this.zeptoToken : !!this.sesClient;
   }
 
   /**
@@ -110,40 +85,29 @@ export class EmailService {
       throw error;
     }
 
-    if (!this.isProviderReady()) {
-      // No provider credentials — pure mock mode.
+    if (!this.sesClient) {
+      // No SES credentials — pure mock mode.
       this.logMockEmail(to, subject);
       return 'mocked';
     }
 
     try {
-      await this.deliver(to, subject, htmlBody);
-      this.logger.log(`Email "${subject}" sent successfully to ${to} via ${this.provider}`);
+      await this.deliverViaSes(to, subject, htmlBody);
+      this.logger.log(`Email "${subject}" sent successfully to ${to}`);
       return 'sent';
     } catch (deliveryError) {
       const message =
         deliveryError instanceof Error ? deliveryError.message : String(deliveryError);
       if (throwOnFailure) {
-        this.logger.error(`Email delivery to ${to} failed (${this.provider}): ${message}`);
+        this.logger.error(`Email delivery to ${to} failed: ${message}`);
         throw deliveryError;
       }
-      // Provider rejected the send. Fall back to console logging so
+      // SES rejected the send. Fall back to console logging so
       // request-path flows are not blocked.
-      this.logger.warn(
-        `Email delivery to ${to} failed (${this.provider}), falling back to mock mode: ${message}`,
-      );
+      this.logger.warn(`Email delivery to ${to} failed, falling back to mock mode: ${message}`);
       this.logMockEmail(to, subject);
       return 'mocked';
     }
-  }
-
-  /** Dispatch a rendered email to the active provider. Throws on failure. */
-  private async deliver(to: string, subject: string, htmlBody: string): Promise<void> {
-    if (this.provider === 'zeptomail') {
-      await this.deliverViaZeptoMail(to, subject, htmlBody);
-      return;
-    }
-    await this.deliverViaSes(to, subject, htmlBody);
   }
 
   private async deliverViaSes(to: string, subject: string, htmlBody: string): Promise<void> {
@@ -159,37 +123,6 @@ export class EmailService {
       Source: this.fromEmail,
     });
     await this.sesClient.send(command);
-  }
-
-  private async deliverViaZeptoMail(to: string, subject: string, htmlBody: string): Promise<void> {
-    if (!this.zeptoToken) {
-      throw new Error('ZeptoMail token is not configured');
-    }
-    // Tokens copied from the ZeptoMail console sometimes already include the
-    // scheme prefix; accept both forms.
-    const authorization = this.zeptoToken.startsWith('Zoho-enczapikey')
-      ? this.zeptoToken
-      : `Zoho-enczapikey ${this.zeptoToken}`;
-
-    const response = await fetch(this.zeptoApiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: authorization,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        from: { address: this.fromEmail, name: this.fromName },
-        to: [{ email_address: { address: to } }],
-        subject,
-        htmlbody: htmlBody,
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`ZeptoMail responded ${response.status}: ${detail}`);
-    }
   }
 
   private logMockEmail(to: string, subject: string): void {
