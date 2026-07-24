@@ -585,18 +585,17 @@ export class CampaignsService {
 
     // ── 2. Pandascrow Status Check ──────────────────────────────────────────
     let isFunded = false;
+    const pandascrowLookupId = payment.escrowId || payment.transactionRef || escrowId;
 
-    if (payment.escrowId) {
+    if (pandascrowLookupId) {
       try {
-        console.log({ payment: payment.escrowId });
-        const escrowDetails = await this.pandascrowService.getEscrowDetails(payment.escrowId);
+        const escrowDetails = await this.pandascrowService.getEscrowDetails(pandascrowLookupId);
 
-        console.log({ escrowDetails });
         const st = (escrowDetails.status || '').toLowerCase();
         isFunded = st === 'funded' || st === 'paid' || st === 'completed';
       } catch (err) {
         this.logger.error(
-          `[verifyPayment] Error fetching escrow details for escrowId ${payment.escrowId}: ${err}`,
+          `[verifyPayment] Error fetching escrow details for lookupId ${pandascrowLookupId}: ${err}`,
         );
       }
     }
