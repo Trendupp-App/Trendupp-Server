@@ -28,6 +28,7 @@ import { TimelineService } from './timeline.service';
 import { Niche } from '../../users/entities/niche.entity';
 import { Op } from 'sequelize';
 import { InjectModel } from '@nestjs/sequelize';
+import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -46,6 +47,8 @@ export class CampaignsService {
     private readonly creatorCategoryModel: typeof CreatorCategory,
     @InjectModel(Fee)
     private readonly feeModel: typeof Fee,
+    @InjectModel(BrandCommissionTier)
+    private readonly commissionTierModel: typeof BrandCommissionTier,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -53,6 +56,7 @@ export class CampaignsService {
   async calculateBreakdown(
     budget: number,
     currency: string,
+    brandId?: string,
   ): Promise<{
     campaignBudget: number;
     trenduppFee: number;
@@ -61,8 +65,28 @@ export class CampaignsService {
     totalToPay: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
-    // Trendupp commission (15%) and VAT (7.5%) are deducted from the brand's total payment
-    const trenduppFee = Math.round(budget * 0.15);
+    let trenduppRate = 0.15;
+    if (brandId) {
+      const customTier = await this.commissionTierModel.findOne({
+        where: { brandIds: { [Op.contains]: [brandId] } },
+      });
+      if (customTier) {
+        trenduppRate = customTier.ratePercentage / 100;
+      } else {
+        const defaultTier = await this.commissionTierModel.findOne({ where: { isDefault: true } });
+        if (defaultTier) {
+          trenduppRate = defaultTier.ratePercentage / 100;
+        }
+      }
+    } else {
+      const defaultTier = await this.commissionTierModel.findOne({ where: { isDefault: true } });
+      if (defaultTier) {
+        trenduppRate = defaultTier.ratePercentage / 100;
+      }
+    }
+
+    // Trendupp commission and VAT (7.5%) are deducted from the brand's total payment
+    const trenduppFee = Math.round(budget * trenduppRate);
     const vat = Math.round(budget * 0.075);
 
     // Look up Pandascrow platform fee rate from the fees table
@@ -80,7 +104,7 @@ export class CampaignsService {
       {
         name: 'Trendupp Fee',
         type: 'percentage',
-        value: 0.15,
+        value: trenduppRate,
         amount: trenduppFee,
       },
       {
@@ -112,6 +136,7 @@ export class CampaignsService {
       const breakdown = await this.calculateBreakdown(
         campaign.totalBudget,
         campaign.currency ?? 'USD',
+        campaign.brandId,
       );
       campaign.paymentBreakdown = breakdown;
 

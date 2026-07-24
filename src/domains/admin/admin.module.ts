@@ -38,6 +38,13 @@ import { CampaignsModule } from '../campaigns/campaigns.module';
 import { UsersModule } from '../users/users.module';
 import { NewsModule } from '../news/news.module';
 import { AdsModule } from '../ads/ads.module';
+import { BrandCommissionTier } from './entities/brand-commission-tier.entity';
+import { Faq } from './entities/faq.entity';
+import { NewsCategory } from './entities/news-category.entity';
+import { SystemSetting } from './entities/system-setting.entity';
+import { AdminSettingsService } from './services/admin-settings.service';
+import { AdminSettingsController } from './controllers/admin-settings.controller';
+import { PublicSettingsController } from '../users/controllers/public-settings.controller';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
 
@@ -58,6 +65,10 @@ import { EmailModule } from '../../integration/email/email.module';
       CampaignApplication,
       ContentSubmission,
       Dispute,
+      BrandCommissionTier,
+      Faq,
+      NewsCategory,
+      SystemSetting,
     ]),
     ConfigModule,
     CampaignsModule,
@@ -79,6 +90,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminCampaignsService,
     AdminSocialImpactService,
     AdminNotesService,
+    AdminSettingsService,
   ],
   controllers: [
     AdminController,
@@ -89,6 +101,8 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminBrandsController,
     AdminCampaignsController,
     AdminSocialImpactController,
+    AdminSettingsController,
+    PublicSettingsController,
   ],
   exports: [
     RolesSeederService,
@@ -100,6 +114,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminCampaignsService,
     AdminSocialImpactService,
     AdminNotesService,
+    AdminSettingsService,
     AdsModule,
   ],
 })
