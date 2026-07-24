@@ -106,6 +106,15 @@ export class AdminUsersService {
       };
     }
 
+    // Parse names from dto.fullName if firstName/lastName not provided directly
+    let firstName = dto.firstName || '';
+    let lastName = dto.lastName || '';
+    if (!firstName && !lastName && dto.fullName) {
+      const parts = dto.fullName.trim().split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+
     // ── NEW INVITE path ───────────────────────────────────────────────────────
     const role = await this.roleModel.findOne({ where: { name: dto.role } });
     if (!role) {
@@ -119,8 +128,8 @@ export class AdminUsersService {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const newAdmin = await this.userModel.create({
       email,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
+      firstName,
+      lastName,
       phoneNumber: dto.phoneNumber,
       password: hashedPassword,
       roleId: role.id,
@@ -139,7 +148,7 @@ export class AdminUsersService {
     try {
       await this.emailService.sendAdminInvitationEmail(
         email,
-        `${dto.firstName} ${dto.lastName}`.trim(),
+        `${firstName} ${lastName}`.trim(),
         role.displayName || role.name,
         otpRecord.code,
       );
@@ -173,9 +182,39 @@ export class AdminUsersService {
     };
   }
 
-  async findAllAdmins(query: QueryAdminUsersDto): Promise<PaginatedResult<User>> {
+  async getRoles(): Promise<
+    { id: string; name: string; displayName: string; description: string }[]
+  > {
+    const roles = await this.roleModel.findAll({
+      where: {
+        name: {
+          [Op.in]: ['owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent'],
+        },
+      },
+      order: [['name', 'ASC']],
+    });
+
+    const descriptions: Record<string, string> = {
+      super_admin: 'Full platform access and management.',
+      finance_admin: 'Manages escrow, payouts, and financial reports.',
+      moderator: 'Review content, reports, and flags.',
+      support_agent: 'Handles disputes, tickets, chat approvals.',
+      owner: 'Platform owner with unrestricted system control.',
+    };
+
+    return roles.map((r) => ({
+      id: r.id,
+      name: r.name,
+      displayName: r.displayName || r.name,
+      description: descriptions[r.name] || 'Administrator staff role',
+    }));
+  }
+
+  async findAllAdmins(
+    query: QueryAdminUsersDto,
+  ): Promise<PaginatedResult<User> & { metrics: any }> {
     const { q, role, isActive, page = 1, limit = 20 } = query;
-    const where: Record<string | symbol, unknown> = {};
+    const whereClause: Record<string, unknown> = {};
 
     // Filter by admin roles (owner, superadmin, finance_admin, moderator, support_agent)
     const adminRoles = await this.roleModel.findAll({
@@ -190,36 +229,73 @@ export class AdminUsersService {
     if (role) {
       const selectedRole = adminRoles.find((r) => r.name === role);
       if (selectedRole) {
-        where.roleId = selectedRole.id;
+        whereClause.roleId = selectedRole.id;
       } else {
-        where.roleId = null; // force empty result if invalid role passed
+        whereClause.roleId = null; // force empty result if invalid role passed
       }
     } else {
-      where.roleId = { [Op.in]: adminRoleIds };
+      whereClause.roleId = { [Op.in]: adminRoleIds };
     }
 
     if (typeof isActive === 'boolean') {
-      where.isActive = isActive;
+      whereClause.isActive = isActive;
     }
 
     if (q) {
       const pattern = `%${q}%`;
-      where[Op.or] = [
-        { firstName: { [Op.iLike]: pattern } },
-        { lastName: { [Op.iLike]: pattern } },
-        { email: { [Op.iLike]: pattern } },
-      ];
+      Object.assign(whereClause, {
+        [Op.or]: [
+          { firstName: { [Op.iLike]: pattern } },
+          { lastName: { [Op.iLike]: pattern } },
+          { email: { [Op.iLike]: pattern } },
+        ],
+      });
     }
 
-    return paginate(
+    const allAdmins = await this.userModel.findAll({
+      where: { roleId: { [Op.in]: adminRoleIds } },
+    });
+
+    let pendingCount = 0;
+    let activeCount = 0;
+    for (const adm of allAdmins) {
+      const pendingOtp = await this.otpService.findPendingInviteOtp(adm.email);
+      if (pendingOtp || !adm.lastLoginAt) {
+        pendingCount++;
+      } else if (adm.isActive) {
+        activeCount++;
+      }
+    }
+
+    const paginated = await paginate(
       this.userModel,
       {
-        where,
+        where: whereClause as never,
         include: [{ model: Role, as: 'role', attributes: ['id', 'name', 'displayName'] }],
         order: [['createdAt', 'DESC']],
       },
       { page, limit },
     );
+
+    // Decorate each admin instance with virtual status field
+    for (const adm of paginated.data) {
+      const pendingOtp = await this.otpService.findPendingInviteOtp(adm.email);
+      const status =
+        pendingOtp || !adm.lastLoginAt ? 'Pending Setup' : adm.isActive ? 'Active' : 'Suspended';
+      adm.setDataValue('status' as any, status);
+      adm.setDataValue('joinedAt' as any, adm.createdAt);
+      adm.setDataValue('lastLoginAt' as any, adm.lastLoginAt || null);
+    }
+
+    return {
+      ...paginated,
+      metrics: {
+        totalStaff: allAdmins.length,
+        active: activeCount,
+        pendingSetup: pendingCount,
+        rolesAvailable: adminRoles.length,
+      },
+    };
   }
 
   async findAdminById(id: string): Promise<User> {

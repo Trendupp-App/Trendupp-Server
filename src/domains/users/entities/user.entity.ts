@@ -272,6 +272,13 @@ export class User extends BaseEntity<User> {
   })
   declare deactivatedAt?: Date | null;
 
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'last_login_at',
+  })
+  declare lastLoginAt?: Date | null;
+
   @Column({ type: DataType.STRING, allowNull: true })
   declare city?: string;
 
