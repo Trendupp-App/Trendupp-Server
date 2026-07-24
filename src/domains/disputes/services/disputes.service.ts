@@ -410,7 +410,15 @@ export class DisputesService {
       throw new NotFoundException('Dispute not found');
     }
 
-    const isAdmin = ['admin', 'super_admin', 'finance_admin'].includes(role);
+    const roleName = (role || '').toLowerCase();
+    const isAdmin = [
+      'owner',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+      'admin',
+    ].includes(roleName);
     if (!isAdmin && dispute.creatorId !== userId && dispute.brandId !== userId) {
       throw new ForbiddenException('You do not have access to this dispute');
     }
@@ -419,13 +427,21 @@ export class DisputesService {
   }
 
   async listDisputes(userId: string, role: string): Promise<Dispute[]> {
-    const isAdmin = ['admin', 'super_admin', 'finance_admin'].includes(role);
+    const roleName = (role || '').toLowerCase();
+    const isAdmin = [
+      'owner',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+      'admin',
+    ].includes(roleName);
 
     if (isAdmin) {
       return this.disputeRepository.findAllWithCampaign();
     }
 
-    if (role === 'creator') {
+    if (roleName === 'creator') {
       return this.disputeRepository.findAllByCreator(userId);
     }
 
