@@ -266,10 +266,26 @@ export class CampaignsController {
     @CurrentUser() user: User,
     @Query('escrowId') queryEscrowId?: string,
     @Query('escrow_id') queryEscrowIdSnake?: string,
+    @Query('transaction_ref') queryTrxRef?: string,
+    @Query('trxref') queryTrxRefShort?: string,
+    @Query('reference') queryRef?: string,
     @Body('escrowId') bodyEscrowId?: string,
     @Body('escrow_id') bodyEscrowIdSnake?: string,
+    @Body('transaction_ref') bodyTrxRef?: string,
+    @Body('trxref') bodyTrxRefShort?: string,
+    @Body('reference') bodyRef?: string,
   ) {
-    const targetEscrowId = queryEscrowId || queryEscrowIdSnake || bodyEscrowId || bodyEscrowIdSnake;
+    const targetEscrowId =
+      queryEscrowId ||
+      queryEscrowIdSnake ||
+      queryTrxRef ||
+      queryTrxRefShort ||
+      queryRef ||
+      bodyEscrowId ||
+      bodyEscrowIdSnake ||
+      bodyTrxRef ||
+      bodyTrxRefShort ||
+      bodyRef;
     const result = await this.campaignsService.verifyPayment(id, user.id, targetEscrowId);
     return result;
   }
