@@ -274,6 +274,19 @@ export class CampaignsController {
     return result;
   }
 
+  @Get(':id/activity-timeline')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get chronological activity timeline events feed for a campaign',
+  })
+  @ApiResponse({ status: 200, description: 'Activity timeline feed retrieved successfully' })
+  async getActivityTimeline(@Param('id') id: string) {
+    return this.campaignsService.getActivityTimeline(id);
+  }
+
   // ─── Public / Authenticated campaign listings ─────────────────────────────
 
   @Get()

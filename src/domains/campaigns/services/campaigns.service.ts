@@ -1699,4 +1699,204 @@ export class CampaignsService {
 
     await this.campaignRepository.deleteDraftById(id, brandId);
   }
+
+  // ─── Activity Timeline Feed ────────────────────────────────────────────────
+
+  async getActivityTimeline(campaignId: string): Promise<CampaignActivityTimelineResponse> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const activities: CampaignActivityItem[] = [];
+    let actIndex = 1;
+
+    const formatEventTime = (dStr: string | Date): string => {
+      const date = new Date(dStr);
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      const month = months[date.getUTCMonth()];
+      const day = date.getUTCDate();
+      const year = date.getUTCFullYear();
+      let hours = date.getUTCHours();
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${month} ${day}, ${year} · ${hours}:${minutes} ${ampm}`;
+    };
+
+    // 1. Campaign created
+    if (campaign.createdAt) {
+      const createdDate = new Date(campaign.createdAt);
+      activities.push({
+        id: `act-${actIndex++}`,
+        actorType: 'Brand',
+        timestamp: createdDate.toISOString(),
+        formattedTime: formatEventTime(createdDate),
+        description: `Campaign created — ${campaign.title}`,
+      });
+    }
+
+    // 2. Escrow funded
+    const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
+    if (payment && (payment.paymentStatus === 'paid' || payment.escrowStatus === 'funded')) {
+      const paidDate = payment.updatedAt ? new Date(payment.updatedAt) : new Date();
+      const symbol = campaign.currency === 'NGN' ? '₦' : '$';
+      const formattedAmount = Number(payment.totalAmount ?? payment.amount).toLocaleString('en-US');
+      activities.push({
+        id: `act-${actIndex++}`,
+        actorType: 'Brand',
+        timestamp: paidDate.toISOString(),
+        formattedTime: formatEventTime(paidDate),
+        description: `Escrow funded — ${symbol}${formattedAmount} secured`,
+      });
+    }
+
+    // 3. Campaign published (Applications opened)
+    if (campaign.approvedAt) {
+      const pubDate = new Date(campaign.approvedAt);
+      activities.push({
+        id: `act-${actIndex++}`,
+        actorType: 'System',
+        timestamp: pubDate.toISOString(),
+        formattedTime: formatEventTime(pubDate),
+        description: 'Campaign published — Applications opened (48hr window)',
+      });
+
+      // 4. Applications closed automatically after 48h
+      const now = new Date();
+      const closedDate = new Date(pubDate.getTime() + 48 * 60 * 60 * 1000);
+      if (
+        ['reviewing_applicant', 'active', 'completed'].includes(campaign.status) ||
+        now > closedDate
+      ) {
+        activities.push({
+          id: `act-${actIndex++}`,
+          actorType: 'System',
+          timestamp: closedDate.toISOString(),
+          formattedTime: formatEventTime(closedDate),
+          description: 'Applications closed automatically after 48hrs',
+        });
+      }
+    }
+
+    // 5. Applications submitted by creators
+    const applications =
+      (await this.campaignRepository.findApplicationsByCampaignId(campaignId)) || [];
+    for (const app of applications) {
+      if (app.createdAt) {
+        const appDate = new Date(app.createdAt);
+        const creatorName = app.creator
+          ? `${app.creator.firstName || ''} ${app.creator.lastName || ''}`.trim() ||
+            app.creator.username ||
+            'Creator'
+          : 'Creator';
+        const symbol = campaign.currency === 'NGN' ? '₦' : '$';
+        const feeStr = `${symbol}${Number(app.feeRequest || 0).toLocaleString('en-US')}`;
+        activities.push({
+          id: `act-${actIndex++}`,
+          actorType: 'Creator',
+          timestamp: appDate.toISOString(),
+          formattedTime: formatEventTime(appDate),
+          description: `${creatorName} applied — fee: ${feeStr}`,
+        });
+      }
+    }
+
+    // 6. Creator selection completed & Declined applications
+    const acceptedApps = applications.filter(
+      (a) => a.status === 'accepted' || a.status === 'approved',
+    );
+    const declinedApps = applications.filter(
+      (a) => a.status === 'rejected' || a.status === 'declined',
+    );
+
+    if (acceptedApps.length > 0) {
+      let maxAcceptedDate = new Date();
+      if (acceptedApps[0].updatedAt) {
+        maxAcceptedDate = new Date(
+          Math.max(...acceptedApps.map((a) => new Date(a.updatedAt || a.createdAt).getTime())),
+        );
+      }
+      activities.push({
+        id: `act-${actIndex++}`,
+        actorType: 'Brand',
+        timestamp: maxAcceptedDate.toISOString(),
+        formattedTime: formatEventTime(maxAcceptedDate),
+        description: `Creator selection completed — ${acceptedApps.length} creator${
+          acceptedApps.length > 1 ? 's' : ''
+        } chosen`,
+      });
+
+      if (declinedApps.length > 0) {
+        const declinedDate = new Date(maxAcceptedDate.getTime() + 60 * 1000);
+        activities.push({
+          id: `act-${actIndex++}`,
+          actorType: 'System',
+          timestamp: declinedDate.toISOString(),
+          formattedTime: formatEventTime(declinedDate),
+          description: `Other ${declinedApps.length} application${
+            declinedApps.length > 1 ? 's' : ''
+          } automatically declined`,
+        });
+      }
+    }
+
+    // 7. Content Submissions
+    const submissions =
+      (await this.campaignRepository.findSubmissionsByCampaignId(campaignId)) || [];
+    for (const sub of submissions) {
+      if (sub.createdAt) {
+        const subDate = new Date(sub.createdAt);
+        const creatorName = sub.creator
+          ? `${sub.creator.firstName || ''} ${sub.creator.lastName || ''}`.trim() || 'Creator'
+          : 'Creator';
+        const isLiveLink = !!sub.liveLink;
+        const actionText = isLiveLink ? 'submitted live post link' : 'submitted content for review';
+        activities.push({
+          id: `act-${actIndex++}`,
+          actorType: 'Creator',
+          timestamp: subDate.toISOString(),
+          formattedTime: formatEventTime(subDate),
+          description: `${creatorName} ${actionText}`,
+        });
+      }
+    }
+
+    // Sort chronologically by timestamp
+    activities.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    return {
+      campaignId,
+      totalEvents: activities.length,
+      activities,
+    };
+  }
+}
+
+export interface CampaignActivityItem {
+  id: string;
+  actorType: 'Brand' | 'System' | 'Creator' | 'Admin';
+  timestamp: string;
+  formattedTime: string;
+  description: string;
+}
+
+export interface CampaignActivityTimelineResponse {
+  campaignId: string;
+  totalEvents: number;
+  activities: CampaignActivityItem[];
 }

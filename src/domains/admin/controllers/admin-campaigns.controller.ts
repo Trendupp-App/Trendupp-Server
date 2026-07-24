@@ -1,6 +1,7 @@
-import { Controller, Get, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminCampaignsService } from '../services/admin-campaigns.service';
+import { CampaignsService } from '../../campaigns/services/campaigns.service';
 import {
   QueryAdminCampaignsListDto,
   AdminCampaignSummaryResponseDto,
@@ -15,7 +16,10 @@ import { Roles } from '../../../shared/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class AdminCampaignsController {
-  constructor(private readonly adminCampaignsService: AdminCampaignsService) {}
+  constructor(
+    private readonly adminCampaignsService: AdminCampaignsService,
+    private readonly campaignsService: CampaignsService,
+  ) {}
 
   @Get('campaigns/summary')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
@@ -44,5 +48,19 @@ export class AdminCampaignsController {
     @Query() query: QueryAdminCampaignsListDto,
   ): Promise<AdminCampaignsListResponseDto> {
     return this.adminCampaignsService.getCampaignsList(query);
+  }
+
+  @Get('campaigns/:id/activity-timeline')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get chronological activity timeline events feed for a campaign (Admin tab)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Campaign activity timeline feed retrieved successfully',
+  })
+  async getActivityTimeline(@Param('id') id: string) {
+    return this.campaignsService.getActivityTimeline(id);
   }
 }
