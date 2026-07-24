@@ -106,6 +106,24 @@ export interface NotificationPayloads {
     paidAt?: string;
   };
   'campaign.completed': { campaignId: string; campaignTitle: string };
+  'campaign.cancelled': {
+    campaignId: string;
+    campaignTitle: string;
+    payoutAmount?: number;
+    payoutPercentage?: number;
+    refundAmount?: number;
+    releaseDate?: string;
+    reason?: string;
+  };
+  'campaign.paused': {
+    campaignId: string;
+    campaignTitle: string;
+    reason?: string;
+  };
+  'campaign.resumed': {
+    campaignId: string;
+    campaignTitle: string;
+  };
 
   // ── Social connections ────────────────────────────────────────────────────
   'social.connected': {

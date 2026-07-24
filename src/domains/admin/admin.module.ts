@@ -45,6 +45,10 @@ import { SystemSetting } from './entities/system-setting.entity';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { PublicSettingsController } from '../users/controllers/public-settings.controller';
+import { PaymentRelease } from '../campaigns/entities/payment-release.entity';
+import { CampaignRefund } from '../campaigns/entities/campaign-refund.entity';
+import { Payment } from '../campaigns/entities/payment.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
 
@@ -69,6 +73,9 @@ import { EmailModule } from '../../integration/email/email.module';
       Faq,
       NewsCategory,
       SystemSetting,
+      PaymentRelease,
+      CampaignRefund,
+      Payment,
     ]),
     ConfigModule,
     CampaignsModule,
@@ -77,6 +84,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdsModule,
     AuthModule,
     EmailModule,
+    NotificationsModule,
   ],
   providers: [
     RolesSeederService,
