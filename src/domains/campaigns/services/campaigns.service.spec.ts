@@ -18,6 +18,7 @@ import { getModelToken } from '@nestjs/sequelize';
 import { Niche } from '../../users/entities/niche.entity';
 import { CreatorCategory } from '../entities/creator-category.entity';
 import { Fee } from '../entities/fee.entity';
+import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.entity';
 
 import { TimelineService } from './timeline.service';
 
@@ -29,9 +30,10 @@ describe('CampaignsService', () => {
   let pandascrowServiceMock: jest.Mocked<PandascrowService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
   let emailServiceMock: jest.Mocked<EmailService>;
-  let nicheModelMock: Record<string, unknown>;
-  let creatorCategoryModelMock: Record<string, unknown>;
-  let feeModelMock: Record<string, unknown>;
+  let nicheModelMock: { findAll: jest.Mock };
+  let creatorCategoryModelMock: { findAll: jest.Mock };
+  let feeModelMock: { findOne: jest.Mock };
+  let commissionTierModelMock: { findOne: jest.Mock };
 
   const mockCampaign = {
     id: 'c1',
@@ -160,6 +162,10 @@ describe('CampaignsService', () => {
       findOne: jest.fn().mockResolvedValue({ value: 0.05 }),
     };
 
+    commissionTierModelMock = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
@@ -173,6 +179,7 @@ describe('CampaignsService', () => {
         { provide: getModelToken(Niche), useValue: nicheModelMock },
         { provide: getModelToken(CreatorCategory), useValue: creatorCategoryModelMock },
         { provide: getModelToken(Fee), useValue: feeModelMock },
+        { provide: getModelToken(BrandCommissionTier), useValue: commissionTierModelMock },
       ],
     }).compile();
 
@@ -212,7 +219,7 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
-        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        timeline: '2026-07-31T23:59:59.999Z',
         creatorNicheId: 'n1',
         creatorNicheIds: ['n1'],
         currency: 'USD',
@@ -259,7 +266,7 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
-        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        timeline: '2026-07-31T23:59:59.999Z',
         creatorNicheId: 'n1',
         creatorNicheIds: ['n1'],
         currency: 'USD',

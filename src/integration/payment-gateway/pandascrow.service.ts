@@ -51,6 +51,7 @@ export class PandascrowService {
   private readonly secretKey: string;
   private readonly apiUrl: string;
   private readonly accountUuid: string;
+  private readonly callbackUrl: string;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('pandascrow.apiKey') || '';
@@ -58,6 +59,7 @@ export class PandascrowService {
     this.apiUrl =
       this.configService.get<string>('pandascrow.apiUrl') || 'https://sandbox.pandascrow.io';
     this.accountUuid = this.configService.get<string>('pandascrow.accountUuid') || '';
+    this.callbackUrl = this.configService.get<string>('pandascrow.callbackUrl') || '';
   }
 
   /**
@@ -81,27 +83,43 @@ export class PandascrowService {
       };
     }
 
+    const currencyUpper = payload.currency.toUpperCase();
+
+    // Dynamic callback URL construction:
+    // - Paystack (NGN): Paystack does NOT append /success, so append /success manually
+    // - Stripe (USD / non-NGN): Stripe automatically appends /success, so leave base URL without /success
+    let computedCallbackUrl = this.callbackUrl;
+    if (this.callbackUrl) {
+      const baseUrl = this.callbackUrl.replace(/\/+$/, '');
+      if (currencyUpper === 'NGN') {
+        computedCallbackUrl = `${baseUrl}/success`;
+      } else {
+        computedCallbackUrl = baseUrl;
+      }
+    }
+
     const body = {
       uuid: this.accountUuid,
       escrow_type: 'onetime',
       initiator_role: 'buyer', // Trendupp manages OTP & release; escrow.paid webhook fires back correctly
       initiator_id: this.accountUuid,
       title: payload.title,
-      currency: payload.currency.toUpperCase(),
+      currency: currencyUpper,
       description: payload.description,
       inspection_period: '7', // default 7 days
       delivery_date: payload.deliveryDate,
       who_pay_fees: 'seller', // Trendupp pays fees
       amount: payload.amount,
+      ...(computedCallbackUrl && { callback_url: computedCallbackUrl }),
       buyer_details: {
         name: payload.buyerDetails.name,
         email: payload.buyerDetails.email,
-        phone: payload.buyerDetails.phone || '+2348000000000',
+        phone: payload.buyerDetails.phone,
       },
       seller_details: {
         name: payload.sellerDetails.name,
         email: payload.sellerDetails.email,
-        phone: payload.sellerDetails.phone || '+2348000000000',
+        phone: payload.sellerDetails.phone,
       },
     };
 

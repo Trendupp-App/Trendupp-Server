@@ -168,6 +168,36 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
       `All deliverables and payouts for "${d.campaignTitle}" are done. The campaign is now complete.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
+  'campaign.cancelled': {
+    category: 'applicationUpdates',
+    channels: ['inApp', 'email'],
+    priority: 'critical',
+    title: (d) => `Campaign cancelled: "${d.campaignTitle}"`,
+    body: (d) =>
+      d.payoutAmount
+        ? `"${d.campaignTitle}" was cancelled. A ${d.payoutPercentage}% payout of ${money(d.payoutAmount)} has been scheduled for 30 days from now.`
+        : `"${d.campaignTitle}" was cancelled.` +
+          (d.refundAmount ? ` A refund of ${money(d.refundAmount)} is scheduled.` : ''),
+    actionUrl: (d) => `/campaigns/${d.campaignId}`,
+  },
+  'campaign.paused': {
+    category: 'applicationUpdates',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Campaign paused: "${d.campaignTitle}"`,
+    body: (d) =>
+      `"${d.campaignTitle}" was paused by platform administration.` +
+      (d.reason ? ` Reason: ${d.reason}` : ''),
+    actionUrl: (d) => `/campaigns/${d.campaignId}`,
+  },
+  'campaign.resumed': {
+    category: 'applicationUpdates',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Campaign resumed: "${d.campaignTitle}"`,
+    body: (d) => `"${d.campaignTitle}" has been resumed and is active again.`,
+    actionUrl: (d) => `/campaigns/${d.campaignId}`,
+  },
 
   // ── Social connections (account-change confirmations — never suppressible) ─
   'social.connected': {

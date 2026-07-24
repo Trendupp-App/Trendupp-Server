@@ -33,17 +33,9 @@ export const validationSchema = Joi.object({
   AWS_SES_SECRET_KEY: Joi.string().optional(),
   AWS_SES_FROM_EMAIL: Joi.string().email().optional(),
 
-  // Email transport
-  EMAIL_PROVIDER: Joi.string().valid('ses', 'zeptomail').default('ses'),
+  // Email sender identity
   EMAIL_FROM: Joi.string().email().optional(),
   EMAIL_FROM_NAME: Joi.string().optional(),
-  ZEPTOMAIL_API_URL: Joi.string().uri().optional(),
-  // Required only when ZeptoMail is the active provider.
-  ZEPTOMAIL_TOKEN: Joi.string().when('EMAIL_PROVIDER', {
-    is: 'zeptomail',
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
 
   // Security
   ALLOWED_ORIGINS: Joi.string().default('*'),
@@ -86,4 +78,5 @@ export const validationSchema = Joi.object({
   PANDASCROW_SECRET_KEY: Joi.string().allow('').optional(),
   PANDASCROW_API_URL: Joi.string().uri().allow('').optional(),
   PANDASCROW_ACCOUNT_UUID: Joi.string().allow('').optional(),
+  PAYMENT_CALLBACK_URL: Joi.string().uri().allow('').optional(),
 });

@@ -22,6 +22,7 @@ import { SocialsModule } from './domains/socials/socials.module';
 import { NotificationsModule } from './domains/notifications/notifications.module';
 import { NewsModule } from './domains/news/news.module';
 import { TransactionsModule } from './domains/transactions/transactions.module';
+import { AdsModule } from './domains/ads/ads.module';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { TransactionsModule } from './domains/transactions/transactions.module';
     NotificationsModule,
     NewsModule,
     TransactionsModule,
+    AdsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -34,18 +34,9 @@ export default () => ({
     },
   },
   email: {
-    // Active transport: 'ses' (default) or 'zeptomail'. Toggle without code changes.
-    provider: process.env.EMAIL_PROVIDER || 'ses',
-    // Shared sender identity. Falls back to the legacy SES from-address.
+    // Sender identity. Falls back to the legacy SES from-address.
     fromEmail: process.env.EMAIL_FROM || process.env.AWS_SES_FROM_EMAIL || 'noreply@trendupp.com',
     fromName: process.env.EMAIL_FROM_NAME || 'Trendupp',
-    zeptomail: {
-      // Regional API host: api.zeptomail.com (global), api.zeptomail.eu, api.zeptomail.in, ...
-      apiUrl: process.env.ZEPTOMAIL_API_URL || 'https://api.zeptomail.com/v1.1/email',
-      // "Send Mail" token from your ZeptoMail Mail Agent (Setup Info → API).
-      // Used as the Authorization header: `Zoho-enczapikey <token>`.
-      token: process.env.ZEPTOMAIL_TOKEN,
-    },
   },
   cors: {
     allowedOrigins: process.env.ALLOWED_ORIGINS || '*',
@@ -92,5 +83,6 @@ export default () => ({
     secretKey: process.env.PANDASCROW_SECRET_KEY,
     apiUrl: process.env.PANDASCROW_API_URL || 'https://sandbox.pandascrow.io',
     accountUuid: process.env.PANDASCROW_ACCOUNT_UUID,
+    callbackUrl: process.env.PAYMENT_CALLBACK_URL,
   },
 });
