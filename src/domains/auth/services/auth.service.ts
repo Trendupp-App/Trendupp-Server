@@ -617,17 +617,15 @@ export class AuthService {
     const email = verifyOtpDto.email.toLowerCase().trim();
     const { code } = verifyOtpDto;
 
-    // Supports checking both 'registration' or general OTP codes
-    let isValid = await this.otpService.verifyOtp(email, code);
-
-    // Fallback: Check 'registration' specifically if generic verify fails
-    if (!isValid) {
-      const otpRecord = await this.otpService.generateOtp(email, 'registration');
-      // If code matches, we verify (for testing support where OTP defaults)
-      if (otpRecord.code === code) {
-        isValid = true;
-      }
+    // If this is a password-reset OTP, mark it as verified (do not delete it).
+    // The resetPassword endpoint will confirm and consume it instead of re-asking for the code.
+    const isPasswordResetOtp = await this.otpService.verifyOtpForPasswordReset(email, code);
+    if (isPasswordResetOtp) {
+      return { message: 'OTP verified successfully. You may now reset your password.' };
     }
+
+    // For all other OTP types (registration, login, etc.) — verify and delete as normal.
+    const isValid = await this.otpService.verifyOtp(email, code);
 
     if (!isValid) {
       throw new UnauthorizedException('Invalid or expired OTP code');
@@ -697,24 +695,30 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    // Normalise email before lookup and OTP verification.
+    // Normalise email before lookup.
     const email = resetPasswordDto.email.toLowerCase().trim();
-    const { code, newPassword } = resetPasswordDto;
+    const { newPassword } = resetPasswordDto;
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    // Verify OTP of type 'password-reset'
-    // To support generic/mock otp code verify, we fallback to general verify
-    const isValid = await this.otpService.verifyOtp(email, code);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid or expired verification OTP code');
+    // Confirm the user completed the OTP verification step for password-reset.
+    // The otp/verify endpoint marks the OTP as verified without deleting it;
+    // we consume it here after a successful reset to prevent reuse.
+    const hasVerified = await this.otpService.hasVerifiedPasswordResetOtp(email);
+    if (!hasVerified) {
+      throw new UnauthorizedException(
+        'Password reset requires a verified OTP. Please complete the OTP verification step first.',
+      );
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.usersService.update(user.id, { password: hashedPassword });
+
+    // Consume the verified OTP so it cannot be reused.
+    await this.otpService.consumeVerifiedPasswordResetOtp(email);
 
     this.logger.log(`Password reset complete for user ${email}`);
 
