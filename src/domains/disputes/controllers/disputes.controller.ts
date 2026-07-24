@@ -73,7 +73,7 @@ export class DisputesController {
 
   @Post(':id/activate')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent', 'admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Activate a raised dispute & initialize GetStream chat (Admins only)' })
   @ApiResponse({ status: 200, description: 'Dispute activated and chat channel created' })
@@ -89,16 +89,16 @@ export class DisputesController {
 
   @Post(':id/resolve')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'finance_admin', 'super_admin')
+  @Roles('owner', 'super_admin', 'finance_admin', 'admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Resolve a campaign dispute and lock the chat (Admin, Finance Admin & Super Admin only)',
+      'Resolve a campaign dispute and lock the chat (Owner, Admin, Finance Admin & Super Admin only)',
   })
   @ApiResponse({ status: 200, description: 'Dispute resolved and chat channel frozen' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden — admin, finance_admin or super_admin role required',
+    description: 'Forbidden — owner, admin, finance_admin or super_admin role required',
   })
   @ApiResponse({ status: 404, description: 'Dispute not found' })
   async resolveDispute(
@@ -107,10 +107,12 @@ export class DisputesController {
     @Body() dto: ResolveDisputeDto,
   ) {
     // Standard role gate is handled by guard, but verify role just in case
-    const roleName = user.role?.name || '';
-    const canResolve = ['admin', 'finance_admin', 'super_admin'].includes(roleName);
+    const roleName = (user.role?.name || '').toLowerCase();
+    const canResolve = ['owner', 'super_admin', 'finance_admin', 'admin'].includes(roleName);
     if (!canResolve) {
-      throw new ForbiddenException('Only Admin, Finance Admin or Super Admin can resolve disputes');
+      throw new ForbiddenException(
+        'Only Owner, Admin, Finance Admin or Super Admin can resolve disputes',
+      );
     }
     return this.disputesService.resolveDispute(id, user.id, dto);
   }
