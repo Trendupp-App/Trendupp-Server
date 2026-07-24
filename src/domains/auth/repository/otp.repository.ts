@@ -40,6 +40,17 @@ export class OtpRepository {
     });
   }
 
+  async findVerifiedByEmailAndType(email: string, type: string): Promise<Otp | null> {
+    return this.otpModel.findOne({
+      where: { email, type, isVerified: true },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  async markAsVerified(email: string, type: string): Promise<void> {
+    await this.otpModel.update({ isVerified: true }, { where: { email, type } });
+  }
+
   async deleteById(id: string): Promise<void> {
     await this.otpModel.destroy({
       where: { id },

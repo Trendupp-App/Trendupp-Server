@@ -18,4 +18,12 @@ export class Otp extends BaseEntity<Otp> {
     field: 'otp_expires_at',
   })
   declare otpExpiresAt: Date;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_verified',
+  })
+  declare isVerified: boolean;
 }
