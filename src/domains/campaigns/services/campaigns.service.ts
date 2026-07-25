@@ -1634,13 +1634,27 @@ export class CampaignsService {
     return updated!;
   }
 
-  async getSubmittedContent(campaignId: string, brandId: string): Promise<ContentSubmission[]> {
+  async getSubmittedContent(
+    campaignId: string,
+    brandId: string,
+    userRole?: string,
+  ): Promise<ContentSubmission[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
