@@ -184,7 +184,7 @@ export class AdminBroadcastsService {
         userId: u.id,
         actorId: broadcast.createdById,
         type: 'broadcast.announcement',
-        category: 'announcements',
+        category: 'broadcast',
         priority: 'medium',
         title: broadcast.title,
         body: broadcast.message,
