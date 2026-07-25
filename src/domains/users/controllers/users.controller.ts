@@ -30,7 +30,7 @@ export class UsersController {
 
   @Get('creators/top-performers')
   @UseGuards(RolesGuard)
-  @Roles('brand', 'admin', 'finance_admin', 'super_admin')
+  @Roles('owner', 'brand', 'finance_admin', 'super_admin')
   @ApiOperation({ summary: 'Get list of top performing creators sorted by total social followers' })
   @ApiResponse({ status: 200, type: [User] })
   getTopPerformers() {
