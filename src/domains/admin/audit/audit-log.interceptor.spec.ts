@@ -32,7 +32,10 @@ describe('AuditLogInterceptor', () => {
     reflectorMock.get.mockReturnValue(undefined);
 
     const result = await lastValueFrom(
-      interceptor.intercept(makeContext({ user: { id: 'a-1' }, headers: {} }), next),
+      interceptor.intercept(
+        makeContext({ user: { id: 'a-1', role: { name: 'owner' } }, headers: {} }),
+        next,
+      ),
     );
 
     expect(result).toEqual({ ok: true });
@@ -48,7 +51,7 @@ describe('AuditLogInterceptor', () => {
     await lastValueFrom(
       interceptor.intercept(
         makeContext({
-          user: { id: 'admin-1' },
+          user: { id: 'admin-1', role: { name: 'super_admin' } },
           params: { id: 'creator-9' },
           query: {},
           body: { note: 'hello', password: 'hunter2' },
@@ -81,13 +84,28 @@ describe('AuditLogInterceptor', () => {
     expect(auditLogServiceMock.log).not.toHaveBeenCalled();
   });
 
+  it('skips logging when the actor is not staff (shared brand/creator routes)', async () => {
+    reflectorMock.get.mockReturnValue({
+      action: 'CAMPAIGN_APPLICATION_REVIEWED',
+    } satisfies AuditMeta);
+
+    await lastValueFrom(
+      interceptor.intercept(
+        makeContext({ user: { id: 'brand-1', role: { name: 'brand' } }, headers: {} }),
+        next,
+      ),
+    );
+
+    expect(auditLogServiceMock.log).not.toHaveBeenCalled();
+  });
+
   it('truncates oversized string fields in details', async () => {
     reflectorMock.get.mockReturnValue({ action: 'BROADCAST_CREATED' } satisfies AuditMeta);
 
     await lastValueFrom(
       interceptor.intercept(
         makeContext({
-          user: { id: 'admin-1' },
+          user: { id: 'admin-1', role: { name: 'super_admin' } },
           body: { message: 'x'.repeat(2000) },
           headers: {},
         }),

@@ -7,8 +7,21 @@ import { AUDIT_METADATA_KEY, AuditMeta } from './audit.decorator';
 /** Request fields never persisted into audit details. */
 const SENSITIVE_KEYS = /password|token|secret|otp|authorization|apikey|api_key/i;
 
+/**
+ * The audit trail records STAFF actions only. Routes shared with brands or
+ * creators (e.g. campaign application review) can carry @Audit safely — a
+ * non-staff actor is skipped here.
+ */
+const STAFF_ROLES = new Set([
+  'owner',
+  'super_admin',
+  'finance_admin',
+  'moderator',
+  'support_agent',
+]);
+
 interface AuditableRequest {
-  user?: { id?: string };
+  user?: { id?: string; role?: { name?: string } };
   params?: Record<string, string>;
   query?: Record<string, unknown>;
   body?: unknown;
@@ -63,6 +76,8 @@ export class AuditLogInterceptor implements NestInterceptor {
       tap(() => {
         const adminId = request.user?.id;
         if (!adminId) return; // unauthenticated route — nothing to attribute
+        // Shared routes: only staff actions belong in the admin audit trail.
+        if (!STAFF_ROLES.has(request.user?.role?.name ?? '')) return;
 
         const forwardedFor = request.headers['x-forwarded-for'];
         void this.auditLogService.log({
