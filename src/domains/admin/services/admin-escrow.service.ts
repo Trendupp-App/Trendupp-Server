@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, WhereOptions } from 'sequelize';
@@ -154,7 +153,7 @@ export class AdminEscrowService {
             {
               model: User,
               as: 'brand',
-              attributes: ['id', 'firstName', 'lastName', 'companyName', 'avatarUrl'],
+              attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
             },
           ],
         },
@@ -167,8 +166,9 @@ export class AdminEscrowService {
       recentPayments.map(async (p) => {
         const campaign = p.campaign;
         const brand = campaign?.brand;
+        const brandObj = brand as (User & { companyName?: string }) | undefined;
         const brandName =
-          brand?.companyName ||
+          brandObj?.companyName ||
           `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
           'Advertiser';
         const totalFunded = p.totalAmount || p.amount || 0;
@@ -263,7 +263,7 @@ export class AdminEscrowService {
               {
                 model: User,
                 as: 'brand',
-                attributes: ['id', 'firstName', 'lastName', 'companyName', 'avatarUrl'],
+                attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
               },
             ],
           },
@@ -276,8 +276,9 @@ export class AdminEscrowService {
     const data = paginated.data.map((p) => {
       const campaign = p.campaign;
       const brand = campaign?.brand;
+      const brandObj = brand as (User & { companyName?: string }) | undefined;
       const brandName =
-        brand?.companyName ||
+        brandObj?.companyName ||
         `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
         'Advertiser';
 
@@ -379,7 +380,7 @@ export class AdminEscrowService {
               {
                 model: User,
                 as: 'brand',
-                attributes: ['id', 'firstName', 'lastName', 'companyName'],
+                attributes: ['id', 'firstName', 'lastName'],
               },
             ],
           },
@@ -398,8 +399,9 @@ export class AdminEscrowService {
       const campaign = pr.campaign;
       const brand = campaign?.brand;
       const creator = pr.creator;
+      const brandObj = brand as (User & { companyName?: string }) | undefined;
       const brandName =
-        brand?.companyName ||
+        brandObj?.companyName ||
         `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
         'Advertiser';
       const creatorName =
@@ -502,7 +504,7 @@ export class AdminEscrowService {
           {
             model: User,
             as: 'brand',
-            attributes: ['id', 'firstName', 'lastName', 'companyName', 'avatarUrl'],
+            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
           },
         ],
         order: [['updatedAt', 'DESC']],
@@ -513,8 +515,9 @@ export class AdminEscrowService {
     const data = paginated.data.map((rf) => {
       const campaign = rf.campaign;
       const brand = rf.brand;
+      const brandObj = brand as (User & { companyName?: string }) | undefined;
       const brandName =
-        brand?.companyName ||
+        brandObj?.companyName ||
         `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
         'Advertiser';
 
