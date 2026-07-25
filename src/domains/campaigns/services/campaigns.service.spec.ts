@@ -366,6 +366,9 @@ describe('CampaignsService', () => {
         lastName: 'Owner',
         email: 'brand@owner.com',
         phoneNumber: '+2348000000000',
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Brand Account',
       } as any);
 
       pandascrowServiceMock.initializeEscrow.mockResolvedValue({
@@ -408,6 +411,37 @@ describe('CampaignsService', () => {
       });
     });
 
+    it('should throw ForbiddenException if brand has not added bank details on submit', async () => {
+      const completeCampaign = {
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'draft',
+        title: 'complete campaign',
+        goal: 'Amplify Content',
+        totalBudget: 3000000,
+        creatorCategoryId: 'cc1',
+        creatorNicheId: 'n1',
+        timeline: new Date('2026-07-31T23:59:59.999Z'),
+        preferredPlatforms: [{ id: 'p1' }],
+        deliverables: ['1x post'],
+        contentDirection: ['d1'],
+        contentGuidelines: { dos: ['do1'], donts: [] },
+        usageRights: 'full rights',
+        campaignBrief: 'our brand guidelines brief',
+      } as unknown as Campaign;
+
+      campaignRepoMock.findById.mockResolvedValue(completeCampaign);
+      usersServiceMock.findOne.mockResolvedValue({
+        firstName: 'Brand',
+        lastName: 'Owner',
+        email: 'brand@owner.com',
+      } as any);
+
+      await expect(service.submit('c1', 'b1')).rejects.toThrow(
+        'kindly add your refund details in the profile section',
+      );
+    });
+
     it('should allow re-submission (retry) when status is pending_payment and payment is pending', async () => {
       const pendingPaymentCampaign = {
         ...mockCampaign,
@@ -438,6 +472,9 @@ describe('CampaignsService', () => {
         lastName: 'Owner',
         email: 'brand@owner.com',
         phoneNumber: '+2348000000000',
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Brand Account',
       } as any);
 
       pandascrowServiceMock.initializeEscrow.mockResolvedValue({
@@ -698,12 +735,15 @@ describe('CampaignsService', () => {
       comments: 'Looking forward to this!',
     };
 
-    it('should successfully submit an application for a live campaign when creator has at least one social connected', async () => {
+    it('should successfully submit an application for a live campaign when creator has at least one social connected and bank details set', async () => {
       const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
       const mockApplication = { id: 'app1', ...mockAppDto };
       const mockCreator = {
         id: 'creator1',
         socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
       };
 
       campaignRepoMock.findById.mockResolvedValue(liveCampaign);
@@ -747,6 +787,9 @@ describe('CampaignsService', () => {
       const mockCreator = {
         id: 'creator1',
         socialsConnected: { instagram: false, tiktok: false, youtube: false, twitter: false },
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
       };
 
       campaignRepoMock.findById.mockResolvedValue(liveCampaign);
@@ -757,11 +800,29 @@ describe('CampaignsService', () => {
       );
     });
 
+    it('should throw ForbiddenException if creator has not added bank details when applying', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        'kindly add your payout details in the profile section',
+      );
+    });
+
     it('should throw ForbiddenException if creator has already applied', async () => {
       const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
       const mockCreator = {
         id: 'creator1',
         socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
       };
 
       campaignRepoMock.findById.mockResolvedValue(liveCampaign);
