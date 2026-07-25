@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -84,6 +85,7 @@ export class AdminUsersController {
   }
 
   @Patch('users/:id')
+  @Audit('ADMIN_PROFILE_UPDATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update sub-admin profile or role' })

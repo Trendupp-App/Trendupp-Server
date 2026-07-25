@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Patch,
@@ -37,6 +38,7 @@ export class AdminController {
   ) {}
 
   @Patch('campaigns/:id/approve')
+  @Audit('CAMPAIGN_APPROVED')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
@@ -64,6 +66,7 @@ export class AdminController {
   }
 
   @Post('fees')
+  @Audit('FEE_CREATED')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
@@ -77,6 +80,7 @@ export class AdminController {
   }
 
   @Delete('fees/:id')
+  @Audit('FEE_DELETED')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
@@ -90,6 +94,7 @@ export class AdminController {
   }
 
   @Post('news')
+  @Audit('NEWS_CREATED')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a news article (admin only)' })
@@ -109,6 +114,7 @@ export class AdminController {
   }
 
   @Patch('news/:id')
+  @Audit('NEWS_UPDATED')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a news article (admin only)' })
@@ -128,6 +134,7 @@ export class AdminController {
   }
 
   @Delete('news/:id')
+  @Audit('NEWS_DELETED')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a news article (admin only)' })

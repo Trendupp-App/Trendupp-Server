@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -196,6 +197,7 @@ export class AdminBrandsController {
   }
 
   @Post('brands/:id/notes')
+  @Audit('BRAND_NOTE_CREATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add an internal admin note for a Brand' })
@@ -211,6 +213,7 @@ export class AdminBrandsController {
   }
 
   @Patch('brands/:id/notes/:noteId')
+  @Audit('BRAND_NOTE_UPDATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update an internal admin note for a Brand' })
@@ -227,6 +230,7 @@ export class AdminBrandsController {
   }
 
   @Delete('brands/:id/notes/:noteId')
+  @Audit('BRAND_NOTE_DELETED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an internal admin note for a Brand' })

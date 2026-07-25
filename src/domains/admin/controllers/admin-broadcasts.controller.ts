@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -32,6 +33,7 @@ export class AdminBroadcastsController {
   constructor(private readonly broadcastsService: AdminBroadcastsService) {}
 
   @Post()
+  @Audit('BROADCAST_CREATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a broadcast notification (Draft, Send Now, or Schedule)' })
@@ -68,6 +70,7 @@ export class AdminBroadcastsController {
   }
 
   @Patch(':id')
+  @Audit('BROADCAST_UPDATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @ApiOperation({ summary: 'Update a draft or scheduled broadcast notification' })
   @ApiResponse({ status: 200, description: 'Broadcast updated successfully' })
@@ -82,6 +85,7 @@ export class AdminBroadcastsController {
   }
 
   @Delete(':id')
+  @Audit('BROADCAST_DELETED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a draft or scheduled broadcast notification' })

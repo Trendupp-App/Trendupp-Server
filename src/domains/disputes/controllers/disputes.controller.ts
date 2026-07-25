@@ -1,3 +1,4 @@
+import { Audit } from '../../admin/audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -72,6 +73,7 @@ export class DisputesController {
   }
 
   @Post(':id/activate')
+  @Audit('DISPUTE_ACTIVATED')
   @UseGuards(RolesGuard)
   @Roles('owner', 'super_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
@@ -88,6 +90,7 @@ export class DisputesController {
   }
 
   @Post(':id/resolve')
+  @Audit('DISPUTE_RESOLVED')
   @UseGuards(RolesGuard)
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.OK)

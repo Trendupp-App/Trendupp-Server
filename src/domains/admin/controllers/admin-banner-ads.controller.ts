@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -54,6 +55,7 @@ export class AdminBannerAdsController {
   }
 
   @Post()
+  @Audit('BANNER_AD_CREATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new Banner Ad (Save Draft or Publish)' })
@@ -72,6 +74,7 @@ export class AdminBannerAdsController {
   }
 
   @Patch(':id')
+  @Audit('BANNER_AD_UPDATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update an existing Banner Ad' })
@@ -81,6 +84,7 @@ export class AdminBannerAdsController {
   }
 
   @Patch(':id/status')
+  @Audit('BANNER_AD_STATUS_CHANGED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update Banner Ad status (active, paused, draft)' })
@@ -90,6 +94,7 @@ export class AdminBannerAdsController {
   }
 
   @Delete(':id')
+  @Audit('BANNER_AD_DELETED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a Banner Ad' })

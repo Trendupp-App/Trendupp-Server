@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -236,6 +237,7 @@ export class AdminCreatorsController {
   }
 
   @Post('creators/:id/notes')
+  @Audit('CREATOR_NOTE_CREATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -251,6 +253,7 @@ export class AdminCreatorsController {
   }
 
   @Patch('creators/:id/notes/:noteId')
+  @Audit('CREATOR_NOTE_UPDATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -266,6 +269,7 @@ export class AdminCreatorsController {
   }
 
   @Delete('creators/:id/notes/:noteId')
+  @Audit('CREATOR_NOTE_DELETED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

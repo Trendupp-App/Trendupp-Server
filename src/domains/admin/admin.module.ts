@@ -58,6 +58,8 @@ import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
 import { PushModule } from '../../integration/push/push.module';
 import { BullModule } from '@nestjs/bullmq';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './audit/audit-log.interceptor';
 import {
   BroadcastSchedulerProcessor,
   BROADCASTS_QUEUE,
@@ -103,6 +105,9 @@ import {
     RolesSeederService,
     AuditLogRepository,
     AuditLogService,
+    // Global: no-ops on routes without @Audit(...). Lives here so it can
+    // inject AuditLogService.
+    { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
     AdminAuthService,
     AdminUsersService,
     AdminOverviewService,
