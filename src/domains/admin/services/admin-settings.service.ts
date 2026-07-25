@@ -313,10 +313,6 @@ export class AdminSettingsService {
   // ─── Change Password ───────────────────────────────────────────────────────
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ message: string }> {
-    if (dto.newPassword !== dto.confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match.');
-    }
-
     const user = await this.userModel.findByPk(userId);
     if (!user || !user.password) {
       throw new NotFoundException('User account not found.');

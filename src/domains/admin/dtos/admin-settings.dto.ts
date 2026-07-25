@@ -183,9 +183,4 @@ export class ChangePasswordDto {
   @IsString()
   @IsNotEmpty()
   newPassword: string;
-
-  @ApiProperty({ example: 'NewPassword123!' })
-  @IsString()
-  @IsNotEmpty()
-  confirmPassword: string;
 }
