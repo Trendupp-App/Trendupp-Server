@@ -127,14 +127,15 @@ export class StreamService implements OnModuleInit {
    * call getStreamToken() or connect via the SDK.
    */
   async upsertUsers(userIds: string[]): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds.filter((id): id is string => Boolean(id))));
     if (this.isMockMode || !this.streamClient) {
-      this.logger.warn(`MOCK mode: Skipping batch upsert for ${userIds.length} users`);
+      this.logger.warn(`MOCK mode: Skipping batch upsert for ${uniqueUserIds.length} users`);
       return;
     }
     try {
-      const users = userIds.map((id) => ({ id }));
+      const users = uniqueUserIds.map((id) => ({ id }));
       await this.streamClient.upsertUsers(users);
-      this.logger.log(`Upserted ${users.length} users to Stream: [${userIds.join(', ')}]`);
+      this.logger.log(`Upserted ${users.length} users to Stream: [${uniqueUserIds.join(', ')}]`);
     } catch (error) {
       const stack = error instanceof Error ? error.stack : '';
       this.logger.error('Failed to batch-upsert Stream users', stack);
@@ -157,6 +158,9 @@ export class StreamService implements OnModuleInit {
     memberIds: string[],
     createdById: string,
   ): Promise<any> {
+    const uniqueMemberIds = Array.from(
+      new Set(memberIds.filter((id): id is string => Boolean(id))),
+    );
     if (this.isMockMode || !this.streamClient) {
       this.logger.warn(
         `MOCK mode: Simulating channel creation for type: ${channelType}, ID: ${channelId}`,
@@ -165,7 +169,7 @@ export class StreamService implements OnModuleInit {
         id: channelId,
         type: channelType,
         name,
-        members: memberIds,
+        members: uniqueMemberIds,
         createdById,
         frozen: false,
       };
@@ -174,7 +178,7 @@ export class StreamService implements OnModuleInit {
     try {
       const channel = this.streamClient.channel(channelType, channelId, {
         name,
-        members: memberIds,
+        members: uniqueMemberIds,
         created_by_id: createdById,
       } as unknown as ChannelData);
 
