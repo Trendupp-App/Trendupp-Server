@@ -136,7 +136,14 @@ export class AdminSettingsService {
     if (existing) {
       throw new BadRequestException(`Niche "${dto.name}" already exists.`);
     }
-    return this.nicheModel.create({ name: dto.name } as unknown as Niche);
+
+    // Auto-assign order as max(order) + 1 so niches self-sequence on creation
+    const maxOrderNiche = await this.nicheModel.findOne({
+      order: [['order', 'DESC']],
+    });
+    const nextOrder = maxOrderNiche ? maxOrderNiche.order + 1 : 1;
+
+    return this.nicheModel.create({ name: dto.name, order: nextOrder } as unknown as Niche);
   }
 
   async updateNiche(id: string, dto: UpdateNicheDto): Promise<Niche> {
