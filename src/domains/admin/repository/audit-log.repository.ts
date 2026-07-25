@@ -18,6 +18,8 @@ export interface CreateAuditLogInput {
 export interface QueryAuditLogsInput {
   action?: string;
   adminId?: string;
+  targetUserId?: string;
+  q?: string;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -37,14 +39,20 @@ export class AuditLogRepository {
   }
 
   async findAll(query: QueryAuditLogsInput): Promise<PaginatedResult<AuditLog>> {
-    const { action, adminId, startDate, endDate, page = 1, limit = 20 } = query;
+    const { action, adminId, targetUserId, q, startDate, endDate, page = 1, limit = 20 } = query;
     const where: Record<string | symbol, unknown> = {};
 
     if (action) {
       where.action = action;
     }
+    if (q) {
+      where.action = { [Op.iLike]: `%${q}%` };
+    }
     if (adminId) {
       where.adminId = adminId;
+    }
+    if (targetUserId) {
+      where.targetUserId = targetUserId;
     }
     if (startDate || endDate) {
       const dateFilter: Record<symbol, Date> = {};
@@ -78,5 +86,20 @@ export class AuditLogRepository {
       },
       { page, limit },
     );
+  }
+
+  /** Distinct action names ever recorded — drives the filter dropdown. */
+  async listActions(): Promise<string[]> {
+    const rows = (await this.auditLogModel.findAll({
+      attributes: [
+        [
+          this.auditLogModel.sequelize!.fn('DISTINCT', this.auditLogModel.sequelize!.col('action')),
+          'action',
+        ],
+      ],
+      order: [['action', 'ASC']],
+      raw: true,
+    })) as unknown as { action: string }[];
+    return rows.map((r) => r.action);
   }
 }

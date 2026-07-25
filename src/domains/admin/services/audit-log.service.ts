@@ -27,4 +27,8 @@ export class AuditLogService {
   async findAll(query: QueryAuditLogsInput): Promise<PaginatedResult<AuditLog>> {
     return this.auditLogRepository.findAll(query);
   }
+
+  async listActions(): Promise<string[]> {
+    return this.auditLogRepository.listActions();
+  }
 }
