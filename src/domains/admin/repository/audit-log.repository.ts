@@ -42,10 +42,10 @@ export class AuditLogRepository {
     const { action, adminId, targetUserId, q, startDate, endDate, page = 1, limit = 20 } = query;
     const where: Record<string | symbol, unknown> = {};
 
+    // Exact action filter wins over the free-text search when both are sent.
     if (action) {
       where.action = action;
-    }
-    if (q) {
+    } else if (q) {
       where.action = { [Op.iLike]: `%${q}%` };
     }
     if (adminId) {
