@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
+import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
+import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
 import {
   UnauthorizedException,
   ConflictException,
@@ -78,6 +80,15 @@ describe('AuthService', () => {
       getUserProfile: jest.fn(),
     } as unknown as jest.Mocked<InstagramAuthService>;
 
+    const facebookAuthServiceMock = {
+      exchangeCodeForToken: jest.fn(),
+      getUserProfile: jest.fn(),
+    } as unknown as jest.Mocked<FacebookAuthService>;
+
+    const appleAuthServiceMock = {
+      verifyIdentityToken: jest.fn(),
+    } as unknown as jest.Mocked<AppleAuthService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -88,6 +99,8 @@ describe('AuthService', () => {
         { provide: GoogleAuthService, useValue: googleAuthServiceMock },
         { provide: TiktokAuthService, useValue: tiktokAuthServiceMock },
         { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
+        { provide: FacebookAuthService, useValue: facebookAuthServiceMock },
+        { provide: AppleAuthService, useValue: appleAuthServiceMock },
       ],
     }).compile();
 

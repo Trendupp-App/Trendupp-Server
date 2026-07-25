@@ -4,13 +4,14 @@ import { Transform } from 'class-transformer';
 import { PaginationDto } from '../../../shared/dtos/pagination.dto';
 
 const CATEGORIES = [
-  'newCampaigns',
-  'applicationUpdates',
-  'paymentAlerts',
-  'brandMessages',
-  'weeklySummary',
-  'marketingOffers',
+  'campaigns',
+  'applications',
+  'payments',
+  'chatDispute',
+  'account',
   'security',
+  'opportunities',
+  'broadcast',
 ] as const;
 
 export class ListNotificationsDto extends PaginationDto {

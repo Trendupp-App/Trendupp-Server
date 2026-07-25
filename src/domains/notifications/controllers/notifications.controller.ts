@@ -22,6 +22,7 @@ import { NotificationRepository } from '../repository/notification.repository';
 import { DeviceTokenRepository } from '../repository/device-token.repository';
 import { ListNotificationsDto } from '../dtos/list-notifications.dto';
 import { RegisterDeviceDto, UnregisterDeviceDto } from '../dtos/register-device.dto';
+import { NOTIFICATION_CATEGORIES } from '../notifications.constants';
 import {
   NotificationItemDto,
   PaginatedNotificationsDto,
@@ -85,6 +86,38 @@ export class NotificationsController {
       unreadOnly: query.unreadOnly,
       category: query.category,
     });
+  }
+
+  @Get('categories')
+  @ApiOperation({
+    summary: 'List the notification category tabs for the current user',
+    description:
+      'The product taxonomy behind the category tabs, in display order, starting with the ' +
+      '"all" pseudo-category (= no filter). Creator-only categories (e.g. opportunities) are ' +
+      'omitted for other roles. Every other id is a valid `category` filter for GET /notifications.',
+  })
+  @ApiOkResponse({
+    description: 'Ordered category list',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', nullable: true, example: 'payments' },
+          label: { type: 'string', example: 'Payments' },
+          description: { type: 'string', example: 'Payout/refund released or failed' },
+        },
+      },
+    },
+  })
+  listCategories(@CurrentUser() user: User) {
+    const role = user.role?.name === 'brand' ? 'brand' : 'creator';
+    return [
+      { id: null, label: 'All', description: 'Everything' },
+      ...NOTIFICATION_CATEGORIES.filter((c) => c.audience === 'all' || c.audience === role).map(
+        ({ id, label, description }) => ({ id, label, description }),
+      ),
+    ];
   }
 
   @Get('unread-count')

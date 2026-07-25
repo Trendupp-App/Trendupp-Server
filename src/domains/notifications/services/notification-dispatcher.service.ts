@@ -10,13 +10,14 @@ import { NotificationRepository } from '../repository/notification.repository';
 import { DeviceTokenRepository } from '../repository/device-token.repository';
 import { NOTIFICATION_CATALOG } from '../notification.catalog';
 import { CatalogEntry, NotifyInput } from '../notification.types';
+import { CATEGORY_SETTINGS_KEY, NON_SUPPRESSIBLE_CATEGORIES } from '../notifications.constants';
 
 /**
  * TikTok/Instagram signups get synthetic placeholder addresses
  * (`tiktok_<openId>@trendupp.tiktok`) that would bounce and hurt SES
  * reputation — the email leg is hard-skipped for them (in-app still delivers).
  */
-const SYNTHETIC_EMAIL_PATTERN = /@trendupp\.(tiktok|instagram)$/i;
+const SYNTHETIC_EMAIL_PATTERN = /@trendupp\.(tiktok|instagram|facebook|apple)$/i;
 
 /**
  * Does the actual work of delivering one notification: recipient resolution,
@@ -73,7 +74,10 @@ export class NotificationDispatcherService {
    * bypass or forget it.
    *
    * Policy (see NOTIFICATION_SYSTEM_PLAN.md §5):
-   * - 'security' entries bypass all toggles (except pushNotifications, below).
+   * - Non-suppressible categories ('security', 'chatDispute') bypass all
+   *   toggles (except pushNotifications, below).
+   * - Each display category maps to a users.notification_settings key via
+   *   CATEGORY_SETTINGS_KEY; categories mapped to null are never muted.
    * - In-app: written when the category toggle is on; critical/high
    *   notifications land in the feed even when the category is off
    *   (the user opted out of noise, not of history).
@@ -94,11 +98,12 @@ export class NotificationDispatcherService {
     // Missing key (pre-migration rows) counts as enabled, matching the JSONB defaults.
     const pushMasterOn = settings.pushNotifications !== false;
 
-    if (entry.category === 'security') {
+    if (NON_SUPPRESSIBLE_CATEGORIES.has(entry.category)) {
       return { inApp: wantsInApp, email: wantsEmail, push: wantsInApp && pushMasterOn };
     }
 
-    const categoryOn = settings[entry.category] !== false;
+    const settingsKey = CATEGORY_SETTINGS_KEY[entry.category];
+    const categoryOn = settingsKey ? settings[settingsKey] !== false : true;
     const emailMasterOn = settings.emailNotifications !== false;
     const isImportant = entry.priority === 'critical' || entry.priority === 'high';
 

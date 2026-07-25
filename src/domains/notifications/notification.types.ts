@@ -8,20 +8,22 @@
  */
 
 /**
- * Preference category a notification is gated on.
- * All values except 'security' are keys of users.notification_settings JSONB.
- * 'security' notifications bypass every user toggle (password/bank changes,
- * dispute lifecycle, money-movement failures) — a user must not be able to
- * opt out of "your bank account was changed".
+ * Display/filter category of a notification — the product taxonomy shown as
+ * tabs in the clients (see GET /notifications/categories). Preference gating
+ * maps each category to a users.notification_settings key separately via
+ * CATEGORY_SETTINGS_KEY in notifications.constants.ts; 'security' and
+ * 'chatDispute' bypass the category toggles entirely (a user must not be able
+ * to opt out of "your account was suspended" or dispute proceedings).
  */
 export type NotificationCategory =
-  | 'newCampaigns'
-  | 'applicationUpdates'
-  | 'paymentAlerts'
-  | 'brandMessages'
-  | 'weeklySummary'
-  | 'marketingOffers'
-  | 'security';
+  | 'campaigns'
+  | 'applications'
+  | 'payments'
+  | 'chatDispute'
+  | 'account'
+  | 'security'
+  | 'opportunities'
+  | 'broadcast';
 
 export type NotificationChannel = 'inApp' | 'email';
 

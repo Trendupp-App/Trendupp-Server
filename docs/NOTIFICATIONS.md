@@ -58,24 +58,47 @@ Key files:
 | `entities/notification.entity.ts` | `notifications` table model |
 | migration `20260714120000-create-notifications-table.js` | Table + feed/unread/dedupe indexes |
 
+## Categories (product taxonomy)
+
+Every notification carries a display `category` — the tab taxonomy clients get
+from `GET /notifications/categories` (role-aware: `opportunities` is
+creator-only; the endpoint also prepends the `all` pseudo-category = no
+filter). Defined in `notifications.constants.ts` (`NOTIFICATION_CATEGORIES`):
+
+| Category | What lives here |
+|---|---|
+| `campaigns` | paused/resumed/cancelled, completed, stage & deadline reminders |
+| `applications` | selected / not selected, new application received, window closing, content submissions |
+| `payments` | payout/refund released, failed, escrow updates |
+| `chatDispute` | dispute opened/resolved and everything tied to the resolution chat |
+| `account` | onboarding nudges, inactivity reminders, tier upgrades |
+| `security` | account suspension, social account connected/disconnected |
+| `opportunities` | new campaigns matching tier/niche (creator only) |
+| `broadcast` | admin announcements |
+
 ## Preference gating
 
 Preferences live in `users.notification_settings` JSONB (managed by the client at
-`GET/PATCH /api/v1/profile/notifications`). Enforcement is one pure function,
+`GET/PATCH /api/v1/profile/notifications`) — the settings keys are the ORIGINAL
+names (`applicationUpdates`, `paymentAlerts`, ...) so that API is unchanged;
+`CATEGORY_SETTINGS_KEY` in `notifications.constants.ts` maps each display
+category to its toggle. Enforcement is one pure function,
 `NotificationDispatcherService.resolveChannels()`:
 
 | Rule | Behavior |
 |---|---|
-| `category: 'security'` | Bypasses **all** toggles (money movement, disputes, account security). |
+| `security` / `chatDispute` | Bypass **all** toggles (account security, dispute proceedings). |
 | Category toggle off | Suppresses medium/low entirely; **critical/high still land in-app** (user opted out of noise, not history) but never email. |
-| `emailNotifications: false` | Master email kill switch for all non-security email. |
+| `emailNotifications: false` | Master email kill switch for all suppressible email. |
+| `pushNotifications: false` | Master push kill switch — honored for every category, including security. |
 | In-app | No master kill switch by design — the tray is the system of record. |
 | Missing keys (pre-migration users) | Count as enabled, matching the JSONB defaults. |
 | Role fan-outs (`finance_admin`, `admin`) | Not preference-gated — operational work items. |
 
-Category → settings-key mapping: `applicationUpdates`, `paymentAlerts`,
-`newCampaigns`, `brandMessages`, `weeklySummary`, `marketingOffers` map 1:1;
-`security` is the non-suppressible sentinel.
+Category → settings-key mapping: `campaigns`/`applications` → `applicationUpdates`,
+`payments` → `paymentAlerts`, `opportunities` → `newCampaigns`;
+`account` and `broadcast` have no toggle; `security` and `chatDispute` are
+non-suppressible.
 
 ## Implemented notifications (24)
 

@@ -21,7 +21,7 @@ const money = (amount: number, currency?: string): string => {
 export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } = {
   // ── Applications (gated on notificationSettings.applicationUpdates) ───────
   'application.submitted': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `New application on "${d.campaignTitle}"`,
@@ -30,7 +30,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}/applications`,
   },
   'application.accepted': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: () => `You're in! Application accepted`,
@@ -40,7 +40,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     emailSubject: (d) => `Your application for "${d.campaignTitle}" was accepted — Trendupp`,
   },
   'application.rejected': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Application update on "${d.campaignTitle}"`,
@@ -49,7 +49,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: () => `/campaigns/explore`,
   },
   'application.acceptance_undone': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Engagement cancelled on "${d.campaignTitle}"`,
@@ -60,7 +60,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
 
   // ── Content submissions (gated on applicationUpdates) ─────────────────────
   'submission.draft_submitted': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Draft ready for review on "${d.campaignTitle}"`,
@@ -69,7 +69,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.revision_resubmitted': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Revised draft ready on "${d.campaignTitle}"`,
@@ -78,7 +78,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.draft_approved': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: () => `Draft approved — time to go live!`,
@@ -88,7 +88,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     emailSubject: (d) => `Your draft for "${d.campaignTitle}" was approved — Trendupp`,
   },
   'submission.revision_requested': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: (d) => `Revision requested on "${d.campaignTitle}"`,
@@ -98,7 +98,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.live_posted': {
-    category: 'applicationUpdates',
+    category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Live post submitted on "${d.campaignTitle}"`,
@@ -107,7 +107,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.live_approved': {
-    category: 'paymentAlerts',
+    category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: () => `Content approved — payout scheduled`,
@@ -119,7 +119,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
 
   // ── Payments & payouts ─────────────────────────────────────────────────────
   'payout.released': {
-    category: 'paymentAlerts',
+    category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: (d) => `Payment sent: ${money(d.amount, d.currency)}`,
@@ -129,8 +129,9 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     emailSubject: (d) => `You've been paid ${money(d.amount, d.currency)} — Trendupp`,
   },
   'payout.failed': {
-    // Money-movement failure — never suppressible, also fanned out to finance admins.
-    category: 'security',
+    // Money-movement failure — critical, so it lands in-app even when the
+    // paymentAlerts toggle is off; also fanned out to finance admins.
+    category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: (d) => `Payout failed: ${money(d.amount, d.currency)}`,
@@ -140,7 +141,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
   },
   'payout.escrow_pending': {
     // Finance-admin work item: release the escrow so the payout can proceed.
-    category: 'security',
+    category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `Action required: escrow release pending`,
@@ -149,7 +150,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/admin/campaigns/${d.campaignId}`,
   },
   'campaign.payment_confirmed': {
-    category: 'paymentAlerts',
+    category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: (d) => `Payment confirmed — "${d.campaignTitle}" is live!`,
@@ -160,7 +161,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     emailTemplate: 'payment-escrow-receipt',
   },
   'campaign.completed': {
-    category: 'applicationUpdates',
+    category: 'campaigns',
     channels: ['inApp', 'email'],
     priority: 'medium',
     title: (d) => `Campaign completed: "${d.campaignTitle}"`,
@@ -169,7 +170,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'campaign.cancelled': {
-    category: 'applicationUpdates',
+    category: 'campaigns',
     channels: ['inApp', 'email'],
     priority: 'critical',
     title: (d) => `Campaign cancelled: "${d.campaignTitle}"`,
@@ -181,7 +182,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'campaign.paused': {
-    category: 'applicationUpdates',
+    category: 'campaigns',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Campaign paused: "${d.campaignTitle}"`,
@@ -191,7 +192,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'campaign.resumed': {
-    category: 'applicationUpdates',
+    category: 'campaigns',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Campaign resumed: "${d.campaignTitle}"`,
@@ -224,7 +225,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
 
   // ── Disputes (contractual process — never suppressible) ───────────────────
   'dispute.raised': {
-    category: 'security',
+    category: 'chatDispute',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `A dispute was raised`,
@@ -233,7 +234,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/disputes/${d.disputeId}`,
   },
   'dispute.activated': {
-    category: 'security',
+    category: 'chatDispute',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `Your dispute is under review`,
@@ -242,7 +243,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/disputes/${d.disputeId}`,
   },
   'dispute.resolved': {
-    category: 'security',
+    category: 'chatDispute',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `Your dispute has been resolved`,
@@ -252,7 +253,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/disputes/${d.disputeId}`,
   },
   'dispute.escrow_action_required': {
-    category: 'security',
+    category: 'chatDispute',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `Action required: execute dispute escrow decision`,

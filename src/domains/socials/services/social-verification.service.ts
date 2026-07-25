@@ -3,6 +3,7 @@ import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { YoutubeAuthService } from '../../../integration/social-apis/youtube-auth.service';
 import { TwitterAuthService } from '../../../integration/social-apis/twitter-auth.service';
+import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
 import { SocialPlatform } from '../constants/social-platforms';
 
 export interface ConnectInput {
@@ -38,6 +39,7 @@ export class SocialVerificationService {
     private readonly instagram: InstagramAuthService,
     private readonly youtube: YoutubeAuthService,
     private readonly twitter: TwitterAuthService,
+    private readonly facebook: FacebookAuthService,
   ) {}
 
   async verify(platform: SocialPlatform, input: ConnectInput): Promise<VerifiedSocial> {
@@ -50,6 +52,8 @@ export class SocialVerificationService {
         return this.verifyYoutube(input);
       case SocialPlatform.TWITTER:
         return this.verifyTwitter(input);
+      case SocialPlatform.FACEBOOK:
+        return this.verifyFacebook(input);
       default:
         throw new BadRequestException(`Unsupported platform: ${String(platform)}`);
     }
@@ -74,6 +78,10 @@ export class SocialVerificationService {
         const s = await this.twitter.getUserStats(accessToken);
         return { username: s.username, avatarUrl: s.avatarUrl, followerCount: s.followerCount };
       }
+      case SocialPlatform.FACEBOOK: {
+        const s = await this.facebook.getFollowerStats(accessToken);
+        return { username: s.username, avatarUrl: s.avatarUrl, followerCount: s.followerCount };
+      }
       default:
         throw new BadRequestException(`Unsupported platform: ${String(platform)}`);
     }
@@ -96,6 +104,19 @@ export class SocialVerificationService {
       avatarUrl: stats.avatarUrl,
       followerCount: stats.followerCount,
       accessToken: token.accessToken,
+    };
+  }
+
+  private async verifyFacebook(input: ConnectInput): Promise<VerifiedSocial> {
+    const token = await this.facebook.exchangeCodeForToken(input.code, input.redirectUri);
+    const stats = await this.facebook.getFollowerStats(token.accessToken);
+    return {
+      platformUserId: stats.id,
+      username: stats.username,
+      avatarUrl: stats.avatarUrl,
+      followerCount: stats.followerCount,
+      accessToken: token.accessToken,
+      tokenExpiresAt: SocialVerificationService.expiry(token.expiresIn),
     };
   }
 
