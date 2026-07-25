@@ -423,6 +423,23 @@ export class CreatorSocialAccountDto {
   lastSynced: string;
 }
 
+export class BankDetailsDto {
+  @ApiProperty({ example: 'Alex Okafor', nullable: true })
+  accountName: string | null;
+
+  @ApiProperty({ example: '0123456789', nullable: true })
+  accountNumber: string | null;
+
+  @ApiProperty({ example: 'bank-uuid-1', nullable: true })
+  bankId: string | null;
+
+  @ApiProperty({ example: 'Zenith Bank', nullable: true })
+  bankName: string | null;
+
+  @ApiProperty({ example: '057', nullable: true })
+  bankCode: string | null;
+}
+
 export class AdminCreatorProfileResponseDto {
   @ApiProperty({ type: CreatorProfileMetricsDto })
   metrics: CreatorProfileMetricsDto;
@@ -432,6 +449,9 @@ export class AdminCreatorProfileResponseDto {
 
   @ApiProperty({ type: [CreatorSocialAccountDto] })
   socialAccounts: CreatorSocialAccountDto[];
+
+  @ApiProperty({ type: BankDetailsDto, nullable: true })
+  bankDetails: BankDetailsDto | null;
 }
 
 export class CreatorCampaignHistoryItemDto {
