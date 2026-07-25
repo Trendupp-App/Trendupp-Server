@@ -145,10 +145,11 @@ export class DisputesService {
       );
     }
 
-    const memberIds = [dispute.creatorId, dispute.brandId, adminId];
+    const rawMemberIds = [dispute.creatorId, dispute.brandId, adminId];
     if (dto.financeAdminId) {
-      memberIds.push(dto.financeAdminId);
+      rawMemberIds.push(dto.financeAdminId);
     }
+    const memberIds = Array.from(new Set(rawMemberIds.filter((id): id is string => Boolean(id))));
 
     // Ensure all channel participants exist in Stream before creating the channel.
     // Stream's GetOrCreateChannel rejects user IDs that have never been upserted.
