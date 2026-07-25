@@ -5,7 +5,7 @@ import { Industry } from '../../users/entities/industry.entity';
 
 @Table({ tableName: 'news', paranoid: true })
 export class News extends BaseEntity<News> {
-  @Column({ type: DataType.STRING, allowNull: false })
+  @Column({ type: DataType.TEXT, allowNull: false })
   declare title: string;
 
   @Column({ type: DataType.TEXT, allowNull: true })
@@ -14,7 +14,7 @@ export class News extends BaseEntity<News> {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare content: string;
 
-  @Column({ type: DataType.STRING, allowNull: true, field: 'cover_image' })
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'cover_image' })
   declare coverImage: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
