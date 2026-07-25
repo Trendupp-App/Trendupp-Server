@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { BroadcastRepository } from '../../notifications/repository/broadcast.repository';
 import { NotificationRepository } from '../../notifications/repository/notification.repository';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
@@ -27,6 +28,7 @@ export class AdminBroadcastsService {
   constructor(
     private readonly broadcastRepository: BroadcastRepository,
     private readonly notificationRepository: NotificationRepository,
+    private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
     @InjectModel(User)
     private readonly userModel: typeof User,
@@ -227,5 +229,17 @@ export class AdminBroadcastsService {
     }
 
     this.logger.log(`Completed dispatch for broadcast ID: ${broadcast.id}`);
+
+    // Confirmation to the sending admin's inbox.
+    await this.notificationsService.notify({
+      type: 'broadcast.sent',
+      recipientId: broadcast.createdById,
+      data: {
+        broadcastId: broadcast.id,
+        title: broadcast.title,
+        totalRecipients,
+      },
+      dedupeKey: broadcast.id,
+    });
   }
 }

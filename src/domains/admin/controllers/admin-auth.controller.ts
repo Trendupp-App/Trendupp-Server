@@ -69,7 +69,7 @@ export class AdminAuthController {
 
   @Post('change-password')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent', 'admin')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change admin password (email, current password, and new password)' })
@@ -86,7 +86,7 @@ export class AdminAuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent', 'admin')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current authenticated admin profile' })

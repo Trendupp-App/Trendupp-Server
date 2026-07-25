@@ -4,6 +4,7 @@ import { NotFoundException, ForbiddenException, BadRequestException } from '@nes
 import { AdminBroadcastsService } from './admin-broadcasts.service';
 import { BroadcastRepository } from '../../notifications/repository/broadcast.repository';
 import { NotificationRepository } from '../../notifications/repository/notification.repository';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
@@ -75,6 +76,10 @@ describe('AdminBroadcastsService', () => {
         AdminBroadcastsService,
         { provide: BroadcastRepository, useValue: broadcastRepoMock },
         { provide: NotificationRepository, useValue: notificationRepoMock },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: EmailService, useValue: emailServiceMock },
         { provide: getModelToken(User), useValue: userModelMock },
         { provide: getModelToken(Role), useValue: roleModelMock },

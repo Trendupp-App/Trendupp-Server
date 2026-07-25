@@ -25,7 +25,6 @@ export const ADMIN_ROLES = new Set([
   'finance_admin',
   'moderator',
   'support_agent',
-  'admin',
 ]);
 
 export interface AdminAuthResponse {

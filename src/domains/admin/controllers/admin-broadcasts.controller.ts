@@ -32,7 +32,7 @@ export class AdminBroadcastsController {
   constructor(private readonly broadcastsService: AdminBroadcastsService) {}
 
   @Post()
-  @Roles('owner', 'super_admin', 'admin', 'superadmin', 'finance_admin', 'moderator')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a broadcast notification (Draft, Send Now, or Schedule)' })
   @ApiResponse({ status: 201, description: 'Broadcast created successfully' })
@@ -50,15 +50,7 @@ export class AdminBroadcastsController {
   }
 
   @Get()
-  @Roles(
-    'owner',
-    'super_admin',
-    'admin',
-    'superadmin',
-    'finance_admin',
-    'moderator',
-    'support_agent',
-  )
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @ApiOperation({ summary: 'Get list of broadcast notifications with filters and pagination' })
   @ApiResponse({ status: 200, description: 'List of broadcasts retrieved' })
   async getBroadcasts(@Query() query: QueryAdminBroadcastsDto) {
@@ -66,15 +58,7 @@ export class AdminBroadcastsController {
   }
 
   @Get(':id')
-  @Roles(
-    'owner',
-    'super_admin',
-    'admin',
-    'superadmin',
-    'finance_admin',
-    'moderator',
-    'support_agent',
-  )
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @ApiOperation({ summary: 'Get details of a specific broadcast notification by ID' })
   @ApiResponse({ status: 200, description: 'Broadcast details retrieved' })
   @ApiResponse({ status: 404, description: 'Broadcast not found' })
@@ -84,7 +68,7 @@ export class AdminBroadcastsController {
   }
 
   @Patch(':id')
-  @Roles('owner', 'super_admin', 'admin', 'superadmin', 'finance_admin', 'moderator')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @ApiOperation({ summary: 'Update a draft or scheduled broadcast notification' })
   @ApiResponse({ status: 200, description: 'Broadcast updated successfully' })
   @ApiResponse({ status: 403, description: 'Cannot modify a broadcast that has already been sent' })
@@ -98,7 +82,7 @@ export class AdminBroadcastsController {
   }
 
   @Delete(':id')
-  @Roles('owner', 'super_admin', 'admin', 'superadmin', 'finance_admin', 'moderator')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a draft or scheduled broadcast notification' })
   @ApiResponse({ status: 200, description: 'Broadcast deleted successfully' })

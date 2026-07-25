@@ -152,7 +152,16 @@ export class NotificationDispatcherService {
     entry: CatalogEntry,
     input: NotifyInput,
   ): Promise<void> {
-    const channels = this.resolveChannels(user, entry);
+    // Role fan-outs are staff work items (disputes, escrow releases, team
+    // changes). Staff can never mute notifications — there is no admin
+    // notification-settings UI — so preference gating is bypassed entirely.
+    const channels = input.recipientRole
+      ? {
+          inApp: entry.channels.includes('inApp'),
+          email: entry.channels.includes('email'),
+          push: entry.channels.includes('inApp'),
+        }
+      : this.resolveChannels(user, entry);
     if (!channels.inApp && !channels.email) {
       this.logger.debug(
         `Notification "${input.type}" fully suppressed by preferences for user ${user.id}.`,

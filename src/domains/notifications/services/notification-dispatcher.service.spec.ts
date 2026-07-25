@@ -312,6 +312,30 @@ describe('NotificationDispatcherService', () => {
       expect(emailServiceMock.send).toHaveBeenCalled();
     });
 
+    it('role fan-outs bypass all preference toggles (staff cannot mute work items)', async () => {
+      userModelMock.findAll.mockResolvedValue([
+        makeUser({
+          notificationSettings: {
+            ...defaultSettings,
+            applicationUpdates: false,
+            paymentAlerts: false,
+            emailNotifications: false,
+            pushNotifications: false,
+          },
+        }),
+      ]);
+
+      await service.dispatch({
+        type: 'dispute.raised',
+        recipientRole: 'support_agent',
+        data: { disputeId: 'd-1', campaignId: 'c-1', reason: 'late delivery' },
+      } as any);
+
+      expect(repositoryMock.create).toHaveBeenCalled();
+      expect(emailServiceMock.send).toHaveBeenCalled();
+      expect(pushServiceMock.sendToTokens).toHaveBeenCalled();
+    });
+
     it('does nothing for a fully suppressed recipient', async () => {
       userModelMock.findAll.mockResolvedValue([
         makeUser({

@@ -16,6 +16,7 @@ import { UsersService } from '../../users/services/users.service';
 import { OtpService } from '../../auth/services/otp.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { AuditLogService } from './audit-log.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { AdminInviteDto } from '../dtos/admin-invite.dto';
 import { UpdateAdminProfileDto } from '../dtos/update-admin-profile.dto';
 import { QueryAdminUsersDto } from '../dtos/query-admin-users.dto';
@@ -34,7 +35,13 @@ export class AdminUsersService {
     private readonly otpService: OtpService,
     private readonly emailService: EmailService,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Display name for staff-inbox notifications about a team member. */
+  private static adminDisplayName(user: { firstName?: string; lastName?: string; email: string }) {
+    return `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email;
+  }
 
   /** 7-day TTL used for admin invitation OTPs */
   private readonly INVITE_OTP_EXPIRES_MINUTES = 7 * 24 * 60; // 10 080 minutes
@@ -168,6 +175,16 @@ export class AdminUsersService {
       },
     });
 
+    await this.notificationsService.notify({
+      type: 'admin.team_member_invited',
+      recipientRole: ['owner', 'super_admin'],
+      actorId: callerId,
+      data: {
+        adminName: AdminUsersService.adminDisplayName(newAdmin),
+        roleName: role.displayName || role.name,
+      },
+    });
+
     return {
       message: `Admin user invited successfully. A 7-day activation link has been emailed.`,
       code: otpRecord.code,
@@ -220,7 +237,7 @@ export class AdminUsersService {
     const adminRoles = await this.roleModel.findAll({
       where: {
         name: {
-          [Op.in]: ['owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent', 'admin'],
+          [Op.in]: ['owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent'],
         },
       },
     });
@@ -390,6 +407,13 @@ export class AdminUsersService {
       details: { email: targetAdmin.email },
     });
 
+    await this.notificationsService.notify({
+      type: 'admin.team_member_suspended',
+      recipientRole: ['owner', 'super_admin'],
+      actorId: callerId,
+      data: { adminName: AdminUsersService.adminDisplayName(targetAdmin) },
+    });
+
     return { message: `Administrator ${targetAdmin.email} has been suspended.` };
   }
 
@@ -410,6 +434,13 @@ export class AdminUsersService {
       ipAddress,
       userAgent,
       details: { email: targetAdmin.email },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.team_member_reactivated',
+      recipientRole: ['owner', 'super_admin'],
+      actorId: callerId,
+      data: { adminName: AdminUsersService.adminDisplayName(targetAdmin) },
     });
 
     return { message: `Administrator ${targetAdmin.email} has been reactivated.` };
@@ -434,7 +465,15 @@ export class AdminUsersService {
     }
 
     const email = targetAdmin.email;
+    const deletedName = AdminUsersService.adminDisplayName(targetAdmin);
     await targetAdmin.destroy();
+
+    await this.notificationsService.notify({
+      type: 'admin.team_member_removed',
+      recipientRole: ['owner', 'super_admin'],
+      actorId: callerId,
+      data: { adminName: deletedName },
+    });
 
     await this.auditLogService.log({
       adminId: callerId,

@@ -136,7 +136,12 @@ call, naturally single-fire).
 | `campaign.payment_confirmed` | critical | `paymentAlerts` | brand | `WebhooksController.handleEscrowPaid` — campaign goes live | `<campaignId>:live` |
 | `campaign.completed` | medium | `applicationUpdates` | brand | `PayoutScheduler.checkAndCompleteCampaign` — all releases + submissions done | `<campaignId>:completed` |
 
-### Refunds (brand refunds of unused campaign budget)
+### Refunds (brand refunds of unused campaign budget) — ⚠️ NOT BUILT YET
+
+> The three types below were designed but never implemented — they exist in
+> neither `notification.types.ts` nor the catalog, and
+> `PayoutScheduler.processPendingRefunds` currently only logs. Kept here as
+> the spec to implement (see ADMIN_NOTIFICATIONS_PLAN.md follow-ups).
 
 | Type | Priority | Gate | Recipients | Trigger | Dedupe |
 |---|---|---|---|---|---|
