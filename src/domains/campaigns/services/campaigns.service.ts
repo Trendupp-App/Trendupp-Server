@@ -405,6 +405,17 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
+    // Load brand profile details & check bank details
+    const brand = await this.usersService.findOne(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand user profile not found');
+    }
+
+    const hasBankDetails = brand.bankId && brand.bankAccountNumber && brand.bankAccountName;
+    if (!hasBankDetails) {
+      throw new ForbiddenException('kindly add your refund details in the profile section');
+    }
+
     // Allow re-submission when payment is still pending (retry / refresh checkout URL)
     const isPaymentRetry =
       campaign.status === 'pending_payment' && campaign.paymentStatus === 'pending';
@@ -462,12 +473,6 @@ export class CampaignsService {
           paymentStatus: 'cancelled',
         });
       }
-    }
-
-    // Load brand profile details
-    const brand = await this.usersService.findOne(brandId);
-    if (!brand) {
-      throw new NotFoundException('Brand user profile not found');
     }
 
     const breakdown = await this.calculateBreakdown(campaign.totalBudget, campaign.currency);
@@ -860,6 +865,11 @@ export class CampaignsService {
       throw new ForbiddenException(
         'Your profile is incomplete. Please connect at least one social account (Instagram, TikTok, YouTube, or Twitter) before applying to campaigns.',
       );
+    }
+
+    const hasBankDetails = creator.bankId && creator.bankAccountNumber && creator.bankAccountName;
+    if (!hasBankDetails) {
+      throw new ForbiddenException('kindly add your payout details in the profile section');
     }
     // ─────────────────────────────────────────────────────────────────────────
 

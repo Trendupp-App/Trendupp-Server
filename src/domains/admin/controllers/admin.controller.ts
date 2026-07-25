@@ -38,7 +38,7 @@ export class AdminController {
 
   @Patch('campaigns/:id/approve')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Approve a pending campaign (admin / super_admin only)',
@@ -64,7 +64,7 @@ export class AdminController {
   }
 
   @Post('fees')
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
   @ApiResponse({ status: 201, description: 'Fee created successfully' })
@@ -77,7 +77,7 @@ export class AdminController {
   }
 
   @Delete('fees/:id')
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
   @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
@@ -90,7 +90,7 @@ export class AdminController {
   }
 
   @Post('news')
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a news article (admin only)' })
   @ApiResponse({ status: 201, description: 'News article created successfully' })
@@ -109,7 +109,7 @@ export class AdminController {
   }
 
   @Patch('news/:id')
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a news article (admin only)' })
   @ApiResponse({ status: 200, description: 'News article updated successfully' })
@@ -128,7 +128,7 @@ export class AdminController {
   }
 
   @Delete('news/:id')
-  @Roles('admin', 'super_admin')
+  @Roles('owner', 'admin', 'super_admin', 'superadmin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a news article (admin only)' })
   @ApiResponse({ status: 200, description: 'News article deleted successfully' })

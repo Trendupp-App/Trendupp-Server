@@ -5,6 +5,7 @@ import {
   TimeSeriesPointDto,
   CompletionDistributionItemDto,
   PaginationMetaDto,
+  BankDetailsDto,
 } from './admin-creators.dto';
 
 export { TimeSeriesPointDto };
@@ -370,6 +371,9 @@ export class AdminBrandProfileResponseDto {
 
   @ApiProperty({ type: BrandMetricsInfoDto })
   metrics: BrandMetricsInfoDto;
+
+  @ApiProperty({ type: BankDetailsDto, nullable: true })
+  bankDetails: BankDetailsDto | null;
 }
 
 // ── Brand Campaign History DTOs ───────────────────────────────────────────────

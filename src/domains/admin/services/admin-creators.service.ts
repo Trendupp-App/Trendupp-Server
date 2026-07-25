@@ -5,6 +5,7 @@ import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Nationality } from '../../users/entities/nationality.entity';
+import { Bank } from '../../users/entities/bank.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import {
   QueryWidgetTimeFilterDto,
@@ -663,6 +664,7 @@ export class AdminCreatorsService {
       include: [
         { model: Niche, as: 'niches', attributes: ['id', 'name'] },
         { model: Nationality, as: 'country', attributes: ['id', 'name'] },
+        { model: Bank, as: 'bank', attributes: ['id', 'name', 'code'] },
         {
           model: CampaignApplication,
           as: 'applications',
@@ -774,6 +776,13 @@ export class AdminCreatorsService {
         avatarUrl: creator.avatarUrl || null,
       },
       socialAccounts,
+      bankDetails: {
+        accountName: creator.bankAccountName || null,
+        accountNumber: creator.bankAccountNumber || null,
+        bankId: creator.bankId || null,
+        bankName: creator.bank?.name || null,
+        bankCode: creator.bank?.code || null,
+      },
     };
   }
 

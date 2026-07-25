@@ -136,7 +136,14 @@ export class AdminSettingsService {
     if (existing) {
       throw new BadRequestException(`Niche "${dto.name}" already exists.`);
     }
-    return this.nicheModel.create({ name: dto.name } as unknown as Niche);
+
+    // Auto-assign order as max(order) + 1 so niches self-sequence on creation
+    const maxOrderNiche = await this.nicheModel.findOne({
+      order: [['order', 'DESC']],
+    });
+    const nextOrder = maxOrderNiche ? maxOrderNiche.order + 1 : 1;
+
+    return this.nicheModel.create({ name: dto.name, order: nextOrder } as unknown as Niche);
   }
 
   async updateNiche(id: string, dto: UpdateNicheDto): Promise<Niche> {
@@ -306,10 +313,6 @@ export class AdminSettingsService {
   // ─── Change Password ───────────────────────────────────────────────────────
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ message: string }> {
-    if (dto.newPassword !== dto.confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match.');
-    }
-
     const user = await this.userModel.findByPk(userId);
     if (!user || !user.password) {
       throw new NotFoundException('User account not found.');

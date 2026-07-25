@@ -370,31 +370,68 @@ export class TimelineService {
   }
 
   /**
-   * Extends stage SLA deadline by +3 days for dispute resolution 'extend_days'.
+   * Extends Stage 3 (Creator draft submission) deadline by +3 days.
+   * Used when admin selects "Allow Content Submission" on a dispute.
    */
-  extendDays(timeline?: ApplicationTimeline, additionalDays: number = 3): ApplicationTimeline {
+  extendContentSubmission(
+    timeline?: ApplicationTimeline,
+    additionalDays: number = 3,
+  ): ApplicationTimeline {
+    return this.extendSpecificStage(timeline, 'stage3_content_creation', additionalDays);
+  }
+
+  /**
+   * Extends Stage 4 (Brand draft review) deadline by +3 days.
+   * Used when admin selects "Allow Content Review" on a dispute.
+   */
+  extendContentReview(
+    timeline?: ApplicationTimeline,
+    additionalDays: number = 3,
+  ): ApplicationTimeline {
+    return this.extendSpecificStage(timeline, 'stage4_content_review', additionalDays);
+  }
+
+  /**
+   * Extends Stage 5 (Creator revised submission) deadline by +3 days.
+   * Used when admin selects "Allow Revised Submission" on a dispute.
+   */
+  extendRevisedSubmission(
+    timeline?: ApplicationTimeline,
+    additionalDays: number = 3,
+  ): ApplicationTimeline {
+    return this.extendSpecificStage(timeline, 'stage5_revised_creation', additionalDays);
+  }
+
+  /**
+   * Extends Stage 6 (Brand revised review) deadline by +3 days.
+   * Used when admin selects "Allow Revised Review" on a dispute.
+   */
+  extendRevisedReview(
+    timeline?: ApplicationTimeline,
+    additionalDays: number = 3,
+  ): ApplicationTimeline {
+    return this.extendSpecificStage(timeline, 'stage6_revised_review', additionalDays);
+  }
+
+  /**
+   * Extends a specific named stage deadline.
+   * Sets the stage status to 'extended', bumps extendedDays, and pushes endedDate forward.
+   */
+  private extendSpecificStage(
+    timeline: ApplicationTimeline | undefined,
+    stageKey: string,
+    additionalDays: number,
+  ): ApplicationTimeline {
     const current = timeline || this.initCreatorApplicationTimeline();
+    const stage = current[stageKey];
 
-    // Find current active/in_progress or disputed stage to extend
-    const keys: (keyof ApplicationTimeline)[] = [
-      'stage3_content_creation',
-      'stage4_content_review',
-      'stage5_revised_creation',
-      'stage6_revised_review',
-    ];
-
-    for (const key of keys) {
-      const stage = current[key];
-      if (stage && (stage.status === 'in_progress' || stage.status === 'disputed')) {
-        stage.status = 'extended';
-        stage.extendedDays = (stage.extendedDays || 0) + additionalDays;
-
-        const baseDate = stage.endedDate ? new Date(stage.endedDate) : new Date();
-        stage.endedDate = new Date(
-          baseDate.getTime() + additionalDays * 24 * 60 * 60 * 1000,
-        ).toISOString();
-        break;
-      }
+    if (stage && stage.status !== 'skipped') {
+      stage.status = 'extended';
+      stage.extendedDays = (stage.extendedDays || 0) + additionalDays;
+      const baseDate = stage.endedDate ? new Date(stage.endedDate) : new Date();
+      stage.endedDate = new Date(
+        baseDate.getTime() + additionalDays * 24 * 60 * 60 * 1000,
+      ).toISOString();
     }
 
     return current;
