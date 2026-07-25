@@ -78,6 +78,14 @@ export class UsersService {
     return this.userRepository.findByInstagramOpenId(instagramOpenId);
   }
 
+  findByFacebookOpenId(facebookOpenId: string): Promise<User | null> {
+    return this.userRepository.findByFacebookOpenId(facebookOpenId);
+  }
+
+  findByAppleUserId(appleUserId: string): Promise<User | null> {
+    return this.userRepository.findByAppleUserId(appleUserId);
+  }
+
   setUserNiches(id: string, nicheIds: string[]): Promise<void> {
     return this.userRepository.setUserNiches(id, nicheIds);
   }

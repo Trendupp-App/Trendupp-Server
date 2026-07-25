@@ -48,6 +48,7 @@ const USER_FIELD_MAP: Record<SocialPlatform, { username: keyof User; followers: 
   [SocialPlatform.TIKTOK]: { username: 'tiktokUsername', followers: 'tiktokFollowers' },
   [SocialPlatform.YOUTUBE]: { username: 'youtubeUsername', followers: 'youtubeFollowers' },
   [SocialPlatform.TWITTER]: { username: 'twitterUsername', followers: 'twitterFollowers' },
+  [SocialPlatform.FACEBOOK]: { username: 'facebookUsername', followers: 'facebookFollowers' },
 };
 
 @Injectable()

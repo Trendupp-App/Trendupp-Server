@@ -16,7 +16,7 @@ import { CatalogEntry, NotifyInput } from '../notification.types';
  * (`tiktok_<openId>@trendupp.tiktok`) that would bounce and hurt SES
  * reputation — the email leg is hard-skipped for them (in-app still delivers).
  */
-const SYNTHETIC_EMAIL_PATTERN = /@trendupp\.(tiktok|instagram)$/i;
+const SYNTHETIC_EMAIL_PATTERN = /@trendupp\.(tiktok|instagram|facebook|apple)$/i;
 
 /**
  * Does the actual work of delivering one notification: recipient resolution,

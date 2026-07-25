@@ -48,6 +48,7 @@
     "firebase-admin": "^14.2.0",
     "google-auth-library": "^10.7.0",
     "joi": "^18.2.1",
+    "jose": "^6.2.4",
     "jsonwebtoken": "^9.0.3",
     "nest-winston": "^1.10.2",
     "pg": "^8.21.0",
@@ -102,6 +103,9 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
+    "moduleNameMapper": {
+      "^jose$": "<rootDir>/../test/mocks/jose.js"
+    },
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

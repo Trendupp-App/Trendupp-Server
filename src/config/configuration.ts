@@ -61,6 +61,15 @@ export default () => ({
     appId: process.env.INSTAGRAM_APP_ID,
     appSecret: process.env.INSTAGRAM_APP_SECRET,
   },
+  facebook: {
+    appId: process.env.FACEBOOK_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET,
+  },
+  apple: {
+    // Comma-separated audience whitelist for Sign in with Apple identity
+    // tokens: the iOS bundle id + the web Services ID.
+    clientIds: process.env.APPLE_CLIENT_IDS,
+  },
   firebase: {
     // Base64-encoded service-account JSON (Firebase console → Project settings
     // → Service accounts → Generate new private key, then `base64 -i key.json`).
