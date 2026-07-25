@@ -50,6 +50,17 @@ export class DeviceTokenRepository {
     });
   }
 
+  /** All registered tokens across a set of users (broadcast fan-outs). */
+  async findTokensForUsers(userIds: string[]): Promise<string[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.deviceTokenModel.findAll({
+      attributes: ['token'],
+      where: { userId: userIds },
+      raw: true,
+    });
+    return rows.map((r) => r.token);
+  }
+
   /** Prune tokens FCM reported as invalid/unregistered. */
   async removeTokens(tokens: string[]): Promise<number> {
     if (tokens.length === 0) return 0;

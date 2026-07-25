@@ -5,6 +5,8 @@ import { AdminBroadcastsService } from './admin-broadcasts.service';
 import { BroadcastRepository } from '../../notifications/repository/broadcast.repository';
 import { NotificationRepository } from '../../notifications/repository/notification.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { DeviceTokenRepository } from '../../notifications/repository/device-token.repository';
+import { PushService } from '../../../integration/push/push.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
@@ -22,6 +24,7 @@ describe('AdminBroadcastsService', () => {
     claimScheduled: jest.Mock;
   };
   let notificationRepoMock: { create: jest.Mock };
+  let pushServiceMock: { isConfigured: boolean; sendToTokens: jest.Mock };
   let emailServiceMock: { send: jest.Mock };
   let userModelMock: { findAll: jest.Mock };
   let roleModelMock: { findAll: jest.Mock };
@@ -59,6 +62,11 @@ describe('AdminBroadcastsService', () => {
       send: jest.fn().mockResolvedValue('sent'),
     };
 
+    pushServiceMock = {
+      isConfigured: true,
+      sendToTokens: jest.fn().mockResolvedValue({ sent: 2, failed: 0, invalidTokens: [] }),
+    };
+
     userModelMock = {
       findAll: jest.fn().mockResolvedValue([
         { id: 'user-1', email: 'creator@test.com', firstName: 'Creator' },
@@ -82,6 +90,14 @@ describe('AdminBroadcastsService', () => {
           provide: NotificationsService,
           useValue: { notify: jest.fn().mockResolvedValue(undefined) },
         },
+        {
+          provide: DeviceTokenRepository,
+          useValue: {
+            findTokensForUsers: jest.fn().mockResolvedValue(['fcm-1', 'fcm-2']),
+            removeTokens: jest.fn().mockResolvedValue(0),
+          },
+        },
+        { provide: PushService, useValue: pushServiceMock },
         { provide: EmailService, useValue: emailServiceMock },
         { provide: getModelToken(User), useValue: userModelMock },
         { provide: getModelToken(Role), useValue: roleModelMock },
@@ -220,6 +236,20 @@ describe('AdminBroadcastsService', () => {
       expect(userModelMock.findAll).toHaveBeenCalled();
       expect(notificationRepoMock.create).toHaveBeenCalledTimes(2);
       expect(emailServiceMock.send).toHaveBeenCalledTimes(2);
+    });
+
+    it('in_app broadcasts also push to every recipient device (in_app = in-app + push)', async () => {
+      broadcastRepoMock.findById.mockResolvedValue({
+        ...mockBroadcast,
+        channel: 'in_app',
+      });
+      await service.dispatchBroadcast('bc-1');
+
+      expect(pushServiceMock.sendToTokens).toHaveBeenCalledWith(
+        ['fcm-1', 'fcm-2'],
+        expect.objectContaining({ title: mockBroadcast.title, body: mockBroadcast.message }),
+      );
+      expect(emailServiceMock.send).not.toHaveBeenCalled();
     });
   });
 

@@ -10,6 +10,8 @@ import { Op } from 'sequelize';
 import { BroadcastRepository } from '../../notifications/repository/broadcast.repository';
 import { NotificationRepository } from '../../notifications/repository/notification.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { DeviceTokenRepository } from '../../notifications/repository/device-token.repository';
+import { PushService } from '../../../integration/push/push.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
@@ -29,6 +31,8 @@ export class AdminBroadcastsService {
     private readonly broadcastRepository: BroadcastRepository,
     private readonly notificationRepository: NotificationRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly deviceTokenRepository: DeviceTokenRepository,
+    private readonly pushService: PushService,
     private readonly emailService: EmailService,
     @InjectModel(User)
     private readonly userModel: typeof User,
@@ -197,6 +201,29 @@ export class AdminBroadcastsService {
       for (let i = 0; i < notificationsData.length; i += chunkSize) {
         const chunk = notificationsData.slice(i, i + chunkSize);
         await Promise.all(chunk.map((nData) => this.notificationRepository.create(nData)));
+      }
+
+      // Product rule: "in_app" always means in-app + push together. Push is
+      // best-effort — failures never fail the broadcast; dead tokens pruned.
+      try {
+        const tokens = await this.deviceTokenRepository.findTokensForUsers(
+          targetUsers.map((u) => u.id),
+        );
+        if (tokens.length > 0) {
+          const result = await this.pushService.sendToTokens(tokens, {
+            title: broadcast.title,
+            body: broadcast.message,
+            data: { type: 'broadcast.announcement', actionUrl: '' },
+          });
+          if (result.invalidTokens.length > 0) {
+            await this.deviceTokenRepository.removeTokens(result.invalidTokens);
+          }
+          this.logger.log(
+            `Broadcast ${broadcast.id} push: ${result.sent} sent, ${result.failed} failed.`,
+          );
+        }
+      } catch (err) {
+        this.logger.error(`Broadcast ${broadcast.id} push leg failed: ${(err as Error).message}`);
       }
     }
 

@@ -56,6 +56,7 @@ import { Payment } from '../campaigns/entities/payment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
+import { PushModule } from '../../integration/push/push.module';
 import { BullModule } from '@nestjs/bullmq';
 import {
   BroadcastSchedulerProcessor,
@@ -95,6 +96,7 @@ import {
     AdsModule,
     AuthModule,
     EmailModule,
+    PushModule,
     NotificationsModule,
   ],
   providers: [
