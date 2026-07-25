@@ -390,7 +390,7 @@ export class CampaignsController {
 
   @Get('applications/:appId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'creator', 'admin', 'finance_admin', 'superadmin')
+  @Roles('owner', 'brand', 'creator', 'admin', 'finance_admin', 'superadmin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -457,7 +457,7 @@ export class CampaignsController {
 
   @Post(':id/validate-selection')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'admin', 'superadmin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -470,7 +470,7 @@ export class CampaignsController {
 
   @Patch(':id/applications')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'admin', 'superadmin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -498,7 +498,7 @@ export class CampaignsController {
 
   @Patch(':id/applications/:appId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'admin', 'superadmin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
