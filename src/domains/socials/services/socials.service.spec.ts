@@ -196,6 +196,7 @@ describe('SocialsService', () => {
       tiktok: 1000,
       youtube: 0,
       twitter: 500,
+      facebook: 1000,
     });
     verification.verify.mockResolvedValue({
       platformUserId: 'yt-1',

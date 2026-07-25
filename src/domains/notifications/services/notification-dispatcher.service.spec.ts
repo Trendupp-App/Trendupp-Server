@@ -94,7 +94,7 @@ describe('NotificationDispatcherService', () => {
 
   describe('resolveChannels', () => {
     const entry = (overrides: Partial<CatalogEntry>): CatalogEntry => ({
-      category: 'applicationUpdates',
+      category: 'applications',
       channels: ['inApp', 'email'],
       priority: 'medium',
       title: () => 't',
@@ -193,7 +193,7 @@ describe('NotificationDispatcherService', () => {
           userId: 'user-1',
           actorId: 'brand-1',
           type: 'application.accepted',
-          category: 'applicationUpdates',
+          category: 'applications',
         }),
       );
       expect(emailServiceMock.send).toHaveBeenCalledWith(

@@ -198,7 +198,7 @@ describe('CampaignsService', () => {
         totalBudget: 3000000,
         creatorCategoryIds: ['cc1'],
         preferredPlatformIds: ['p1'],
-        timeline: '2026-07-31T23:59:59.999Z',
+        timeline: { stage1_application_window: { endedDate: '2026-07-31T23:59:59.999Z' } },
         creatorNicheId: 'n1',
       };
 
@@ -219,7 +219,7 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
-        timeline: '2026-07-31T23:59:59.999Z',
+        timeline: { stage1_application_window: { endedDate: '2026-07-31T23:59:59.999Z' } },
         creatorNicheId: 'n1',
         creatorNicheIds: ['n1'],
         currency: 'USD',
@@ -237,7 +237,7 @@ describe('CampaignsService', () => {
         totalBudget: 3000000,
         creatorCategoryIds: ['cc1'],
         preferredPlatformIds: ['p1'],
-        timeline: '2026-07-31T23:59:59.999Z',
+        timeline: { stage1_application_window: { endedDate: '2026-07-31T23:59:59.999Z' } },
         creatorNicheId: 'n1',
       };
 
@@ -266,7 +266,7 @@ describe('CampaignsService', () => {
         status: 'draft',
         currentStep: 1,
         paymentStatus: 'unpaid',
-        timeline: '2026-07-31T23:59:59.999Z',
+        timeline: { stage1_application_window: { endedDate: '2026-07-31T23:59:59.999Z' } },
         creatorNicheId: 'n1',
         creatorNicheIds: ['n1'],
         currency: 'USD',
