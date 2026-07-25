@@ -198,15 +198,24 @@ export class AdminBroadcastsService {
       }
     }
 
+    // Social-login users carry synthetic placeholder addresses
+    // (tiktok_<id>@trendupp.tiktok, ...) that bounce — skip the email leg for
+    // them, same as the notification dispatcher does.
+    const syntheticEmail = /@trendupp\.(tiktok|instagram|facebook|apple)$/i;
+
     if (broadcast.channel === 'email' || broadcast.channel === 'both') {
       for (const u of targetUsers) {
-        if (u.email) {
+        if (u.email && !syntheticEmail.test(u.email)) {
           try {
             await this.emailService.send({
               to: u.email,
               subject: broadcast.title,
-              template: 'otp',
-              data: { otp: broadcast.message, name: u.firstName || 'User' },
+              template: 'broadcast',
+              data: {
+                firstName: u.firstName,
+                title: broadcast.title,
+                message: broadcast.message,
+              },
             });
           } catch (err) {
             this.logger.error(
