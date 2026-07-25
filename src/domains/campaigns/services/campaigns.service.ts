@@ -712,7 +712,15 @@ export class CampaignsService {
           ? (roleRaw as { name: string }).name
           : ((roleRaw as string | undefined) ?? '');
 
-      const isAdmin = ['admin', 'superadmin', 'finance_admin'].includes(role);
+      const isAdmin = [
+        'owner',
+        'admin',
+        'superadmin',
+        'super_admin',
+        'finance_admin',
+        'moderator',
+        'support_agent',
+      ].includes(role.toLowerCase());
       const isBrandOwner = campaign.brandId === requestingUser.id;
 
       if (isAdmin || isBrandOwner) {
@@ -906,13 +914,24 @@ export class CampaignsService {
   async getCampaignApplications(
     campaignId: string,
     brandId: string,
+    userRole?: string,
   ): Promise<CampaignApplication[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -1281,13 +1300,24 @@ export class CampaignsService {
     brandId: string,
     decision: 'approved' | 'request_revision' | 'rejected',
     brandFeedback?: string,
+    userRole?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -1518,13 +1548,24 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     brandId: string,
+    userRole?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
