@@ -19,6 +19,7 @@ describe('AdminBroadcastsService', () => {
     update: jest.Mock;
     delete: jest.Mock;
     findPendingScheduled: jest.Mock;
+    claimScheduled: jest.Mock;
   };
   let notificationRepoMock: { create: jest.Mock };
   let emailServiceMock: { send: jest.Mock };
@@ -47,6 +48,7 @@ describe('AdminBroadcastsService', () => {
       update: jest.fn().mockResolvedValue([1, [mockBroadcast]]),
       delete: jest.fn().mockResolvedValue(1),
       findPendingScheduled: jest.fn().mockResolvedValue([]),
+      claimScheduled: jest.fn().mockResolvedValue(true),
     };
 
     notificationRepoMock = {
@@ -218,6 +220,58 @@ describe('AdminBroadcastsService', () => {
       expect(userModelMock.findAll).toHaveBeenCalled();
       expect(notificationRepoMock.create).toHaveBeenCalledTimes(2);
       expect(emailServiceMock.send).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('dispatchDueScheduled', () => {
+    const dueBroadcast = {
+      ...mockBroadcast,
+      id: 'bc-due',
+      status: 'scheduled',
+      scheduledAt: new Date(Date.now() - 60_000),
+    } as unknown as Broadcast;
+
+    it('claims and dispatches every due scheduled broadcast', async () => {
+      broadcastRepoMock.findPendingScheduled.mockResolvedValue([dueBroadcast]);
+      broadcastRepoMock.findById.mockResolvedValue({
+        ...dueBroadcast,
+        channel: 'in_app',
+      });
+
+      const dispatched = await service.dispatchDueScheduled();
+
+      expect(broadcastRepoMock.claimScheduled).toHaveBeenCalledWith('bc-due');
+      expect(dispatched).toBe(1);
+      expect(notificationRepoMock.create).toHaveBeenCalled();
+    });
+
+    it('skips a broadcast another worker (or a manual send) already claimed', async () => {
+      broadcastRepoMock.findPendingScheduled.mockResolvedValue([dueBroadcast]);
+      broadcastRepoMock.claimScheduled.mockResolvedValue(false);
+
+      const dispatched = await service.dispatchDueScheduled();
+
+      expect(dispatched).toBe(0);
+      expect(notificationRepoMock.create).not.toHaveBeenCalled();
+    });
+
+    it('marks a broadcast failed when dispatch throws, without breaking the batch', async () => {
+      broadcastRepoMock.findPendingScheduled.mockResolvedValue([dueBroadcast]);
+      userModelMock.findAll.mockRejectedValue(new Error('db down'));
+
+      const dispatched = await service.dispatchDueScheduled();
+
+      expect(dispatched).toBe(0);
+      expect(broadcastRepoMock.update).toHaveBeenCalledWith('bc-due', { status: 'failed' });
+    });
+
+    it('does nothing when no scheduled broadcast is due', async () => {
+      broadcastRepoMock.findPendingScheduled.mockResolvedValue([]);
+
+      const dispatched = await service.dispatchDueScheduled();
+
+      expect(dispatched).toBe(0);
+      expect(broadcastRepoMock.claimScheduled).not.toHaveBeenCalled();
     });
   });
 });

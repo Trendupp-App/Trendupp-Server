@@ -56,9 +56,15 @@ import { Payment } from '../campaigns/entities/payment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
+import { BullModule } from '@nestjs/bullmq';
+import {
+  BroadcastSchedulerProcessor,
+  BROADCASTS_QUEUE,
+} from './services/broadcast-scheduler.processor';
 
 @Module({
   imports: [
+    BullModule.registerQueue({ name: BROADCASTS_QUEUE }),
     SequelizeModule.forFeature([
       AuditLog,
       AdminNote,
@@ -106,6 +112,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminSettingsService,
     AdminBroadcastsService,
     AdminEscrowService,
+    BroadcastSchedulerProcessor,
   ],
   controllers: [
     AdminController,

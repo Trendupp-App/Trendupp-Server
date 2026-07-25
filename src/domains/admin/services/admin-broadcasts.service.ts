@@ -242,4 +242,35 @@ export class AdminBroadcastsService {
       dedupeKey: broadcast.id,
     });
   }
+
+  /**
+   * Dispatches every scheduled broadcast whose time has come. Invoked by the
+   * BullMQ repeatable job (BroadcastSchedulerProcessor) every minute — the
+   * queue guarantees exactly one worker per tick across the PM2 cluster, and
+   * claimScheduled() guards each broadcast against racing a manual send.
+   */
+  async dispatchDueScheduled(): Promise<number> {
+    const due = await this.broadcastRepository.findPendingScheduled();
+    let dispatched = 0;
+
+    for (const broadcast of due) {
+      const claimed = await this.broadcastRepository.claimScheduled(broadcast.id);
+      if (!claimed) continue; // sent manually (or by a concurrent tick) in the meantime
+
+      try {
+        await this.dispatchBroadcast(broadcast.id);
+        dispatched += 1;
+      } catch (err) {
+        this.logger.error(
+          `Scheduled broadcast ${broadcast.id} failed to dispatch: ${(err as Error).message}`,
+        );
+        await this.broadcastRepository.update(broadcast.id, { status: 'failed' });
+      }
+    }
+
+    if (dispatched > 0) {
+      this.logger.log(`Dispatched ${dispatched} scheduled broadcast(s).`);
+    }
+    return dispatched;
+  }
 }

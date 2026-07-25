@@ -50,6 +50,12 @@ notification pipeline.
   `/admin/disputes?focus=:id` (no detail route exists in the admin app).
 - **Broadcast email leg**: dedicated `broadcast.ejs` template (no more OTP
   template reuse) + synthetic-address skip.
+- **Scheduled broadcasts now dispatch.** A BullMQ repeatable job
+  (`BroadcastSchedulerProcessor`, `broadcasts` queue, 60s tick — cluster-safe,
+  unlike `@Cron`) sends due `status:'scheduled'` broadcasts. Each broadcast is
+  atomically claimed (`claimScheduled`: scheduled→sent only if still
+  scheduled) so a tick can never double-send or race a manual send; a dispatch
+  failure marks the broadcast `failed`.
 - docs/NOTIFICATIONS.md corrected: `refund.*` types marked NOT BUILT.
 
 ### Frontend (Trendupp-Admin)
@@ -72,7 +78,6 @@ notification pipeline.
 | Item | Notes |
 |---|---|
 | `refund.completed` / `refund.failed` / `refund.bank_details_required` | Spec'd in docs/NOTIFICATIONS.md; `processPendingRefunds` only logs today. finance_admin fan-out on failure. |
-| Scheduled broadcasts never dispatch | `status:'scheduled'` persists but no worker picks it up — needs a BullMQ repeatable job (NOT `@Cron`; PM2 cluster). |
 | Campaign-approval work item | The live flow is `pending_payment → live` (payment webhook) with no admin gate; the `approveCampaign`/`pending_approval` path looks legacy. If an approval gate returns, add `staff` work-item type then. |
 | Social-impact participant queue notification | Moderators currently discover pending participants only by visiting the page. |
 | Dispute SLA reminder | Cron-origin (needs `dedupeKey`), e.g. dispute open > 48h → super_admin. |

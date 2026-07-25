@@ -85,4 +85,18 @@ export class BroadcastRepository {
       },
     });
   }
+
+  /**
+   * Atomically claims a scheduled broadcast for dispatch by flipping it to
+   * 'sent' ONLY if it is still 'scheduled'. Returns true when this caller won
+   * the claim — guards against the scheduler tick racing a manual "send now"
+   * (or a concurrent tick) so a broadcast can never dispatch twice.
+   */
+  async claimScheduled(id: string, now: Date = new Date()): Promise<boolean> {
+    const [affected] = await this.broadcastModel.update(
+      { status: 'sent', sentAt: now },
+      { where: { id, status: 'scheduled' } },
+    );
+    return affected === 1;
+  }
 }
