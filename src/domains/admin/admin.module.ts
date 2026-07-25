@@ -46,6 +46,8 @@ import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { AdminBroadcastsService } from './services/admin-broadcasts.service';
 import { AdminBroadcastsController } from './controllers/admin-broadcasts.controller';
+import { AdminEscrowService } from './services/admin-escrow.service';
+import { AdminEscrowController } from './controllers/admin-escrow.controller';
 import { PublicSettingsController } from '../users/controllers/public-settings.controller';
 import { PaymentRelease } from '../campaigns/entities/payment-release.entity';
 import { CampaignRefund } from '../campaigns/entities/campaign-refund.entity';
@@ -102,6 +104,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminNotesService,
     AdminSettingsService,
     AdminBroadcastsService,
+    AdminEscrowService,
   ],
   controllers: [
     AdminController,
@@ -114,6 +117,7 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminSocialImpactController,
     AdminSettingsController,
     AdminBroadcastsController,
+    AdminEscrowController,
     PublicSettingsController,
   ],
   exports: [

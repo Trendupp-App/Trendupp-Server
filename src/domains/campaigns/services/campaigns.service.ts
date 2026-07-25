@@ -495,7 +495,7 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'app@trendupp.com', //brand.email,
+        email: 'trenduppfinance@gmail.com', //brand.email,
         phone: '', //brand.phoneNumber || '',
       },
       sellerDetails: {
