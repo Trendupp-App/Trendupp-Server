@@ -1,15 +1,27 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsNumber, Min } from 'class-validator';
 
+const DISPUTE_ACTIONS = [
+  'release_to_creator',
+  'refund_to_brand',
+  'split',
+  'allow_content_submission',
+  'allow_content_review',
+  'allow_revised_submission',
+  'allow_revised_review',
+] as const;
+
+export type DisputeAction = (typeof DISPUTE_ACTIONS)[number];
+
 export class ResolveDisputeDto {
   @ApiProperty({
     description: 'The action to take on the dispute or escrowed funds',
-    enum: ['release_to_creator', 'refund_to_brand', 'split', 'extend_days'],
-    example: 'extend_days',
+    enum: DISPUTE_ACTIONS,
+    example: 'allow_content_submission',
   })
-  @IsEnum(['release_to_creator', 'refund_to_brand', 'split', 'extend_days'])
+  @IsEnum(DISPUTE_ACTIONS)
   @IsNotEmpty()
-  action: 'release_to_creator' | 'refund_to_brand' | 'split' | 'extend_days';
+  action: DisputeAction;
 
   @ApiProperty({
     description: 'Arbitration notes/justification for the resolution',

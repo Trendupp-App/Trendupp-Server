@@ -361,19 +361,39 @@ export class DisputesService {
           });
         }
       }
-    } else if (dto.action === 'extend_days') {
+    } else if (
+      dto.action === 'allow_content_submission' ||
+      dto.action === 'allow_content_review' ||
+      dto.action === 'allow_revised_submission' ||
+      dto.action === 'allow_revised_review'
+    ) {
+      // "Allow" actions extend a specific stage deadline by 3 days and record it in the
+      // creator's application timeline so the audit trail shows exactly what was granted.
       const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
         dispute.campaignId,
         dispute.creatorId,
       );
+
       if (application) {
-        const extendedTimeline = this.timelineService.extendDays(application.timeline, 3);
+        let extendedTimeline = application.timeline;
+
+        if (dto.action === 'allow_content_submission') {
+          extendedTimeline = this.timelineService.extendContentSubmission(extendedTimeline, 3);
+        } else if (dto.action === 'allow_content_review') {
+          extendedTimeline = this.timelineService.extendContentReview(extendedTimeline, 3);
+        } else if (dto.action === 'allow_revised_submission') {
+          extendedTimeline = this.timelineService.extendRevisedSubmission(extendedTimeline, 3);
+        } else if (dto.action === 'allow_revised_review') {
+          extendedTimeline = this.timelineService.extendRevisedReview(extendedTimeline, 3);
+        }
+
         await application.update({ timeline: extendedTimeline });
       }
+
       if (release) {
         await release.update({
           status: 'pending',
-          errorDetails: `Dispute resolved via deadline extension (+3 days). Resolution notes: ${dto.resolutionNotes}`,
+          errorDetails: `Dispute resolved via deadline extension (${dto.action}, +3 days). Resolution notes: ${dto.resolutionNotes}`,
         });
       }
     }
