@@ -147,6 +147,23 @@ export class CreatorSummaryDto {
   pendingProfileCompletion: number;
 }
 
+export class ConnectedSocialsCountsDto {
+  @ApiProperty({ example: 1204 })
+  instagram: number;
+
+  @ApiProperty({ example: 980 })
+  tiktok: number;
+
+  @ApiProperty({ example: 421 })
+  youtube: number;
+
+  @ApiProperty({ example: 118 })
+  twitter: number;
+
+  @ApiProperty({ example: 64 })
+  facebook: number;
+}
+
 export class TimeSeriesPointDto {
   @ApiProperty({ example: 'Jun' })
   label: string;
@@ -235,6 +252,9 @@ export class TopCreatorWidgetDto {
 export class AdminCreatorSummaryResponseDto {
   @ApiProperty({ type: CreatorSummaryDto })
   summary: CreatorSummaryDto;
+
+  @ApiProperty({ type: ConnectedSocialsCountsDto })
+  connectedSocials: ConnectedSocialsCountsDto;
 
   @ApiProperty({ type: [CompletionDistributionItemDto] })
   profileCompletionDistribution: CompletionDistributionItemDto[];
