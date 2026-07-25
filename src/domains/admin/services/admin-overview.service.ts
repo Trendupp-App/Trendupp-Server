@@ -6,6 +6,7 @@ import { Role } from '../../users/entities/role.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { Dispute } from '../../disputes/entities/dispute.entity';
+import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
 import { AdminOverviewResponseDto } from '../dtos/admin-overview.dto';
 
 @Injectable()
@@ -21,6 +22,8 @@ export class AdminOverviewService {
     private readonly applicationModel: typeof CampaignApplication,
     @InjectModel(Dispute)
     private readonly disputeModel: typeof Dispute,
+    @InjectModel(PaymentRelease)
+    private readonly paymentReleaseModel: typeof PaymentRelease,
   ) {}
 
   async getOverview(): Promise<AdminOverviewResponseDto> {
@@ -45,6 +48,10 @@ export class AdminOverviewService {
       newThisWeekCount,
       allCreators,
       recentCampaignsRaw,
+      failedPayoutsCount,
+      newBrandsThisWeek,
+      newCampaignsThisWeek,
+      newDisputesThisWeek,
     ] = await Promise.all([
       // 1. Total Creators Count
       creatorRoleId
@@ -126,6 +133,18 @@ export class AdminOverviewService {
           { model: CampaignApplication, as: 'applications', attributes: ['id'] },
         ],
       }),
+
+      // 12. Failed payout releases needing attention
+      this.paymentReleaseModel.count({ where: { status: 'failed' } }),
+
+      // 13-15. Week-over-week trend counters
+      brandRoleId
+        ? this.userModel.count({
+            where: { roleId: brandRoleId, createdAt: { [Op.gte]: sevenDaysAgo } },
+          })
+        : Promise.resolve(0),
+      this.campaignModel.count({ where: { createdAt: { [Op.gte]: sevenDaysAgo } } }),
+      this.disputeModel.count({ where: { createdAt: { [Op.gte]: sevenDaysAgo } } }),
     ]);
 
     // ── Section 1 & 2: Top Metrics & Actions Required ─────────────────────
@@ -136,12 +155,16 @@ export class AdminOverviewService {
       totalBrands,
       totalCampaigns,
       openDisputes,
+      newBrandsThisWeek,
+      newCampaignsThisWeek,
+      newDisputesThisWeek,
     };
 
     const actionsRequired = {
       unresolvedDisputes: unresolvedDisputesCount,
       resolvedDisputes: resolvedDisputesCount,
       creatorsAwaitingPayment: creatorsAwaitingPaymentCount,
+      failedPayouts: failedPayoutsCount,
     };
 
     // ── Section 3: Campaign Overview Status Breakdown ───────────────────────
