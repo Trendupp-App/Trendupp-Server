@@ -19,6 +19,7 @@ export interface QueryAuditLogsInput {
   action?: string;
   adminId?: string;
   targetUserId?: string;
+  campaignId?: string;
   q?: string;
   startDate?: string;
   endDate?: string;
@@ -39,7 +40,17 @@ export class AuditLogRepository {
   }
 
   async findAll(query: QueryAuditLogsInput): Promise<PaginatedResult<AuditLog>> {
-    const { action, adminId, targetUserId, q, startDate, endDate, page = 1, limit = 20 } = query;
+    const {
+      action,
+      adminId,
+      targetUserId,
+      campaignId,
+      q,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+    } = query;
     const where: Record<string | symbol, unknown> = {};
 
     // Exact action filter wins over the free-text search when both are sent.
@@ -53,6 +64,11 @@ export class AuditLogRepository {
     }
     if (targetUserId) {
       where.targetUserId = targetUserId;
+    }
+    if (campaignId) {
+      // Actions recorded by the @Audit interceptor keep the route params in
+      // details.params — campaign mutations carry the campaign id there.
+      where['details.params.id'] = campaignId;
     }
     if (startDate || endDate) {
       const dateFilter: Record<symbol, Date> = {};

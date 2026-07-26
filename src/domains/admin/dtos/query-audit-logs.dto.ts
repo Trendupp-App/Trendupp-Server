@@ -19,6 +19,14 @@ export class QueryAuditLogsDto {
   targetUserId?: string;
 
   @ApiPropertyOptional({
+    example: 'uuid',
+    description: 'Filter to actions whose route targeted this campaign (details.params.id)',
+  })
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+
+  @ApiPropertyOptional({
     example: 'suspend',
     description: 'Free-text search across the action name',
   })
