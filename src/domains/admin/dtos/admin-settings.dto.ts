@@ -123,6 +123,20 @@ export class CreateIndustryDto {
 
 export class UpdateIndustryDto extends PartialType(CreateIndustryDto) {}
 
+export class CreateTicketCategoryDto {
+  @ApiProperty({ example: 'Payment Issues' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiPropertyOptional({ example: 'Problems with payouts, refunds or escrow' })
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+export class UpdateTicketCategoryDto extends PartialType(CreateTicketCategoryDto) {}
+
 // ─── Contact Info DTO ────────────────────────────────────────────────────────
 
 export class UpdateContactInfoDto {

@@ -42,6 +42,7 @@ import { BrandCommissionTier } from './entities/brand-commission-tier.entity';
 import { Faq } from './entities/faq.entity';
 import { NewsCategory } from './entities/news-category.entity';
 import { SystemSetting } from './entities/system-setting.entity';
+import { IssueCategory } from '../profile/entities/issue-category.entity';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { AdminBroadcastsService } from './services/admin-broadcasts.service';
@@ -87,6 +88,7 @@ import {
       Faq,
       NewsCategory,
       SystemSetting,
+      IssueCategory,
       PaymentRelease,
       CampaignRefund,
       Payment,

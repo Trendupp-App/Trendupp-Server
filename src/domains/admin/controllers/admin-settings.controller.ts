@@ -27,6 +27,8 @@ import {
   UpdateNicheDto,
   CreateIndustryDto,
   UpdateIndustryDto,
+  CreateTicketCategoryDto,
+  UpdateTicketCategoryDto,
   UpdateContactInfoDto,
   UpdateExternalLinksDto,
   ChangePasswordDto,
@@ -151,6 +153,42 @@ export class AdminSettingsController {
   @ApiOperation({ summary: 'Delete brand industry' })
   async deleteIndustry(@Param('id') id: string) {
     await this.adminSettingsService.deleteIndustry(id);
+  }
+
+  // ─── Support Ticket Categories ─────────────────────────────────────────────
+
+  @Get('ticket-categories')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all support ticket categories' })
+  async getTicketCategories() {
+    return this.adminSettingsService.getTicketCategories();
+  }
+
+  @Post('ticket-categories')
+  @Audit('TICKET_CATEGORY_CREATED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create new support ticket category' })
+  async createTicketCategory(@Body() dto: CreateTicketCategoryDto) {
+    return this.adminSettingsService.createTicketCategory(dto);
+  }
+
+  @Patch('ticket-categories/:id')
+  @Audit('TICKET_CATEGORY_UPDATED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update support ticket category' })
+  async updateTicketCategory(@Param('id') id: string, @Body() dto: UpdateTicketCategoryDto) {
+    return this.adminSettingsService.updateTicketCategory(id, dto);
+  }
+
+  @Delete('ticket-categories/:id')
+  @Audit('TICKET_CATEGORY_DELETED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete support ticket category' })
+  async deleteTicketCategory(@Param('id') id: string) {
+    await this.adminSettingsService.deleteTicketCategory(id);
   }
 
   // ─── FAQ Management ────────────────────────────────────────────────────────
