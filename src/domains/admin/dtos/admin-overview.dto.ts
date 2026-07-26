@@ -12,6 +12,15 @@ export class TopMetricsDto {
 
   @ApiProperty({ example: 4, description: 'Total open/unresolved disputes' })
   openDisputes: number;
+
+  @ApiProperty({ example: 12, description: 'Brands registered in the last 7 days' })
+  newBrandsThisWeek: number;
+
+  @ApiProperty({ example: 8, description: 'Campaigns created in the last 7 days' })
+  newCampaignsThisWeek: number;
+
+  @ApiProperty({ example: 2, description: 'Disputes raised in the last 7 days' })
+  newDisputesThisWeek: number;
 }
 
 export class ActionsRequiredDto {
@@ -23,6 +32,9 @@ export class ActionsRequiredDto {
 
   @ApiProperty({ example: 11, description: 'Number of creators awaiting payment release' })
   creatorsAwaitingPayment: number;
+
+  @ApiProperty({ example: 0, description: 'Payout releases in failed status needing attention' })
+  failedPayouts: number;
 }
 
 export class CampaignOverviewDto {

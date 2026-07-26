@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Patch,
@@ -37,8 +38,9 @@ export class AdminController {
   ) {}
 
   @Patch('campaigns/:id/approve')
+  @Audit('CAMPAIGN_APPROVED')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Approve a pending campaign (admin / super_admin only)',
@@ -64,7 +66,8 @@ export class AdminController {
   }
 
   @Post('fees')
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Audit('FEE_CREATED')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new fee configuration (admin only)' })
   @ApiResponse({ status: 201, description: 'Fee created successfully' })
@@ -77,7 +80,8 @@ export class AdminController {
   }
 
   @Delete('fees/:id')
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Audit('FEE_DELETED')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a fee configuration permanently (admin only)' })
   @ApiResponse({ status: 200, description: 'Fee configuration deleted successfully' })
@@ -90,7 +94,8 @@ export class AdminController {
   }
 
   @Post('news')
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Audit('NEWS_CREATED')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a news article (admin only)' })
   @ApiResponse({ status: 201, description: 'News article created successfully' })
@@ -109,7 +114,8 @@ export class AdminController {
   }
 
   @Patch('news/:id')
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Audit('NEWS_UPDATED')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a news article (admin only)' })
   @ApiResponse({ status: 200, description: 'News article updated successfully' })
@@ -128,7 +134,8 @@ export class AdminController {
   }
 
   @Delete('news/:id')
-  @Roles('owner', 'admin', 'super_admin', 'superadmin')
+  @Audit('NEWS_DELETED')
+  @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a news article (admin only)' })
   @ApiResponse({ status: 200, description: 'News article deleted successfully' })

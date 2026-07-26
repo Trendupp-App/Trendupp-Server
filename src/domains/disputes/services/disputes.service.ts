@@ -120,7 +120,7 @@ export class DisputesService {
     // ... and admins, who need to activate the dispute.
     await this.notificationsService.notify({
       type: 'dispute.raised',
-      recipientRole: 'admin',
+      recipientRole: 'support_agent',
       actorId: userId,
       data: notifyData,
     });

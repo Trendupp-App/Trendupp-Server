@@ -189,7 +189,7 @@ export class EmailService {
   ): Promise<void> {
     const baseUrl =
       this.configService.get<string>('ADMIN_INVITE_URL') ||
-      'https://trendupp-web.vercel.app/setup/invite';
+      'https://admin.trendupp.com/setup/invite';
     const inviteUrl = `${baseUrl}/${activationCode}?email=${encodeURIComponent(to)}`;
 
     const result = await this.send({

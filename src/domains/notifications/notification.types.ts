@@ -29,8 +29,13 @@ export type NotificationChannel = 'inApp' | 'email';
 
 export type NotificationPriority = 'critical' | 'high' | 'medium' | 'low';
 
-/** Roles that can be targeted with a role fan-out (seeded role names). */
-export type NotificationRecipientRole = 'admin' | 'super_admin' | 'finance_admin';
+/** Roles that can be targeted with a role fan-out (seeded staff role names). */
+export type NotificationRecipientRole =
+  | 'owner'
+  | 'super_admin'
+  | 'finance_admin'
+  | 'moderator'
+  | 'support_agent';
 
 /** Payload contract per notification type. */
 export interface NotificationPayloads {
@@ -155,6 +160,13 @@ export interface NotificationPayloads {
     campaignId: string;
     escrowAction: string;
   };
+
+  // ── Admin / staff inbox (delivered via role fan-outs; never suppressible) ──
+  'admin.team_member_invited': { adminName: string; roleName: string };
+  'admin.team_member_suspended': { adminName: string };
+  'admin.team_member_reactivated': { adminName: string };
+  'admin.team_member_removed': { adminName: string };
+  'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
 }
 
 export type NotificationType = keyof NotificationPayloads;
@@ -183,7 +195,7 @@ export interface NotifyInput<T extends NotificationType = NotificationType> {
   /** Explicit recipient user id(s). Provide this OR recipientRole. */
   recipientId?: string | string[];
   /** Fan out to every user holding this role (seeded role names). */
-  recipientRole?: NotificationRecipientRole;
+  recipientRole?: NotificationRecipientRole | NotificationRecipientRole[];
   /** User who triggered the event (rendered as the actor in the feed). */
   actorId?: string;
   data: NotificationPayloads[T];

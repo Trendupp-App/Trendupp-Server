@@ -13,6 +13,7 @@ import { NewsCategory } from '../entities/news-category.entity';
 import { SystemSetting } from '../entities/system-setting.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Industry } from '../../users/entities/industry.entity';
+import { IssueCategory } from '../../profile/entities/issue-category.entity';
 import { User } from '../../users/entities/user.entity';
 import {
   CreateCommissionTierDto,
@@ -26,6 +27,8 @@ import {
   UpdateNicheDto,
   CreateIndustryDto,
   UpdateIndustryDto,
+  CreateTicketCategoryDto,
+  UpdateTicketCategoryDto,
   UpdateContactInfoDto,
   UpdateExternalLinksDto,
   ChangePasswordDto,
@@ -46,6 +49,8 @@ export class AdminSettingsService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(Industry)
     private readonly industryModel: typeof Industry,
+    @InjectModel(IssueCategory)
+    private readonly issueCategoryModel: typeof IssueCategory,
     @InjectModel(User)
     private readonly userModel: typeof User,
   ) {}
@@ -184,6 +189,36 @@ export class AdminSettingsService {
     const ind = await this.industryModel.findByPk(id);
     if (!ind) throw new NotFoundException(`Industry with ID ${id} not found.`);
     await ind.destroy();
+  }
+
+  // ─── Support Ticket Categories ─────────────────────────────────────────────
+
+  async getTicketCategories(): Promise<IssueCategory[]> {
+    return this.issueCategoryModel.findAll({ order: [['name', 'ASC']] });
+  }
+
+  async createTicketCategory(dto: CreateTicketCategoryDto): Promise<IssueCategory> {
+    const existing = await this.issueCategoryModel.findOne({ where: { name: dto.name } });
+    if (existing) {
+      throw new BadRequestException(`Ticket category "${dto.name}" already exists.`);
+    }
+    return this.issueCategoryModel.create({
+      name: dto.name,
+      description: dto.description,
+    } as unknown as IssueCategory);
+  }
+
+  async updateTicketCategory(id: string, dto: UpdateTicketCategoryDto): Promise<IssueCategory> {
+    const category = await this.issueCategoryModel.findByPk(id);
+    if (!category) throw new NotFoundException(`Ticket category with ID ${id} not found.`);
+    await category.update({ name: dto.name, description: dto.description });
+    return category;
+  }
+
+  async deleteTicketCategory(id: string): Promise<void> {
+    const category = await this.issueCategoryModel.findByPk(id);
+    if (!category) throw new NotFoundException(`Ticket category with ID ${id} not found.`);
+    await category.destroy();
   }
 
   // ─── FAQs ──────────────────────────────────────────────────────────────────

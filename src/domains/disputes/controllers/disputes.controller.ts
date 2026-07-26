@@ -1,3 +1,4 @@
+import { Audit } from '../../admin/audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -72,8 +73,9 @@ export class DisputesController {
   }
 
   @Post(':id/activate')
+  @Audit('DISPUTE_ACTIVATED')
   @UseGuards(RolesGuard)
-  @Roles('owner', 'super_admin', 'moderator', 'support_agent', 'admin')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Activate a raised dispute & initialize GetStream chat (Admins only)' })
   @ApiResponse({ status: 200, description: 'Dispute activated and chat channel created' })
@@ -88,8 +90,9 @@ export class DisputesController {
   }
 
   @Post(':id/resolve')
+  @Audit('DISPUTE_RESOLVED')
   @UseGuards(RolesGuard)
-  @Roles('owner', 'super_admin', 'finance_admin', 'admin')
+  @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -108,7 +111,7 @@ export class DisputesController {
   ) {
     // Standard role gate is handled by guard, but verify role just in case
     const roleName = (user.role?.name || '').toLowerCase();
-    const canResolve = ['owner', 'super_admin', 'finance_admin', 'admin'].includes(roleName);
+    const canResolve = ['owner', 'super_admin', 'finance_admin'].includes(roleName);
     if (!canResolve) {
       throw new ForbiddenException(
         'Only Owner, Admin, Finance Admin or Super Admin can resolve disputes',

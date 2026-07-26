@@ -35,6 +35,12 @@ import { NOTIFICATIONS_QUEUE } from './notifications.constants';
     NotificationDispatcherService,
     NotificationDispatchProcessor,
   ],
-  exports: [NotificationsService, NotificationRepository, BroadcastRepository, SequelizeModule],
+  exports: [
+    NotificationsService,
+    NotificationRepository,
+    BroadcastRepository,
+    DeviceTokenRepository,
+    SequelizeModule,
+  ],
 })
 export class NotificationsModule {}

@@ -1,3 +1,4 @@
+import { Audit } from '../../admin/audit/audit.decorator';
 import {
   Controller,
   BadRequestException,
@@ -390,7 +391,7 @@ export class CampaignsController {
 
   @Get('applications/:appId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'brand', 'creator', 'admin', 'finance_admin', 'superadmin')
+  @Roles('owner', 'brand', 'creator', 'finance_admin', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -462,7 +463,7 @@ export class CampaignsController {
 
   @Post(':id/validate-selection')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -474,8 +475,9 @@ export class CampaignsController {
   }
 
   @Patch(':id/applications')
+  @Audit('CAMPAIGN_APPLICATIONS_REVIEWED')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -502,8 +504,9 @@ export class CampaignsController {
   }
 
   @Patch(':id/applications/:appId')
+  @Audit('CAMPAIGN_APPLICATION_REVIEWED')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner', 'brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

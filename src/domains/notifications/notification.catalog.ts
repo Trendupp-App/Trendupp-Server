@@ -259,6 +259,51 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: () => `Action required: execute dispute escrow decision`,
     body: (d) =>
       `Dispute ${d.disputeId} was resolved with escrow action "${d.escrowAction.replace(/_/g, ' ')}". Execute the corresponding escrow movement in the Pandascrow dashboard.`,
-    actionUrl: (d) => `/admin/disputes/${d.disputeId}`,
+    // The admin app has no dispute detail route; the list page focuses via query param.
+    actionUrl: (d) => `/admin/disputes?focus=${d.disputeId}`,
+  },
+
+  // ── Admin / staff inbox ─────────────────────────────────────────────────────
+  // Delivered via recipientRole fan-outs, which bypass all preference gating
+  // (admins have no notification-settings UI). In-app only unless noted.
+  'admin.team_member_invited': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: (d) => `Team member invited: ${d.adminName}`,
+    body: (d) => `${d.adminName} was invited to the admin team as ${d.roleName}.`,
+    actionUrl: () => `/admin/team`,
+  },
+  'admin.team_member_suspended': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: (d) => `Team member suspended: ${d.adminName}`,
+    body: (d) => `${d.adminName}'s admin access was suspended.`,
+    actionUrl: () => `/admin/team`,
+  },
+  'admin.team_member_reactivated': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'low',
+    title: (d) => `Team member reactivated: ${d.adminName}`,
+    body: (d) => `${d.adminName}'s admin access was restored.`,
+    actionUrl: () => `/admin/team`,
+  },
+  'admin.team_member_removed': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: (d) => `Team member removed: ${d.adminName}`,
+    body: (d) => `${d.adminName} was removed from the admin team.`,
+    actionUrl: () => `/admin/team`,
+  },
+  'broadcast.sent': {
+    category: 'broadcast',
+    channels: ['inApp'],
+    priority: 'low',
+    title: (d) => `Broadcast sent: "${d.title}"`,
+    body: (d) => `Your broadcast "${d.title}" was delivered to ${d.totalRecipients} user(s).`,
+    actionUrl: () => `/admin/notifications`,
   },
 };
