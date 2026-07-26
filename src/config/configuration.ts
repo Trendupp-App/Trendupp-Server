@@ -70,6 +70,11 @@ export default () => ({
     // tokens: the iOS bundle id + the web Services ID.
     clientIds: process.env.APPLE_CLIENT_IDS,
   },
+  zoho: {
+    // Shared secret from the Zoho Desk ASAP JWT authentication settings.
+    // Signs the short-lived end-user tokens minted at GET /support/asap-token.
+    asapSecret: process.env.ZOHO_ASAP_SECRET,
+  },
   firebase: {
     // Base64-encoded service-account JSON (Firebase console → Project settings
     // → Service accounts → Generate new private key, then `base64 -i key.json`).

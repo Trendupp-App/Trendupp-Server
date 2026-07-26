@@ -17,6 +17,7 @@ import { AuthModule } from './domains/auth/auth.module';
 import { CampaignsModule } from './domains/campaigns/campaigns.module';
 import { AdminModule } from './domains/admin/admin.module';
 import { ProfileModule } from './domains/profile/profile.module';
+import { SupportModule } from './domains/support/support.module';
 import { DisputesModule } from './domains/disputes/disputes.module';
 import { SocialsModule } from './domains/socials/socials.module';
 import { NotificationsModule } from './domains/notifications/notifications.module';
@@ -109,6 +110,7 @@ import { AdsModule } from './domains/ads/ads.module';
     CampaignsModule,
     AdminModule,
     ProfileModule,
+    SupportModule,
     DisputesModule,
     SocialsModule,
     NotificationsModule,
