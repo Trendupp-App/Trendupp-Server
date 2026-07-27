@@ -12,6 +12,7 @@ import { ContentSubmission } from '../entities/content-submission.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { CampaignComment } from '../entities/campaign-comment.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
 import { CampaignRefund } from '../entities/campaign-refund.entity';
 import { Dispute } from '../../disputes/entities/dispute.entity';
@@ -56,6 +57,8 @@ export class CampaignRepository {
     private readonly disputeModel: typeof Dispute,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
+    @InjectModel(CampaignComment)
+    private readonly campaignCommentModel: typeof CampaignComment,
   ) {}
 
   private readonly fullIncludes = [
@@ -822,6 +825,46 @@ export class CampaignRepository {
   ): Promise<CampaignApplication | null> {
     return this.campaignApplicationModel.findOne({
       where: { campaignId, creatorId },
+    });
+  }
+
+  async createComment(data: Partial<Attributes<CampaignComment>>): Promise<CampaignComment> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    return (this.campaignCommentModel as any).create(data) as Promise<CampaignComment>;
+  }
+
+  async findCommentByCampaignAndCreator(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<CampaignComment | null> {
+    return this.campaignCommentModel.findOne({
+      where: { campaignId, creatorId },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+        },
+        {
+          model: User,
+          as: 'brand',
+          attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+        },
+      ],
+    });
+  }
+
+  async findCommentsByCampaign(campaignId: string): Promise<CampaignComment[]> {
+    return this.campaignCommentModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+        },
+      ],
+      order: [['createdAt', 'ASC']],
     });
   }
 }

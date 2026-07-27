@@ -40,6 +40,7 @@ import { SubmitLiveDto } from '../dtos/submit-live.dto';
 import { VetDraftDto } from '../dtos/vet-draft.dto';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { CreateReviewDto } from '../dtos/create-review.dto';
+import { RespondToCommentDto } from '../dtos/respond-to-comment.dto';
 import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -713,6 +714,33 @@ export class CampaignsController {
     const reviews = await this.campaignsService.getCreatorReviews(creatorId, user);
     return {
       reviews,
+    };
+  }
+
+  @Post(':id/comments/:creatorId/respond')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('brand')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Submit a response to a creator comment/question on a campaign (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Response submitted successfully' })
+  async respondToComment(
+    @Param('id') campaignId: string,
+    @Param('creatorId') creatorId: string,
+    @Body() dto: RespondToCommentDto,
+    @CurrentUser() user: User,
+  ) {
+    const comment = await this.campaignsService.respondToComment(
+      campaignId,
+      creatorId,
+      user.id,
+      dto.response,
+    );
+    return {
+      message: 'Response submitted successfully.',
+      comment,
     };
   }
 }

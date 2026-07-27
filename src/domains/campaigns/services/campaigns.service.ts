@@ -19,6 +19,7 @@ import { PaginatedResult } from '../../../shared/utils/pagination.utils';
 import { CreateReviewDto } from '../dtos/create-review.dto';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { CampaignComment } from '../entities/campaign-comment.entity';
 import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
@@ -63,6 +64,9 @@ export class CampaignsService {
     vat: number;
     pandascrowFee: number;
     totalToPay: number;
+    commissionRate: number;
+    vatRate: number;
+    gatewayRate: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
     let trenduppRate = 0.15;
@@ -85,9 +89,12 @@ export class CampaignsService {
       }
     }
 
-    // Trendupp commission and VAT (7.5%) are deducted from the brand's total payment
+    // Trendupp commission and VAT are deducted from the brand's total payment.
+    // VAT rate is read from the fees table so it reflects any admin-configured value.
     const trenduppFee = Math.round(budget * trenduppRate);
-    const vat = Math.round(budget * 0.075);
+    const vatFeeRecord = await this.feeModel.findOne({ where: { name: 'VAT' } });
+    const vatRate = vatFeeRecord?.value ?? 0.075; // safe fallback to 7.5%
+    const vat = Math.round(budget * vatRate);
 
     // Look up Pandascrow platform fee rate from the fees table
     // NGN → Pandascrow routes via Paystack (3%), USD → via Stripe (5%)
@@ -110,7 +117,7 @@ export class CampaignsService {
       {
         name: 'VAT',
         type: 'percentage',
-        value: 0.075,
+        value: vatRate,
         amount: vat,
       },
       {
@@ -127,6 +134,9 @@ export class CampaignsService {
       vat,
       pandascrowFee,
       totalToPay: budget,
+      commissionRate: trenduppRate,
+      vatRate,
+      gatewayRate: pandascrowRate,
       breakdownItems,
     };
   }
@@ -513,13 +523,17 @@ export class CampaignsService {
     });
 
     // Create pending payment record
-    // gatewayFee = Pandascrow platform fee already computed inside calculateBreakdown
+    // Snapshot the fee rates at payment time so the breakdown remains accurate
+    // even if the admin later updates commission/VAT/gateway rates.
     // (3% for NGN/Paystack, 5% for USD/Stripe)
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
       amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
       gatewayFee: breakdown.pandascrowFee,
+      commissionRate: breakdown.commissionRate,
+      vatRate: breakdown.vatRate,
+      gatewayRate: breakdown.gatewayRate,
       paymentStatus: 'pending',
       currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
@@ -778,6 +792,25 @@ export class CampaignsService {
       campaign.setDataValue('applications' as any, []);
     }
 
+    if (requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      if (role === 'creator') {
+        const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+          id,
+          requestingUser.id,
+        );
+        campaign.setDataValue('campaignComment' as any, commentRecord);
+      } else if (role === 'brand' && campaign.brandId === requestingUser.id) {
+        const comments = await this.campaignRepository.findCommentsByCampaign(id);
+        campaign.setDataValue('campaignComments' as any, comments);
+      }
+    }
+
     return campaign;
   }
 
@@ -886,11 +919,34 @@ export class CampaignsService {
       throw new ForbiddenException(`You have already applied to this campaign`);
     }
 
+    const { comments, ...applicationData } = data;
+
+    if (comments && comments.trim()) {
+      const existingComment = await this.campaignRepository.findCommentByCampaignAndCreator(
+        campaignId,
+        creatorId,
+      );
+      if (existingComment) {
+        throw new ForbiddenException(
+          `You have already submitted a comment/question for this campaign`,
+        );
+      }
+    }
+
     const application = await this.campaignRepository.createApplication({
       campaignId,
       creatorId,
-      ...data,
+      ...applicationData,
     });
+
+    if (comments && comments.trim()) {
+      await this.campaignRepository.createComment({
+        campaignId,
+        creatorId,
+        brandId: campaign.brandId,
+        comment: comments,
+      });
+    }
 
     await this.notificationsService.notify({
       type: 'application.submitted',
@@ -905,8 +961,23 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findApplicationById(application.id);
-    if (populated && populated.campaign) {
-      await this.populateBreakdown(populated.campaign);
+    if (populated) {
+      if (populated.campaign) {
+        await this.populateBreakdown(populated.campaign);
+      }
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        populated.campaignId,
+        populated.creatorId,
+      );
+      if (typeof populated.setDataValue === 'function') {
+        populated.setDataValue('campaignComment' as any, commentRecord);
+        populated.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (populated as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (populated as any).comments;
+      }
     }
     return populated!;
   }
@@ -935,7 +1006,23 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    return this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    const applications = await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    for (const app of applications) {
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        app.campaignId,
+        app.creatorId,
+      );
+      if (typeof app.setDataValue === 'function') {
+        app.setDataValue('campaignComment' as any, commentRecord);
+        app.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (app as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (app as any).comments;
+      }
+    }
+    return applications;
   }
 
   async reviewCampaignApplication(
@@ -1166,6 +1253,19 @@ export class CampaignsService {
       if (app.campaign) {
         await this.populateBreakdown(app.campaign);
       }
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        app.campaignId,
+        app.creatorId,
+      );
+      if (typeof app.setDataValue === 'function') {
+        app.setDataValue('campaignComment' as any, commentRecord);
+        app.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (app as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (app as any).comments;
+      }
     }
     return apps;
   }
@@ -1185,28 +1285,37 @@ export class CampaignsService {
       if (application.campaign) {
         await this.populateBreakdown(application.campaign);
       }
-      return application;
-    }
-
-    if (role === 'creator') {
+    } else if (role === 'creator') {
       if (application.creatorId !== userId) {
         throw new ForbiddenException(`You do not own this application`);
       }
       if (application.campaign) {
         await this.populateBreakdown(application.campaign);
       }
-      return application;
-    }
-
-    if (role === 'brand') {
+    } else if (role === 'brand') {
       if (application.campaign?.brandId !== userId) {
         throw new ForbiddenException(`You do not own the campaign for this application`);
       }
       await this.populateBreakdown(application.campaign);
-      return application;
+    } else {
+      throw new ForbiddenException(`Unauthorized access`);
     }
 
-    throw new ForbiddenException(`Unauthorized access`);
+    const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+      application.campaignId,
+      application.creatorId,
+    );
+    if (typeof application.setDataValue === 'function') {
+      application.setDataValue('campaignComment' as any, commentRecord);
+      application.setDataValue('comments' as any, undefined);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (application as any).campaignComment = commentRecord;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      delete (application as any).comments;
+    }
+
+    return application;
   }
 
   // ─── Content Submissions Flow ─────────────────────────────────────────────
@@ -1973,6 +2082,37 @@ export class CampaignsService {
       totalEvents: activities.length,
       activities,
     };
+  }
+
+  async respondToComment(
+    campaignId: string,
+    creatorId: string,
+    brandId: string,
+    response: string,
+  ): Promise<CampaignComment> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    if (campaign.brandId !== brandId) {
+      throw new ForbiddenException('You do not own this campaign');
+    }
+
+    const comment = await this.campaignRepository.findCommentByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (!comment) {
+      throw new NotFoundException('No comment/question found from this creator for this campaign');
+    }
+
+    if (comment.response) {
+      throw new ForbiddenException("You have already responded to this creator's comment");
+    }
+
+    await comment.update({ response });
+    return comment;
   }
 }
 

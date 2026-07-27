@@ -14,6 +14,7 @@ import { CampaignApplication } from './entities/campaign-application.entity';
 import { ContentSubmission } from './entities/content-submission.entity';
 import { Fee } from './entities/fee.entity';
 import { CampaignReview } from './entities/campaign-review.entity';
+import { CampaignComment } from './entities/campaign-comment.entity';
 import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
@@ -41,6 +42,7 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
       ContentSubmission,
       Fee,
       CampaignReview,
+      CampaignComment,
       PaymentRelease,
       CampaignRefund,
       Dispute,
