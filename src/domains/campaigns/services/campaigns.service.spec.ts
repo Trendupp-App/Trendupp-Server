@@ -106,6 +106,9 @@ describe('CampaignsService', () => {
       findReleaseByCampaignAndCreator: jest.fn(),
       findSubmissionByCampaignAndCreator: jest.fn(),
       findApplicationByCampaignAndCreator: jest.fn(),
+      findCommentByCampaignAndCreator: jest.fn(),
+      createComment: jest.fn(),
+      findCommentsByCampaign: jest.fn(),
     } as unknown as jest.Mocked<CampaignRepository>;
 
     s3ServiceMock = {
@@ -157,9 +160,19 @@ describe('CampaignsService', () => {
       findAll: jest.fn().mockResolvedValue([{ id: 'cc1', name: 'Nano' }]),
     };
 
-    // Returns the Pandascrow USD fee rate (5%) by default (mockCampaign.currency = 'USD')
+    // Returns the correct fee value per name so calculateBreakdown gets
+    // accurate rates for both the VAT lookup and the gateway lookup.
     feeModelMock = {
-      findOne: jest.fn().mockResolvedValue({ value: 0.05 }),
+      findOne: jest.fn().mockImplementation(({ where }: { where: { name: string } }) => {
+        const feeMap: Record<string, number> = {
+          VAT: 0.075,
+          'Trendupp Fee': 0.15,
+          'Pandascrow Gateway Fee (NGN)': 0.03,
+          'Pandascrow Gateway Fee (USD)': 0.05,
+        };
+        const val = feeMap[where?.name];
+        return Promise.resolve(val !== undefined ? { value: val } : null);
+      }),
     };
 
     commissionTierModelMock = {
@@ -755,11 +768,14 @@ describe('CampaignsService', () => {
       const result = await service.applyToCampaign('c1', 'creator1', mockAppDto);
 
       expect(result).toEqual(mockApplication);
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { comments, ...expectedDto } = mockAppDto;
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.createApplication).toHaveBeenCalledWith({
         campaignId: 'c1',
         creatorId: 'creator1',
-        ...mockAppDto,
+        ...expectedDto,
       });
     });
 
@@ -1669,6 +1685,114 @@ describe('CampaignsService', () => {
         }),
       );
       expect(result).toBeDefined();
+    });
+  });
+
+  describe('Campaign Comments & Responses', () => {
+    it('should create a comment if comments are passed on application', async () => {
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
+      };
+      const mockApplication = { id: 'app1', contentIdea: 'some content idea', feeRequest: 100000 };
+
+      campaignRepoMock.findById.mockResolvedValue({
+        ...mockCampaign,
+        status: 'live',
+        brandId: 'brand1',
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
+      campaignRepoMock.findApplication.mockResolvedValue(null);
+      campaignRepoMock.createApplication.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApplication as any);
+      campaignRepoMock.findCommentByCampaignAndCreator.mockResolvedValue(null);
+
+      const dto = {
+        contentIdea: 'I will write a morning skincare styling tutorial video concept.',
+        primaryPlatformId: 'p1',
+        feeRequest: 150000,
+        comments: 'Any questions?',
+      };
+
+      await service.applyToCampaign('c1', 'creator1', dto);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(campaignRepoMock.createComment).toHaveBeenCalledWith({
+        campaignId: 'c1',
+        creatorId: 'creator1',
+        brandId: 'brand1',
+        comment: 'Any questions?',
+      });
+    });
+
+    it('should throw ForbiddenException if creator has already submitted a comment', async () => {
+      const mockCreator = {
+        id: 'creator1',
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+        bankId: 'b1',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
+      };
+
+      campaignRepoMock.findById.mockResolvedValue({
+        ...mockCampaign,
+        status: 'live',
+        brandId: 'brand1',
+      } as any);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
+      campaignRepoMock.findApplication.mockResolvedValue(null);
+      campaignRepoMock.findCommentByCampaignAndCreator.mockResolvedValue({ id: 'comment1' } as any);
+
+      const dto = {
+        contentIdea: 'I will write a morning skincare styling tutorial video concept.',
+        primaryPlatformId: 'p1',
+        feeRequest: 150000,
+        comments: 'Any questions?',
+      };
+
+      await expect(service.applyToCampaign('c1', 'creator1', dto)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should submit a response to creator comment successfully', async () => {
+      const mockComment = {
+        id: 'comment1',
+        comment: 'Any questions?',
+        response: null,
+        update: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      campaignRepoMock.findById.mockResolvedValue({ ...mockCampaign, brandId: 'brand1' } as any);
+      campaignRepoMock.findCommentByCampaignAndCreator.mockResolvedValue(mockComment);
+
+      const result = await service.respondToComment(
+        'c1',
+        'creator1',
+        'brand1',
+        'Here is the response!',
+      );
+
+      expect(mockComment.update).toHaveBeenCalledWith({ response: 'Here is the response!' });
+      expect(result).toEqual(mockComment);
+    });
+
+    it('should throw ForbiddenException if brand has already responded', async () => {
+      const mockComment = {
+        id: 'comment1',
+        comment: 'Any questions?',
+        response: 'Already responded!',
+      } as any;
+
+      campaignRepoMock.findById.mockResolvedValue({ ...mockCampaign, brandId: 'brand1' } as any);
+      campaignRepoMock.findCommentByCampaignAndCreator.mockResolvedValue(mockComment);
+
+      await expect(
+        service.respondToComment('c1', 'creator1', 'brand1', 'New response!'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

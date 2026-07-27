@@ -6,6 +6,8 @@ import { PaymentRelease } from '../../campaigns/entities/payment-release.entity'
 import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { User } from '../../users/entities/user.entity';
+import { Fee } from '../../campaigns/entities/fee.entity';
+import { BrandCommissionTier } from '../entities/brand-commission-tier.entity';
 import { CampaignsService } from '../../campaigns/services/campaigns.service';
 
 describe('AdminEscrowService', () => {
@@ -15,8 +17,11 @@ describe('AdminEscrowService', () => {
   let campaignRefundModelMock: { findAll: jest.Mock; findAndCountAll: jest.Mock };
   let campaignModelMock: { findAll: jest.Mock };
   let userModelMock: { findAll: jest.Mock };
+  let feeModelMock: { findOne: jest.Mock };
+  let commissionTierModelMock: { findOne: jest.Mock };
   let campaignsServiceMock: { calculateBreakdown: jest.Mock };
 
+  // Mock payment with snapshotted rate fields (new-style payment)
   const mockPaymentItem = {
     id: 'pay-1',
     totalAmount: 3500000,
@@ -24,6 +29,10 @@ describe('AdminEscrowService', () => {
     paymentStatus: 'paid',
     escrowStatus: 'funded',
     currency: 'NGN',
+    gatewayFee: 105000,
+    commissionRate: 0.15,
+    vatRate: 0.075,
+    gatewayRate: 0.03,
     createdAt: new Date('2026-06-15'),
     updatedAt: new Date('2026-06-15'),
     campaign: {
@@ -93,6 +102,24 @@ describe('AdminEscrowService', () => {
       findAll: jest.fn().mockResolvedValue([]),
     };
 
+    // Mock the fees table — returns Trendupp Fee = 0.15 for commission lookups
+    feeModelMock = {
+      findOne: jest.fn().mockImplementation(({ where }: { where: { name: string } }) => {
+        const feeMap: Record<string, number> = {
+          'Trendupp Fee': 0.15,
+          VAT: 0.075,
+          'Pandascrow Gateway Fee (NGN)': 0.03,
+          'Pandascrow Gateway Fee (USD)': 0.05,
+        };
+        const val = feeMap[where.name];
+        return Promise.resolve(val !== undefined ? { value: val } : null);
+      }),
+    };
+
+    commissionTierModelMock = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     campaignsServiceMock = {
       calculateBreakdown: jest.fn().mockResolvedValue({
         campaignBudget: 2607500,
@@ -100,6 +127,9 @@ describe('AdminEscrowService', () => {
         vat: 262500,
         pandascrowFee: 105000,
         totalToPay: 3500000,
+        commissionRate: 0.15,
+        vatRate: 0.075,
+        gatewayRate: 0.03,
         breakdownItems: [],
       }),
     };
@@ -112,6 +142,8 @@ describe('AdminEscrowService', () => {
         { provide: getModelToken(CampaignRefund), useValue: campaignRefundModelMock },
         { provide: getModelToken(Campaign), useValue: campaignModelMock },
         { provide: getModelToken(User), useValue: userModelMock },
+        { provide: getModelToken(Fee), useValue: feeModelMock },
+        { provide: getModelToken(BrandCommissionTier), useValue: commissionTierModelMock },
         { provide: CampaignsService, useValue: campaignsServiceMock },
       ],
     }).compile();
@@ -124,9 +156,10 @@ describe('AdminEscrowService', () => {
   });
 
   describe('getGlobalSummary', () => {
-    it('should compute global advertisers spend, agency commission, creator payout, and escrow balance', async () => {
+    it('should compute global advertisers spend, agency commission (from snapshotted rate), creator payout, and escrow balance', async () => {
       const result = await service.getGlobalSummary();
       expect(result.totalAdvertisersSpend).toBe(3500000);
+      // commission = 3500000 * 0.15 (snapshotted) = 525000
       expect(result.totalAgencyCommission).toBe(525000);
       expect(result.totalCreatorPayout).toBe(120000);
       expect(result.totalEscrowBalance).toBe(3500000);
@@ -147,11 +180,26 @@ describe('AdminEscrowService', () => {
   });
 
   describe('getEscrowBalances', () => {
-    it('should return current money in escrow and paginated active escrows', async () => {
+    it('should return current money in escrow and paginated active escrows with breakdown', async () => {
       const result = await service.getEscrowBalances({ page: 1, limit: 10 });
       expect(result.currentMoneyInEscrow).toBe(3500000);
       expect(result.data.length).toBe(1);
       expect(result.data[0].campaignTitle).toBe('Summer Style Collection 2025');
+
+      // Verify breakdown object is present and correct (using snapshotted rates)
+      const bd = result.data[0].breakdown;
+      expect(bd).toBeDefined();
+      // commission = 3500000 * 0.15 = 525000
+      expect(bd.commission).toBe(525000);
+      expect(bd.commissionRate).toBe(0.15);
+      // vat = 3500000 * 0.075 = 262500
+      expect(bd.vat).toBe(262500);
+      expect(bd.vatRate).toBe(0.075);
+      // gatewayFee = already stored as 105000
+      expect(bd.gatewayFee).toBe(105000);
+      expect(bd.gatewayRate).toBe(0.03);
+      // netAmount = 3500000 - 525000 - 262500 - 105000 = 2607500
+      expect(bd.netAmount).toBe(2607500);
     });
   });
 
