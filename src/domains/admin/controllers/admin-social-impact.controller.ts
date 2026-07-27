@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -77,6 +78,7 @@ export class AdminSocialImpactController {
   }
 
   @Post('social-impact')
+  @Audit('CREATE_SOCIAL_IMPACT')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

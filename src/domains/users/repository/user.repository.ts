@@ -157,6 +157,14 @@ export class UserRepository {
     return this.userModel.findOne({ where: { instagramOpenId }, include: ['role'] });
   }
 
+  findByFacebookOpenId(facebookOpenId: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { facebookOpenId }, include: ['role'] });
+  }
+
+  findByAppleUserId(appleUserId: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { appleUserId }, include: ['role'] });
+  }
+
   async setUserNiches(userId: string, nicheIds: string[]): Promise<void> {
     const user = await this.userModel.findByPk(userId);
     if (user) {

@@ -147,6 +147,23 @@ export class CreatorSummaryDto {
   pendingProfileCompletion: number;
 }
 
+export class ConnectedSocialsCountsDto {
+  @ApiProperty({ example: 1204 })
+  instagram: number;
+
+  @ApiProperty({ example: 980 })
+  tiktok: number;
+
+  @ApiProperty({ example: 421 })
+  youtube: number;
+
+  @ApiProperty({ example: 118 })
+  twitter: number;
+
+  @ApiProperty({ example: 64 })
+  facebook: number;
+}
+
 export class TimeSeriesPointDto {
   @ApiProperty({ example: 'Jun' })
   label: string;
@@ -235,6 +252,9 @@ export class TopCreatorWidgetDto {
 export class AdminCreatorSummaryResponseDto {
   @ApiProperty({ type: CreatorSummaryDto })
   summary: CreatorSummaryDto;
+
+  @ApiProperty({ type: ConnectedSocialsCountsDto })
+  connectedSocials: ConnectedSocialsCountsDto;
 
   @ApiProperty({ type: [CompletionDistributionItemDto] })
   profileCompletionDistribution: CompletionDistributionItemDto[];
@@ -423,6 +443,23 @@ export class CreatorSocialAccountDto {
   lastSynced: string;
 }
 
+export class BankDetailsDto {
+  @ApiProperty({ example: 'Alex Okafor', nullable: true })
+  accountName: string | null;
+
+  @ApiProperty({ example: '0123456789', nullable: true })
+  accountNumber: string | null;
+
+  @ApiProperty({ example: 'bank-uuid-1', nullable: true })
+  bankId: string | null;
+
+  @ApiProperty({ example: 'Zenith Bank', nullable: true })
+  bankName: string | null;
+
+  @ApiProperty({ example: '057', nullable: true })
+  bankCode: string | null;
+}
+
 export class AdminCreatorProfileResponseDto {
   @ApiProperty({ type: CreatorProfileMetricsDto })
   metrics: CreatorProfileMetricsDto;
@@ -432,6 +469,9 @@ export class AdminCreatorProfileResponseDto {
 
   @ApiProperty({ type: [CreatorSocialAccountDto] })
   socialAccounts: CreatorSocialAccountDto[];
+
+  @ApiProperty({ type: BankDetailsDto, nullable: true })
+  bankDetails: BankDetailsDto | null;
 }
 
 export class CreatorCampaignHistoryItemDto {

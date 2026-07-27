@@ -37,8 +37,12 @@ export class RolesGuard implements CanActivate {
     const userRole: string | undefined =
       typeof user.role === 'object' && user.role !== null ? user.role.name : user.role;
 
+    // The 'owner' role is the top-level platform owner and has full master access across all admin/staff routes
+    if (userRole && userRole.toLowerCase() === 'owner') {
+      return true;
+    }
+
     if (!userRole || !requiredRoles.includes(userRole)) {
-      console.error('Access denied, only brands can create campaigns');
       throw new ForbiddenException(`Access denied`);
     }
 

@@ -405,6 +405,17 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
+    // Load brand profile details & check bank details
+    const brand = await this.usersService.findOne(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand user profile not found');
+    }
+
+    const hasBankDetails = brand.bankId && brand.bankAccountNumber && brand.bankAccountName;
+    if (!hasBankDetails) {
+      throw new ForbiddenException('kindly add your refund details in the profile section');
+    }
+
     // Allow re-submission when payment is still pending (retry / refresh checkout URL)
     const isPaymentRetry =
       campaign.status === 'pending_payment' && campaign.paymentStatus === 'pending';
@@ -464,12 +475,6 @@ export class CampaignsService {
       }
     }
 
-    // Load brand profile details
-    const brand = await this.usersService.findOne(brandId);
-    if (!brand) {
-      throw new NotFoundException('Brand user profile not found');
-    }
-
     const breakdown = await this.calculateBreakdown(campaign.totalBudget, campaign.currency);
 
     // Initialize escrow on Pandascrow
@@ -490,7 +495,7 @@ export class CampaignsService {
       deliveryDate: deliveryDateStr,
       buyerDetails: {
         name: `${brand.firstName} ${brand.lastName}`,
-        email: 'app@trendupp.com', //brand.email,
+        email: 'trenduppfinance@gmail.com', //brand.email,
         phone: '', //brand.phoneNumber || '',
       },
       sellerDetails: {
@@ -585,18 +590,17 @@ export class CampaignsService {
 
     // ── 2. Pandascrow Status Check ──────────────────────────────────────────
     let isFunded = false;
+    const pandascrowLookupId = payment.escrowId || payment.transactionRef || escrowId;
 
-    if (payment.escrowId) {
+    if (pandascrowLookupId) {
       try {
-        console.log({ payment: payment.escrowId });
-        const escrowDetails = await this.pandascrowService.getEscrowDetails(payment.escrowId);
+        const escrowDetails = await this.pandascrowService.getEscrowDetails(pandascrowLookupId);
 
-        console.log({ escrowDetails });
         const st = (escrowDetails.status || '').toLowerCase();
         isFunded = st === 'funded' || st === 'paid' || st === 'completed';
       } catch (err) {
         this.logger.error(
-          `[verifyPayment] Error fetching escrow details for escrowId ${payment.escrowId}: ${err}`,
+          `[verifyPayment] Error fetching escrow details for lookupId ${pandascrowLookupId}: ${err}`,
         );
       }
     }
@@ -708,7 +712,15 @@ export class CampaignsService {
           ? (roleRaw as { name: string }).name
           : ((roleRaw as string | undefined) ?? '');
 
-      const isAdmin = ['admin', 'superadmin', 'finance_admin'].includes(role);
+      const isAdmin = [
+        'owner',
+        'admin',
+        'superadmin',
+        'super_admin',
+        'finance_admin',
+        'moderator',
+        'support_agent',
+      ].includes(role.toLowerCase());
       const isBrandOwner = campaign.brandId === requestingUser.id;
 
       if (isAdmin || isBrandOwner) {
@@ -862,6 +874,11 @@ export class CampaignsService {
         'Your profile is incomplete. Please connect at least one social account (Instagram, TikTok, YouTube, or Twitter) before applying to campaigns.',
       );
     }
+
+    const hasBankDetails = creator.bankId && creator.bankAccountNumber && creator.bankAccountName;
+    if (!hasBankDetails) {
+      throw new ForbiddenException('kindly add your payout details in the profile section');
+    }
     // ─────────────────────────────────────────────────────────────────────────
 
     const existingApp = await this.campaignRepository.findApplication(campaignId, creatorId);
@@ -897,13 +914,24 @@ export class CampaignsService {
   async getCampaignApplications(
     campaignId: string,
     brandId: string,
+    userRole?: string,
   ): Promise<CampaignApplication[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -1272,13 +1300,24 @@ export class CampaignsService {
     brandId: string,
     decision: 'approved' | 'request_revision' | 'rejected',
     brandFeedback?: string,
+    userRole?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -1509,13 +1548,24 @@ export class CampaignsService {
     campaignId: string,
     submissionId: string,
     brandId: string,
+    userRole?: string,
   ): Promise<ContentSubmission> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
@@ -1584,13 +1634,27 @@ export class CampaignsService {
     return updated!;
   }
 
-  async getSubmittedContent(campaignId: string, brandId: string): Promise<ContentSubmission[]> {
+  async getSubmittedContent(
+    campaignId: string,
+    brandId: string,
+    userRole?: string,
+  ): Promise<ContentSubmission[]> {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.brandId !== brandId) {
+    const isStaffOrOwner = [
+      'owner',
+      'admin',
+      'superadmin',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole?.toLowerCase() || '');
+
+    if (campaign.brandId !== brandId && !isStaffOrOwner) {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 

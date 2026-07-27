@@ -30,6 +30,39 @@ export class OtpService {
     return true;
   }
 
+  /**
+   * Verifies a password-reset OTP without deleting it.
+   * Marks the record as `isVerified = true` so that `resetPassword` can
+   * confirm the verification step was completed without re-submitting the code.
+   */
+  async verifyOtpForPasswordReset(email: string, code: string): Promise<boolean> {
+    const otp = await this.otpRepository.findByEmailAndCode(email, code);
+
+    if (!otp) return false;
+    if (otp.type !== 'password-reset') return false;
+
+    const now = new Date();
+    if (now > otp.otpExpiresAt) return false;
+
+    await this.otpRepository.markAsVerified(email, 'password-reset');
+
+    return true;
+  }
+
+  /** Returns true if a verified password-reset OTP exists for the email. */
+  async hasVerifiedPasswordResetOtp(email: string): Promise<boolean> {
+    const otp = await this.otpRepository.findVerifiedByEmailAndType(email, 'password-reset');
+    return !!otp;
+  }
+
+  /** Deletes the verified password-reset OTP after a successful password reset. */
+  async consumeVerifiedPasswordResetOtp(email: string): Promise<void> {
+    const otp = await this.otpRepository.findVerifiedByEmailAndType(email, 'password-reset');
+    if (otp) {
+      await this.otpRepository.deleteById(otp.id);
+    }
+  }
+
   async findPendingInviteOtp(email: string, type = 'password-reset'): Promise<Otp | null> {
     return this.otpRepository.findByEmailAndType(email, type);
   }

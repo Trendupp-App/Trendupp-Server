@@ -5,6 +5,7 @@ import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { Niche } from '../../users/entities/niche.entity';
 import { Nationality } from '../../users/entities/nationality.entity';
+import { Bank } from '../../users/entities/bank.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import {
   QueryWidgetTimeFilterDto,
@@ -88,6 +89,7 @@ export class AdminCreatorsService {
           suspendedCreators: 0,
           pendingProfileCompletion: 0,
         },
+        connectedSocials: { instagram: 0, tiktok: 0, youtube: 0, twitter: 0, facebook: 0 },
         profileCompletionDistribution: [],
       };
     }
@@ -105,6 +107,8 @@ export class AdminCreatorsService {
     let comp40 = 0;
     let comp20 = 0;
 
+    const connectedSocials = { instagram: 0, tiktok: 0, youtube: 0, twitter: 0, facebook: 0 };
+
     for (const c of creators) {
       const pct = c.onboardingPercentage;
       if (pct === 100) profileCompleted++;
@@ -114,6 +118,12 @@ export class AdminCreatorsService {
       else if (pct >= 75) comp80++;
       else if (pct >= 35) comp40++;
       else comp20++;
+
+      if (c.instagramUsername) connectedSocials.instagram++;
+      if (c.tiktokUsername) connectedSocials.tiktok++;
+      if (c.youtubeUsername) connectedSocials.youtube++;
+      if (c.twitterUsername) connectedSocials.twitter++;
+      if (c.facebookUsername) connectedSocials.facebook++;
     }
 
     return {
@@ -123,6 +133,7 @@ export class AdminCreatorsService {
         suspendedCreators,
         pendingProfileCompletion: totalCreators - profileCompleted,
       },
+      connectedSocials,
       profileCompletionDistribution: [
         { percentageLabel: '100%', count: comp100 },
         { percentageLabel: '80%', count: comp80 },
@@ -663,6 +674,7 @@ export class AdminCreatorsService {
       include: [
         { model: Niche, as: 'niches', attributes: ['id', 'name'] },
         { model: Nationality, as: 'country', attributes: ['id', 'name'] },
+        { model: Bank, as: 'bank', attributes: ['id', 'name', 'code'] },
         {
           model: CampaignApplication,
           as: 'applications',
@@ -774,6 +786,13 @@ export class AdminCreatorsService {
         avatarUrl: creator.avatarUrl || null,
       },
       socialAccounts,
+      bankDetails: {
+        accountName: creator.bankAccountName || null,
+        accountNumber: creator.bankAccountNumber || null,
+        bankId: creator.bankId || null,
+        bankName: creator.bank?.name || null,
+        bankCode: creator.bank?.code || null,
+      },
     };
   }
 

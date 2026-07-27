@@ -80,6 +80,19 @@ export class PushService {
       return { sent: 0, failed: 0, invalidTokens: [] };
     }
 
+    // FCM multicast accepts at most 500 tokens per call — chunk transparently
+    // so large fan-outs (broadcasts) work through the same method.
+    if (tokens.length > 500) {
+      const aggregate: PushSendResult = { sent: 0, failed: 0, invalidTokens: [] };
+      for (let i = 0; i < tokens.length; i += 500) {
+        const result = await this.sendToTokens(tokens.slice(i, i + 500), message);
+        aggregate.sent += result.sent;
+        aggregate.failed += result.failed;
+        aggregate.invalidTokens.push(...result.invalidTokens);
+      }
+      return aggregate;
+    }
+
     try {
       const response = await this.messaging.sendEachForMulticast({
         tokens,

@@ -94,7 +94,7 @@ describe('NotificationDispatcherService', () => {
 
   describe('resolveChannels', () => {
     const entry = (overrides: Partial<CatalogEntry>): CatalogEntry => ({
-      category: 'applicationUpdates',
+      category: 'applications',
       channels: ['inApp', 'email'],
       priority: 'medium',
       title: () => 't',
@@ -193,7 +193,7 @@ describe('NotificationDispatcherService', () => {
           userId: 'user-1',
           actorId: 'brand-1',
           type: 'application.accepted',
-          category: 'applicationUpdates',
+          category: 'applications',
         }),
       );
       expect(emailServiceMock.send).toHaveBeenCalledWith(
@@ -310,6 +310,30 @@ describe('NotificationDispatcherService', () => {
       await expect(service.dispatch(input)).resolves.toBeUndefined();
 
       expect(emailServiceMock.send).toHaveBeenCalled();
+    });
+
+    it('role fan-outs bypass all preference toggles (staff cannot mute work items)', async () => {
+      userModelMock.findAll.mockResolvedValue([
+        makeUser({
+          notificationSettings: {
+            ...defaultSettings,
+            applicationUpdates: false,
+            paymentAlerts: false,
+            emailNotifications: false,
+            pushNotifications: false,
+          },
+        }),
+      ]);
+
+      await service.dispatch({
+        type: 'dispute.raised',
+        recipientRole: 'support_agent',
+        data: { disputeId: 'd-1', campaignId: 'c-1', reason: 'late delivery' },
+      } as any);
+
+      expect(repositoryMock.create).toHaveBeenCalled();
+      expect(emailServiceMock.send).toHaveBeenCalled();
+      expect(pushServiceMock.sendToTokens).toHaveBeenCalled();
     });
 
     it('does nothing for a fully suppressed recipient', async () => {

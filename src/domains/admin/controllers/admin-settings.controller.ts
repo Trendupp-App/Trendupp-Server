@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -26,6 +27,8 @@ import {
   UpdateNicheDto,
   CreateIndustryDto,
   UpdateIndustryDto,
+  CreateTicketCategoryDto,
+  UpdateTicketCategoryDto,
   UpdateContactInfoDto,
   UpdateExternalLinksDto,
   ChangePasswordDto,
@@ -54,6 +57,7 @@ export class AdminSettingsController {
   }
 
   @Post('commissions')
+  @Audit('COMMISSION_TIER_CREATED')
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a custom commission tier for specific brands' })
@@ -62,6 +66,7 @@ export class AdminSettingsController {
   }
 
   @Patch('commissions/:id')
+  @Audit('COMMISSION_TIER_UPDATED')
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update commission tier rate, reason, or assigned brands' })
@@ -70,6 +75,7 @@ export class AdminSettingsController {
   }
 
   @Delete('commissions/:id')
+  @Audit('COMMISSION_TIER_DELETED')
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete custom commission tier' })
@@ -87,6 +93,7 @@ export class AdminSettingsController {
   }
 
   @Post('niches')
+  @Audit('NICHE_CREATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create new creator niche' })
@@ -95,6 +102,7 @@ export class AdminSettingsController {
   }
 
   @Patch('niches/:id')
+  @Audit('NICHE_UPDATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rename creator niche' })
@@ -103,6 +111,7 @@ export class AdminSettingsController {
   }
 
   @Delete('niches/:id')
+  @Audit('NICHE_DELETED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete creator niche' })
@@ -120,6 +129,7 @@ export class AdminSettingsController {
   }
 
   @Post('brand-industries')
+  @Audit('BRAND_INDUSTRY_CREATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create new brand industry' })
@@ -128,6 +138,7 @@ export class AdminSettingsController {
   }
 
   @Patch('brand-industries/:id')
+  @Audit('BRAND_INDUSTRY_UPDATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rename brand industry' })
@@ -136,11 +147,48 @@ export class AdminSettingsController {
   }
 
   @Delete('brand-industries/:id')
+  @Audit('BRAND_INDUSTRY_DELETED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete brand industry' })
   async deleteIndustry(@Param('id') id: string) {
     await this.adminSettingsService.deleteIndustry(id);
+  }
+
+  // ─── Support Ticket Categories ─────────────────────────────────────────────
+
+  @Get('ticket-categories')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all support ticket categories' })
+  async getTicketCategories() {
+    return this.adminSettingsService.getTicketCategories();
+  }
+
+  @Post('ticket-categories')
+  @Audit('TICKET_CATEGORY_CREATED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create new support ticket category' })
+  async createTicketCategory(@Body() dto: CreateTicketCategoryDto) {
+    return this.adminSettingsService.createTicketCategory(dto);
+  }
+
+  @Patch('ticket-categories/:id')
+  @Audit('TICKET_CATEGORY_UPDATED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update support ticket category' })
+  async updateTicketCategory(@Param('id') id: string, @Body() dto: UpdateTicketCategoryDto) {
+    return this.adminSettingsService.updateTicketCategory(id, dto);
+  }
+
+  @Delete('ticket-categories/:id')
+  @Audit('TICKET_CATEGORY_DELETED')
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete support ticket category' })
+  async deleteTicketCategory(@Param('id') id: string) {
+    await this.adminSettingsService.deleteTicketCategory(id);
   }
 
   // ─── FAQ Management ────────────────────────────────────────────────────────
@@ -153,6 +201,7 @@ export class AdminSettingsController {
   }
 
   @Post('faqs')
+  @Audit('FAQ_CREATED')
   @Roles('owner', 'super_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create new FAQ' })
@@ -161,6 +210,7 @@ export class AdminSettingsController {
   }
 
   @Patch('faqs/:id')
+  @Audit('FAQ_UPDATED')
   @Roles('owner', 'super_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update FAQ question, answer, category, or status' })
@@ -169,6 +219,7 @@ export class AdminSettingsController {
   }
 
   @Delete('faqs/:id')
+  @Audit('FAQ_DELETED')
   @Roles('owner', 'super_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete FAQ' })
@@ -186,6 +237,7 @@ export class AdminSettingsController {
   }
 
   @Post('news-categories')
+  @Audit('NEWS_CATEGORY_CREATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create new news category' })
@@ -194,6 +246,7 @@ export class AdminSettingsController {
   }
 
   @Patch('news-categories/:id')
+  @Audit('NEWS_CATEGORY_UPDATED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rename news category' })
@@ -202,6 +255,7 @@ export class AdminSettingsController {
   }
 
   @Delete('news-categories/:id')
+  @Audit('NEWS_CATEGORY_DELETED')
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete news category' })
@@ -219,6 +273,7 @@ export class AdminSettingsController {
   }
 
   @Put('contact-info')
+  @Audit('CONTACT_INFO_UPDATED')
   @Roles('owner', 'super_admin', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update platform business contact information' })
@@ -236,6 +291,7 @@ export class AdminSettingsController {
   }
 
   @Put('external-links')
+  @Audit('EXTERNAL_LINKS_UPDATED')
   @Roles('owner', 'super_admin', 'support_agent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update platform external social media links' })
@@ -246,6 +302,7 @@ export class AdminSettingsController {
   // ─── Change Password ───────────────────────────────────────────────────────
 
   @Post('change-password')
+  @Audit('ADMIN_PASSWORD_CHANGED')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update logged in user password' })
   async changePassword(@CurrentUser() user: User, @Body() dto: ChangePasswordDto) {

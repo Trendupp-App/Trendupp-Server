@@ -1,3 +1,4 @@
+import { Audit } from '../../admin/audit/audit.decorator';
 import {
   Controller,
   BadRequestException,
@@ -266,10 +267,26 @@ export class CampaignsController {
     @CurrentUser() user: User,
     @Query('escrowId') queryEscrowId?: string,
     @Query('escrow_id') queryEscrowIdSnake?: string,
+    @Query('transaction_ref') queryTrxRef?: string,
+    @Query('trxref') queryTrxRefShort?: string,
+    @Query('reference') queryRef?: string,
     @Body('escrowId') bodyEscrowId?: string,
     @Body('escrow_id') bodyEscrowIdSnake?: string,
+    @Body('transaction_ref') bodyTrxRef?: string,
+    @Body('trxref') bodyTrxRefShort?: string,
+    @Body('reference') bodyRef?: string,
   ) {
-    const targetEscrowId = queryEscrowId || queryEscrowIdSnake || bodyEscrowId || bodyEscrowIdSnake;
+    const targetEscrowId =
+      queryEscrowId ||
+      queryEscrowIdSnake ||
+      queryTrxRef ||
+      queryTrxRefShort ||
+      queryRef ||
+      bodyEscrowId ||
+      bodyEscrowIdSnake ||
+      bodyTrxRef ||
+      bodyTrxRefShort ||
+      bodyRef;
     const result = await this.campaignsService.verifyPayment(id, user.id, targetEscrowId);
     return result;
   }
@@ -374,7 +391,7 @@ export class CampaignsController {
 
   @Get('applications/:appId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'creator', 'admin', 'finance_admin', 'superadmin')
+  @Roles('owner', 'brand', 'creator', 'finance_admin', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -425,15 +442,20 @@ export class CampaignsController {
 
   @Get(':id/applications')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
+  @Roles('owner', 'brand', 'admin', 'superadmin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get applications submitted for a campaign (brand owner only)',
+    summary: 'Get applications submitted for a campaign',
   })
   @ApiResponse({ status: 200, description: 'Applications list retrieved' })
   async getApplications(@Param('id') campaignId: string, @CurrentUser() user: User) {
-    const applications = await this.campaignsService.getCampaignApplications(campaignId, user.id);
+    const userRole = user.role?.name ?? (user.role as unknown as string) ?? '';
+    const applications = await this.campaignsService.getCampaignApplications(
+      campaignId,
+      user.id,
+      userRole,
+    );
     return {
       applications,
     };
@@ -441,7 +463,7 @@ export class CampaignsController {
 
   @Post(':id/validate-selection')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -453,8 +475,9 @@ export class CampaignsController {
   }
 
   @Patch(':id/applications')
+  @Audit('CAMPAIGN_APPLICATIONS_REVIEWED')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -481,8 +504,9 @@ export class CampaignsController {
   }
 
   @Patch(':id/applications/:appId')
+  @Audit('CAMPAIGN_APPLICATION_REVIEWED')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand', 'admin', 'superadmin')
+  @Roles('owner', 'brand', 'super_admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -538,10 +562,10 @@ export class CampaignsController {
 
   @Patch(':id/submissions/:submissionId/vet')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
+  @Roles('owner', 'brand', 'admin', 'superadmin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Vet content draft — approve or request revision (brand owner only)' })
+  @ApiOperation({ summary: 'Vet content draft — approve or request revision' })
   @ApiResponse({ status: 200, description: 'Draft vetted successfully' })
   async vetDraft(
     @Param('id') campaignId: string,
@@ -549,12 +573,14 @@ export class CampaignsController {
     @CurrentUser() user: User,
     @Body() dto: VetDraftDto,
   ) {
+    const userRole = user.role?.name ?? (user.role as unknown as string) ?? '';
     const submission = await this.campaignsService.vetDraft(
       campaignId,
       submissionId,
       user.id,
       dto.decision,
       dto.brandFeedback,
+      userRole,
     );
     return {
       message: `Draft content has been ${dto.decision === 'approved' ? 'approved' : 'rejected and revision requested'}.`,
@@ -589,12 +615,11 @@ export class CampaignsController {
 
   @Patch(':id/submissions/:submissionId/approve-live')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
+  @Roles('owner', 'brand', 'admin', 'superadmin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Approve live post link/proof of posting and schedule creator payout (brand owner only)',
+    summary: 'Approve live post link/proof of posting and schedule creator payout',
   })
   @ApiResponse({ status: 200, description: 'Live post approved and payout scheduled successfully' })
   async approveLivePost(
@@ -602,10 +627,12 @@ export class CampaignsController {
     @Param('submissionId') submissionId: string,
     @CurrentUser() user: User,
   ) {
+    const userRole = user.role?.name ?? (user.role as unknown as string) ?? '';
     const submission = await this.campaignsService.approveLivePost(
       campaignId,
       submissionId,
       user.id,
+      userRole,
     );
     return {
       message: 'Live proof of posting approved successfully. Creator payout scheduled in 30 days.',
@@ -615,13 +642,18 @@ export class CampaignsController {
 
   @Get(':id/submissions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('brand')
+  @Roles('owner', 'brand', 'admin', 'superadmin', 'finance_admin', 'moderator', 'support_agent')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get deliverables/submissions for a campaign (brand owner only)' })
+  @ApiOperation({ summary: 'Get deliverables/submissions for a campaign' })
   @ApiResponse({ status: 200, description: 'Deliverables retrieved successfully' })
   async getSubmissions(@Param('id') campaignId: string, @CurrentUser() user: User) {
-    const submissions = await this.campaignsService.getSubmittedContent(campaignId, user.id);
+    const userRole = user.role?.name ?? (user.role as unknown as string) ?? '';
+    const submissions = await this.campaignsService.getSubmittedContent(
+      campaignId,
+      user.id,
+      userRole,
+    );
     return {
       submissions,
     };

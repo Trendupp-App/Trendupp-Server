@@ -5,6 +5,7 @@ import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { Industry } from '../../users/entities/industry.entity';
 import { Nationality } from '../../users/entities/nationality.entity';
+import { Bank } from '../../users/entities/bank.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import {
@@ -455,6 +456,7 @@ export class AdminBrandsService {
       include: [
         { model: Industry, as: 'industries', attributes: ['name'] },
         { model: Nationality, as: 'country', attributes: ['name'] },
+        { model: Bank, as: 'bank', attributes: ['id', 'name', 'code'] },
         {
           model: Campaign,
           as: 'campaigns',
@@ -538,6 +540,13 @@ export class AdminBrandsService {
         totalSpend,
         activeCampaigns,
         avgCreatorRating: 4.7,
+      },
+      bankDetails: {
+        accountName: advertiser.bankAccountName || null,
+        accountNumber: advertiser.bankAccountNumber || null,
+        bankId: advertiser.bankId || null,
+        bankName: advertiser.bank?.name || null,
+        bankCode: advertiser.bank?.code || null,
       },
     };
   }

@@ -4,6 +4,7 @@ import { Dispute } from '../entities/dispute.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
 import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity';
+import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { StreamService } from '../../../integration/stream/stream.service';
 import { DisputeRepository } from '../repository/dispute.repository';
 import { CampaignRepository } from '../../campaigns/repository/campaign.repository';
@@ -402,6 +403,104 @@ describe('DisputesService', () => {
         releaseDate: originalReleaseDate,
       });
     });
+
+    it.each([
+      ['allow_content_submission', 'stage3_content_creation'],
+      ['allow_content_review', 'stage4_content_review'],
+      ['allow_revised_submission', 'stage5_revised_creation'],
+      ['allow_revised_review', 'stage6_revised_review'],
+    ] as const)(
+      'should extend %s stage on the creator timeline when action is %s',
+      async (action, expectedStageKey) => {
+        const dispute = {
+          id: 'disp1',
+          campaignId: 'camp1',
+          creatorId: 'creator1',
+          brandId: 'brand1',
+          status: 'under_review',
+          streamChannelId: 'dispute_disp1',
+          save: jest.fn().mockResolvedValue(undefined),
+        } as unknown as Dispute;
+
+        const now = new Date();
+        const endDate = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString();
+
+        const mockApplication = {
+          id: 'app1',
+          timeline: {
+            stage3_content_creation: {
+              goal: 'Content creation & submission (Draft)',
+              status: 'in_progress',
+              startedDate: now.toISOString(),
+              endedDate: endDate,
+              intendedFor: '3–5 days',
+              extendedDays: 0,
+            },
+            stage4_content_review: {
+              goal: 'Content review (Draft)',
+              status: 'pending',
+              startedDate: null,
+              endedDate: null,
+              intendedFor: '48 hours',
+              extendedDays: 0,
+            },
+            stage5_revised_creation: {
+              goal: 'Revised content creation & submission',
+              status: 'pending',
+              startedDate: null,
+              endedDate: null,
+              intendedFor: '2–3 days',
+              extendedDays: 0,
+            },
+            stage6_revised_review: {
+              goal: 'Revised content review',
+              status: 'pending',
+              startedDate: null,
+              endedDate: null,
+              intendedFor: '48 hours',
+              extendedDays: 0,
+            },
+          },
+          update: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const mockRelease = {
+          id: 'rel1',
+          amount: 50000,
+          releaseDate: now,
+          update: jest.fn().mockResolvedValue(undefined),
+        } as unknown as PaymentRelease;
+
+        disputeRepoMock.findById.mockResolvedValue(dispute);
+        streamServiceMock.freezeChannel.mockResolvedValue(undefined);
+        campaignRepoMock.findReleaseByCampaignAndCreator.mockResolvedValue(mockRelease);
+        campaignRepoMock.findApplicationByCampaignAndCreator.mockResolvedValue(
+          mockApplication as unknown as CampaignApplication,
+        );
+
+        await service.resolveDispute('disp1', 'admin1', {
+          action,
+          resolutionNotes: `Granting extra time: ${action}`,
+        });
+
+        expect(mockApplication.update).toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const updatedTimeline = mockApplication.update.mock.calls[0][0].timeline as Record<
+          string,
+          { status: string; extendedDays: number }
+        >;
+        expect(updatedTimeline[expectedStageKey].status).toBe('extended');
+        expect(updatedTimeline[expectedStageKey].extendedDays).toBe(3);
+
+        // Release error details should mention the specific action
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const releaseUpdateArg = (mockRelease.update as jest.Mock).mock.calls[0][0] as {
+          errorDetails: string;
+        };
+        expect(releaseUpdateArg.errorDetails).toContain(action);
+      },
+    );
   });
 
   describe('getDispute', () => {

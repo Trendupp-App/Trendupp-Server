@@ -13,6 +13,27 @@ export class QueryAuditLogsDto {
   @IsString()
   adminId?: string;
 
+  @ApiPropertyOptional({ example: 'uuid', description: 'Filter by target user ID' })
+  @IsOptional()
+  @IsString()
+  targetUserId?: string;
+
+  @ApiPropertyOptional({
+    example: 'uuid',
+    description: 'Filter to actions whose route targeted this campaign (details.params.id)',
+  })
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+
+  @ApiPropertyOptional({
+    example: 'suspend',
+    description: 'Free-text search across the action name',
+  })
+  @IsOptional()
+  @IsString()
+  q?: string;
+
   @ApiPropertyOptional({ example: '2026-07-01', description: 'Start date ISO string' })
   @IsOptional()
   @IsString()

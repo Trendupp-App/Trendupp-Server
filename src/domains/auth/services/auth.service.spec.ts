@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from '../../../integration/social-apis/google-auth.service';
 import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.service';
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
+import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
+import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
 import {
   UnauthorizedException,
   ConflictException,
@@ -33,6 +35,9 @@ describe('AuthService', () => {
     otpServiceMock = {
       generateOtp: jest.fn(),
       verifyOtp: jest.fn(),
+      verifyOtpForPasswordReset: jest.fn(),
+      hasVerifiedPasswordResetOtp: jest.fn(),
+      consumeVerifiedPasswordResetOtp: jest.fn(),
     } as unknown as jest.Mocked<OtpService>;
 
     emailServiceMock = {
@@ -75,6 +80,15 @@ describe('AuthService', () => {
       getUserProfile: jest.fn(),
     } as unknown as jest.Mocked<InstagramAuthService>;
 
+    const facebookAuthServiceMock = {
+      exchangeCodeForToken: jest.fn(),
+      getUserProfile: jest.fn(),
+    } as unknown as jest.Mocked<FacebookAuthService>;
+
+    const appleAuthServiceMock = {
+      verifyIdentityToken: jest.fn(),
+    } as unknown as jest.Mocked<AppleAuthService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -85,6 +99,8 @@ describe('AuthService', () => {
         { provide: GoogleAuthService, useValue: googleAuthServiceMock },
         { provide: TiktokAuthService, useValue: tiktokAuthServiceMock },
         { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
+        { provide: FacebookAuthService, useValue: facebookAuthServiceMock },
+        { provide: AppleAuthService, useValue: appleAuthServiceMock },
       ],
     }).compile();
 
@@ -372,6 +388,8 @@ describe('AuthService', () => {
   describe('verifyOtp', () => {
     it('should mark email verified and return access token', async () => {
       const dto = { email: 'test@example.com', code: '123456' };
+      // Not a password-reset OTP — falls through to regular verifyOtp
+      otpServiceMock.verifyOtpForPasswordReset.mockResolvedValue(false);
       otpServiceMock.verifyOtp.mockResolvedValue(true);
       usersServiceMock.findByEmail.mockResolvedValue({
         id: 'u1',
@@ -387,6 +405,18 @@ describe('AuthService', () => {
 
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', { isEmailVerified: true });
       expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should return success message for password-reset OTP without a token', async () => {
+      const dto = { email: 'test@example.com', code: '999999' };
+      otpServiceMock.verifyOtpForPasswordReset.mockResolvedValue(true);
+
+      const result = await service.verifyOtp(dto);
+
+      expect(result).toEqual({
+        message: 'OTP verified successfully. You may now reset your password.',
+      });
+      expect(otpServiceMock.verifyOtp).not.toHaveBeenCalled();
     });
   });
 
@@ -420,37 +450,40 @@ describe('AuthService', () => {
       usersServiceMock.findByEmail.mockResolvedValue(null);
 
       await expect(
-        service.resetPassword({ email: 'unknown@example.com', code: '123456', newPassword: 'new' }),
+        service.resetPassword({ email: 'unknown@example.com', newPassword: 'NewP@ss123' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw UnauthorizedException if OTP code check fails', async () => {
+    it('should throw UnauthorizedException if no verified password-reset OTP exists', async () => {
       usersServiceMock.findByEmail.mockResolvedValue({
         id: 'u1',
         email: 'test@example.com',
       } as any);
-      otpServiceMock.verifyOtp.mockResolvedValue(false);
+      otpServiceMock.hasVerifiedPasswordResetOtp.mockResolvedValue(false);
 
       await expect(
-        service.resetPassword({ email: 'test@example.com', code: 'wrong', newPassword: 'new' }),
+        service.resetPassword({ email: 'test@example.com', newPassword: 'NewP@ss123' }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should update password on successful OTP match', async () => {
+    it('should update password when a verified password-reset OTP exists', async () => {
       usersServiceMock.findByEmail.mockResolvedValue({
         id: 'u1',
         email: 'test@example.com',
       } as any);
-      otpServiceMock.verifyOtp.mockResolvedValue(true);
+      otpServiceMock.hasVerifiedPasswordResetOtp.mockResolvedValue(true);
+      otpServiceMock.consumeVerifiedPasswordResetOtp.mockResolvedValue(undefined);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedNewPassword');
 
       const result = await service.resetPassword({
         email: 'test@example.com',
-        code: '123456',
-        newPassword: 'newPassword123',
+        newPassword: 'NewP@ss123',
       });
 
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', { password: 'hashedNewPassword' });
+      expect(otpServiceMock.consumeVerifiedPasswordResetOtp).toHaveBeenCalledWith(
+        'test@example.com',
+      );
       expect(result.message).toContain('successfully');
     });
   });

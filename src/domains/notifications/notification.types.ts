@@ -8,27 +8,34 @@
  */
 
 /**
- * Preference category a notification is gated on.
- * All values except 'security' are keys of users.notification_settings JSONB.
- * 'security' notifications bypass every user toggle (password/bank changes,
- * dispute lifecycle, money-movement failures) — a user must not be able to
- * opt out of "your bank account was changed".
+ * Display/filter category of a notification — the product taxonomy shown as
+ * tabs in the clients (see GET /notifications/categories). Preference gating
+ * maps each category to a users.notification_settings key separately via
+ * CATEGORY_SETTINGS_KEY in notifications.constants.ts; 'security' and
+ * 'chatDispute' bypass the category toggles entirely (a user must not be able
+ * to opt out of "your account was suspended" or dispute proceedings).
  */
 export type NotificationCategory =
-  | 'newCampaigns'
-  | 'applicationUpdates'
-  | 'paymentAlerts'
-  | 'brandMessages'
-  | 'weeklySummary'
-  | 'marketingOffers'
-  | 'security';
+  | 'campaigns'
+  | 'applications'
+  | 'payments'
+  | 'chatDispute'
+  | 'account'
+  | 'security'
+  | 'opportunities'
+  | 'broadcast';
 
 export type NotificationChannel = 'inApp' | 'email';
 
 export type NotificationPriority = 'critical' | 'high' | 'medium' | 'low';
 
-/** Roles that can be targeted with a role fan-out (seeded role names). */
-export type NotificationRecipientRole = 'admin' | 'super_admin' | 'finance_admin';
+/** Roles that can be targeted with a role fan-out (seeded staff role names). */
+export type NotificationRecipientRole =
+  | 'owner'
+  | 'super_admin'
+  | 'finance_admin'
+  | 'moderator'
+  | 'support_agent';
 
 /** Payload contract per notification type. */
 export interface NotificationPayloads {
@@ -153,6 +160,13 @@ export interface NotificationPayloads {
     campaignId: string;
     escrowAction: string;
   };
+
+  // ── Admin / staff inbox (delivered via role fan-outs; never suppressible) ──
+  'admin.team_member_invited': { adminName: string; roleName: string };
+  'admin.team_member_suspended': { adminName: string };
+  'admin.team_member_reactivated': { adminName: string };
+  'admin.team_member_removed': { adminName: string };
+  'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
 }
 
 export type NotificationType = keyof NotificationPayloads;
@@ -181,7 +195,7 @@ export interface NotifyInput<T extends NotificationType = NotificationType> {
   /** Explicit recipient user id(s). Provide this OR recipientRole. */
   recipientId?: string | string[];
   /** Fan out to every user holding this role (seeded role names). */
-  recipientRole?: NotificationRecipientRole;
+  recipientRole?: NotificationRecipientRole | NotificationRecipientRole[];
   /** User who triggered the event (rendered as the actor in the feed). */
   actorId?: string;
   data: NotificationPayloads[T];

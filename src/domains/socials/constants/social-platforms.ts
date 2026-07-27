@@ -11,6 +11,7 @@ export enum SocialPlatform {
   TIKTOK = 'tiktok',
   YOUTUBE = 'youtube',
   TWITTER = 'twitter',
+  FACEBOOK = 'facebook',
 }
 
 /** Stable ordering used when returning the full set of platform cards. */
@@ -19,6 +20,7 @@ export const SOCIAL_PLATFORMS: SocialPlatform[] = [
   SocialPlatform.TIKTOK,
   SocialPlatform.YOUTUBE,
   SocialPlatform.TWITTER,
+  SocialPlatform.FACEBOOK,
 ];
 
 /** Human-friendly labels (used in API messages). */
@@ -27,6 +29,7 @@ export const PLATFORM_LABELS: Record<SocialPlatform, string> = {
   [SocialPlatform.TIKTOK]: 'TikTok',
   [SocialPlatform.YOUTUBE]: 'YouTube',
   [SocialPlatform.TWITTER]: 'X / Twitter',
+  [SocialPlatform.FACEBOOK]: 'Facebook',
 };
 
 /**
@@ -40,6 +43,8 @@ export const MIN_FOLLOWERS: Record<SocialPlatform, number> = {
   [SocialPlatform.TIKTOK]: 1000,
   [SocialPlatform.YOUTUBE]: 500,
   [SocialPlatform.TWITTER]: 500,
+  // Follower count comes from the creator's Facebook Page (profiles expose none).
+  [SocialPlatform.FACEBOOK]: 1000,
 };
 
 /** Creator tier labels (kept identical to the legacy onboarding strings). */

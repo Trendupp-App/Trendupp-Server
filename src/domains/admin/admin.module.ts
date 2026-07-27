@@ -42,8 +42,14 @@ import { BrandCommissionTier } from './entities/brand-commission-tier.entity';
 import { Faq } from './entities/faq.entity';
 import { NewsCategory } from './entities/news-category.entity';
 import { SystemSetting } from './entities/system-setting.entity';
+import { IssueCategory } from '../profile/entities/issue-category.entity';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
+import { AdminBroadcastsService } from './services/admin-broadcasts.service';
+import { AdminBroadcastsController } from './controllers/admin-broadcasts.controller';
+import { AdminEscrowService } from './services/admin-escrow.service';
+import { AdminEscrowController } from './controllers/admin-escrow.controller';
+import { AdminNotificationsController } from './controllers/admin-notifications.controller';
 import { PublicSettingsController } from '../users/controllers/public-settings.controller';
 import { PaymentRelease } from '../campaigns/entities/payment-release.entity';
 import { CampaignRefund } from '../campaigns/entities/campaign-refund.entity';
@@ -51,9 +57,18 @@ import { Payment } from '../campaigns/entities/payment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
+import { PushModule } from '../../integration/push/push.module';
+import { BullModule } from '@nestjs/bullmq';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './audit/audit-log.interceptor';
+import {
+  BroadcastSchedulerProcessor,
+  BROADCASTS_QUEUE,
+} from './services/broadcast-scheduler.processor';
 
 @Module({
   imports: [
+    BullModule.registerQueue({ name: BROADCASTS_QUEUE }),
     SequelizeModule.forFeature([
       AuditLog,
       AdminNote,
@@ -73,6 +88,7 @@ import { EmailModule } from '../../integration/email/email.module';
       Faq,
       NewsCategory,
       SystemSetting,
+      IssueCategory,
       PaymentRelease,
       CampaignRefund,
       Payment,
@@ -84,12 +100,16 @@ import { EmailModule } from '../../integration/email/email.module';
     AdsModule,
     AuthModule,
     EmailModule,
+    PushModule,
     NotificationsModule,
   ],
   providers: [
     RolesSeederService,
     AuditLogRepository,
     AuditLogService,
+    // Global: no-ops on routes without @Audit(...). Lives here so it can
+    // inject AuditLogService.
+    { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
     AdminAuthService,
     AdminUsersService,
     AdminOverviewService,
@@ -99,6 +119,9 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminSocialImpactService,
     AdminNotesService,
     AdminSettingsService,
+    AdminBroadcastsService,
+    AdminEscrowService,
+    BroadcastSchedulerProcessor,
   ],
   controllers: [
     AdminController,
@@ -110,6 +133,9 @@ import { EmailModule } from '../../integration/email/email.module';
     AdminCampaignsController,
     AdminSocialImpactController,
     AdminSettingsController,
+    AdminBroadcastsController,
+    AdminEscrowController,
+    AdminNotificationsController,
     PublicSettingsController,
   ],
   exports: [

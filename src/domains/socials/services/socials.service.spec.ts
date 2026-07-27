@@ -54,6 +54,7 @@ describe('SocialsService', () => {
         tiktok: 1000,
         youtube: 500,
         twitter: 500,
+        facebook: 1000,
       }),
     } as unknown as jest.Mocked<SocialPlatformSettingRepository>;
 
@@ -91,7 +92,7 @@ describe('SocialsService', () => {
 
     const result = await service.list(userId);
 
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
     const ig = result.find((c) => c.platform === SocialPlatform.INSTAGRAM)!;
     expect(ig.connected).toBe(true);
     expect(ig.username).toBe('jane');
@@ -195,6 +196,7 @@ describe('SocialsService', () => {
       tiktok: 1000,
       youtube: 0,
       twitter: 500,
+      facebook: 1000,
     });
     verification.verify.mockResolvedValue({
       platformUserId: 'yt-1',
@@ -212,7 +214,7 @@ describe('SocialsService', () => {
 
   it('connect rejects an unsupported platform before any OAuth call', async () => {
     await expect(
-      service.connect(userId, 'facebook', { code: 'c', redirectUri: 'r' }),
+      service.connect(userId, 'linkedin', { code: 'c', redirectUri: 'r' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(verification.verify).not.toHaveBeenCalled();
   });

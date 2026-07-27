@@ -1,3 +1,4 @@
+import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
   Get,
@@ -84,6 +85,7 @@ export class AdminUsersController {
   }
 
   @Patch('users/:id')
+  @Audit('ADMIN_PROFILE_UPDATED', { targetUserParam: 'id' })
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update sub-admin profile or role' })
@@ -140,10 +142,26 @@ export class AdminUsersController {
   @Roles('owner', 'super_admin', 'finance_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'coming soon!!!🔥🔥🔥 View immutable system access & action audit logs',
+    summary: '[Admin] List the immutable action audit trail (paginated, newest first)',
+    description:
+      'Every privileged admin action (team changes, campaign mutations, settings edits, ...) ' +
+      'with the acting admin, optional target user, IP, user agent and a details payload. ' +
+      'Filter by action (exact) or q (substring), adminId, targetUserId, and a date range.',
   })
   @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully' })
   async getAuditLogs(@Query() query: QueryAuditLogsDto) {
     return this.auditLogService.findAll(query);
+  }
+
+  @Get('audit-logs/actions')
+  @Roles('owner', 'super_admin', 'finance_admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '[Admin] List distinct audit-log action names (filter dropdown source)',
+  })
+  @ApiResponse({ status: 200, description: 'Distinct action names, alphabetical' })
+  async getAuditLogActions() {
+    const actions = await this.auditLogService.listActions();
+    return { actions };
   }
 }
