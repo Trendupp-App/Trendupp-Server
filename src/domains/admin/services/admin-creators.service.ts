@@ -461,10 +461,13 @@ export class AdminCreatorsService {
       ];
     }
 
-    if (tab === 'suspended') {
+    if (tab === 'onboarded') {
+      where.onboardingPercentage = { [Op.gte]: 90 };
+      where.isActive = true;
+    } else if (tab === 'suspended') {
       where.isActive = false;
     } else if (tab === 'pending') {
-      where.verificationStatus = 'pending';
+      where[Op.or] = [{ verificationStatus: 'pending' }, { onboardingPercentage: { [Op.lt]: 90 } }];
     }
 
     if (tier) {
@@ -477,10 +480,12 @@ export class AdminCreatorsService {
 
     if (status === 'active') {
       where.isActive = true;
+      where.verificationStatus = { [Op.ne]: 'pending' };
+      where.onboardingPercentage = { [Op.gte]: 90 };
     } else if (status === 'suspended') {
       where.isActive = false;
     } else if (status === 'pending') {
-      where.verificationStatus = 'pending';
+      where[Op.or] = [{ verificationStatus: 'pending' }, { onboardingPercentage: { [Op.lt]: 90 } }];
     }
 
     if (countryId) {
