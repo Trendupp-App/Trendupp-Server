@@ -15,7 +15,6 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminSocialImpactService } from '../services/admin-social-impact.service';
 import {
-  TokenBatchResponseDto,
   AdminSocialImpactSummaryResponseDto,
   QueryAdminSocialImpactListDto,
   SocialImpactCampaignsListResponseDto,
@@ -39,17 +38,6 @@ import { User } from '../../users/entities/user.entity';
 @ApiBearerAuth()
 export class AdminSocialImpactController {
   constructor(private readonly adminSocialImpactService: AdminSocialImpactService) {}
-
-  @Get('social-impact/token-batches')
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get available seeded Token Batches for creator rewards dropdown',
-  })
-  @ApiResponse({ status: 200, type: [TokenBatchResponseDto] })
-  async getTokenBatches(): Promise<TokenBatchResponseDto[]> {
-    return this.adminSocialImpactService.getTokenBatches();
-  }
 
   @Get('social-impact/summary')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')

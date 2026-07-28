@@ -240,12 +240,25 @@ export class AdminSocialImpactService {
       donts: dto.donts || [],
     };
 
+    let creatorCategoryIds: string[] = [];
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      creatorCategoryIds = categories.map((c) => c.id);
+    }
+
     const campaign = await this.campaignModel.create({
       title: dto.title,
       goal: dto.goal,
       brandId: dto.brandId,
       type: 'social_impact',
-      tokenReward: dto.tokenReward,
+      totalBudget: 0,
+      creatorCategoryIds,
       currentStep: dto.currentStep || 1,
       status,
       paymentStatus: 'paid',
@@ -259,7 +272,7 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: isDraft ? 'CREATE_SOCIAL_IMPACT_DRAFT' : 'PUBLISH_SOCIAL_IMPACT',
-      details: { campaignId: campaign.id, title: dto.title, tokenReward: dto.tokenReward },
+      details: { campaignId: campaign.id, title: dto.title },
     });
 
     return campaign;
@@ -283,8 +296,16 @@ export class AdminSocialImpactService {
 
     if (dto.title) updates.title = dto.title;
     if (dto.goal) updates.goal = dto.goal;
-    if (dto.brandId) updates.brandId = dto.brandId;
-    if (dto.tokenReward) updates.tokenReward = dto.tokenReward;
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      updates.creatorCategoryIds = categories.map((c) => c.id);
+    }
     if (dto.coverImageUrl) updates.coverImageUrl = dto.coverImageUrl;
     if (dto.campaignBrief) updates.campaignBrief = dto.campaignBrief;
     if (dto.currentStep) updates.currentStep = dto.currentStep;
