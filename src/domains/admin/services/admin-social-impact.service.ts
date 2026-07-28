@@ -6,6 +6,7 @@ import { User } from '../../users/entities/user.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { ContentSubmission } from '../../campaigns/entities/content-submission.entity';
 import { TokenBatch } from '../entities/token-batch.entity';
+import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
 import { AuditLogService } from './audit-log.service';
 import {
   TokenBatchResponseDto,
@@ -36,6 +37,8 @@ export class AdminSocialImpactService {
     private readonly submissionModel: typeof ContentSubmission,
     @InjectModel(TokenBatch)
     private readonly tokenBatchModel: typeof TokenBatch,
+    @InjectModel(CreatorCategory)
+    private readonly creatorCategoryModel: typeof CreatorCategory,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -537,16 +540,60 @@ export class AdminSocialImpactService {
       await submission.update({ status: 'approved' });
     }
 
+    // Award tokens to creator based on their CreatorCategory and recalculate badge
+    const creator = await this.userModel.findByPk(application.creatorId);
+    let awardedTokens = 0;
+    if (creator) {
+      const maxFollowers = Math.max(
+        creator.instagramFollowers || 0,
+        creator.tiktokFollowers || 0,
+        creator.youtubeFollowers || 0,
+        creator.twitterFollowers || 0,
+        creator.facebookFollowers || 0,
+      );
+
+      const categories = await this.creatorCategoryModel.findAll({
+        order: [['minFollowers', 'DESC']],
+      });
+      const matchedCat =
+        categories.find(
+          (c) =>
+            maxFollowers >= c.minFollowers && (!c.maxFollowers || maxFollowers <= c.maxFollowers),
+        ) || (categories.length > 0 ? categories[categories.length - 1] : null);
+
+      awardedTokens = matchedCat?.rewardTokens ?? Number(application.campaign?.tokenReward || 100);
+      const newTotalTokens = (creator.totalTokens || 0) + awardedTokens;
+
+      let badge: string | null = null;
+      if (newTotalTokens >= 50) {
+        badge = 'Gold';
+      } else if (newTotalTokens >= 20) {
+        badge = 'Silver';
+      } else if (newTotalTokens >= 1) {
+        badge = 'Bronze';
+      }
+
+      await creator.update({
+        totalTokens: newTotalTokens,
+        badge,
+      });
+    }
+
     await this.auditLogService.log({
       adminId,
       action: 'APPROVE_SOCIAL_IMPACT_PARTICIPANT',
       targetUserId: application.creatorId,
-      details: { campaignId, applicationId: appId, reason: 'Approved content and awarded tokens' },
+      details: {
+        campaignId,
+        applicationId: appId,
+        awardedTokens,
+        reason: 'Approved content and awarded tokens',
+      },
     });
 
     return {
       success: true,
-      message: 'Participant submission approved and tokens awarded successfully.',
+      message: `Participant submission approved and ${awardedTokens} tokens awarded successfully.`,
     };
   }
 

@@ -327,6 +327,21 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'rep_phone' })
   declare repPhone?: string;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_tokens',
+  })
+  declare totalTokens: number;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    defaultValue: null,
+  })
+  declare badge?: string | null;
+
   @BelongsToMany(() => Industry, () => UserIndustry)
   declare industries?: Industry[];
 
@@ -504,6 +519,8 @@ export class User extends BaseEntity<User> {
 
     values['avgRating'] = this.avgRating ? parseFloat(this.avgRating.toString()) : null;
     values['totalReviews'] = this.totalReviews || 0;
+    values['totalTokens'] = this.totalTokens || 0;
+    values['badge'] = this.badge || null;
 
     return values;
   }
