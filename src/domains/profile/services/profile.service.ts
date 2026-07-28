@@ -405,9 +405,17 @@ export class ProfileService {
       }
     }
 
+    const timestamp = Date.now();
     await this.usersService.update(userId, {
       isActive: false,
       deactivatedAt: new Date(),
+      email: `deleted_${timestamp}_${user.email}`,
+      username: user.username ? `deleted_${timestamp}_${user.username}` : undefined,
+      googleId: null as unknown as string,
+      tiktokOpenId: null as unknown as string,
+      instagramOpenId: null as unknown as string,
+      facebookOpenId: null as unknown as string,
+      appleUserId: null as unknown as string,
     });
   }
 

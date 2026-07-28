@@ -22,7 +22,10 @@ import {
   SocialImpactParticipantsListResponseDto,
   SocialImpactParticipantItemDto,
   ReviewParticipantSubmissionDto,
-  SocialImpactAdminActionDto,
+  ExtendDeadlineDto,
+  CancelCampaignDto,
+  CloseApplicationsDto,
+  PauseCampaignDto,
 } from '../dtos/admin-social-impact.dto';
 
 @Injectable()
@@ -687,11 +690,7 @@ export class AdminSocialImpactService {
 
   // ── 12. Administrative Actions ─────────────────────────────────────────────
 
-  async pauseCampaign(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async pauseCampaign(id: string, dto: PauseCampaignDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -702,17 +701,13 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'PAUSE_SOCIAL_IMPACT',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Campaign paused by admin' },
     });
 
     return campaign;
   }
 
-  async cancelCampaign(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async cancelCampaign(id: string, dto: CancelCampaignDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -723,17 +718,13 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'CANCEL_SOCIAL_IMPACT',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Campaign cancelled by admin' },
     });
 
     return campaign;
   }
 
-  async extendDeadline(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async extendDeadline(id: string, dto: ExtendDeadlineDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -754,7 +745,11 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'EXTEND_SOCIAL_IMPACT_DEADLINE',
-      details: { campaignId: id, reason: dto.reason, newDeadline: dto.newDeadline },
+      details: {
+        campaignId: id,
+        reason: dto.reason || 'Deadline extended by admin',
+        newDeadline: dto.newDeadline,
+      },
     });
 
     return campaign;
@@ -762,7 +757,7 @@ export class AdminSocialImpactService {
 
   async closeApplications(
     id: string,
-    dto: SocialImpactAdminActionDto,
+    dto: CloseApplicationsDto,
     adminId: string,
   ): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
@@ -775,7 +770,7 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'CLOSE_SOCIAL_IMPACT_APPLICATIONS',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Applications closed by admin' },
     });
 
     return campaign;
