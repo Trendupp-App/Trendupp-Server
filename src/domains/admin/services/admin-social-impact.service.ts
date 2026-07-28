@@ -6,6 +6,8 @@ import { User } from '../../users/entities/user.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { ContentSubmission } from '../../campaigns/entities/content-submission.entity';
 import { TokenBatch } from '../entities/token-batch.entity';
+import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { AuditLogService } from './audit-log.service';
 import {
   TokenBatchResponseDto,
@@ -36,6 +38,10 @@ export class AdminSocialImpactService {
     private readonly submissionModel: typeof ContentSubmission,
     @InjectModel(TokenBatch)
     private readonly tokenBatchModel: typeof TokenBatch,
+    @InjectModel(CreatorCategory)
+    private readonly creatorCategoryModel: typeof CreatorCategory,
+    @InjectModel(UserTokenLedger)
+    private readonly tokenLedgerModel: typeof UserTokenLedger,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -234,12 +240,25 @@ export class AdminSocialImpactService {
       donts: dto.donts || [],
     };
 
+    let creatorCategoryIds: string[] = [];
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      creatorCategoryIds = categories.map((c) => c.id);
+    }
+
     const campaign = await this.campaignModel.create({
       title: dto.title,
       goal: dto.goal,
       brandId: dto.brandId,
       type: 'social_impact',
-      tokenReward: dto.tokenReward,
+      totalBudget: 0,
+      creatorCategoryIds,
       currentStep: dto.currentStep || 1,
       status,
       paymentStatus: 'paid',
@@ -253,7 +272,7 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: isDraft ? 'CREATE_SOCIAL_IMPACT_DRAFT' : 'PUBLISH_SOCIAL_IMPACT',
-      details: { campaignId: campaign.id, title: dto.title, tokenReward: dto.tokenReward },
+      details: { campaignId: campaign.id, title: dto.title },
     });
 
     return campaign;
@@ -277,8 +296,16 @@ export class AdminSocialImpactService {
 
     if (dto.title) updates.title = dto.title;
     if (dto.goal) updates.goal = dto.goal;
-    if (dto.brandId) updates.brandId = dto.brandId;
-    if (dto.tokenReward) updates.tokenReward = dto.tokenReward;
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      updates.creatorCategoryIds = categories.map((c) => c.id);
+    }
     if (dto.coverImageUrl) updates.coverImageUrl = dto.coverImageUrl;
     if (dto.campaignBrief) updates.campaignBrief = dto.campaignBrief;
     if (dto.currentStep) updates.currentStep = dto.currentStep;
@@ -537,16 +564,82 @@ export class AdminSocialImpactService {
       await submission.update({ status: 'approved' });
     }
 
+    // Award tokens to creator based on their CreatorCategory and recalculate badge
+    const creator = await this.userModel.findByPk(application.creatorId);
+    let awardedTokens = 0;
+    if (creator) {
+      const maxFollowers = Math.max(
+        creator.instagramFollowers || 0,
+        creator.tiktokFollowers || 0,
+        creator.youtubeFollowers || 0,
+        creator.twitterFollowers || 0,
+        creator.facebookFollowers || 0,
+      );
+
+      const categories = await this.creatorCategoryModel.findAll({
+        order: [['minFollowers', 'DESC']],
+      });
+      const matchedCat =
+        categories.find(
+          (c) =>
+            maxFollowers >= c.minFollowers && (!c.maxFollowers || maxFollowers <= c.maxFollowers),
+        ) || (categories.length > 0 ? categories[categories.length - 1] : null);
+
+      awardedTokens = matchedCat?.rewardTokens ?? Number(application.campaign?.tokenReward || 1);
+
+      const awardedAt = new Date();
+      const expiresAt = new Date(awardedAt);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+      await this.tokenLedgerModel.create({
+        userId: creator.id,
+        campaignId,
+        tokensAwarded: awardedTokens,
+        tokensRemaining: awardedTokens,
+        awardedAt,
+        expiresAt,
+        isExpired: false,
+      } as unknown as UserTokenLedger);
+
+      const activeLedgers = await this.tokenLedgerModel.findAll({
+        where: {
+          userId: creator.id,
+          isExpired: false,
+        },
+      });
+
+      const totalTokens = activeLedgers.reduce((acc, l) => acc + (l.tokensRemaining || 0), 0);
+
+      let badge: string | null = null;
+      if (totalTokens >= 1000) {
+        badge = 'Impact Champion';
+      } else if (totalTokens >= 100) {
+        badge = 'Impact Leader';
+      } else if (totalTokens >= 10) {
+        badge = 'Impact Advocate';
+      }
+
+      await creator.update({
+        totalTokens,
+        badge,
+      });
+    }
+
     await this.auditLogService.log({
       adminId,
       action: 'APPROVE_SOCIAL_IMPACT_PARTICIPANT',
       targetUserId: application.creatorId,
-      details: { campaignId, applicationId: appId, reason: 'Approved content and awarded tokens' },
+      details: {
+        campaignId,
+        applicationId: appId,
+        awardedTokens,
+        reason: 'Approved content and awarded tokens',
+      },
     });
 
     return {
       success: true,
-      message: 'Participant submission approved and tokens awarded successfully.',
+      message: `Participant submission approved and ${awardedTokens} tokens awarded successfully.`,
     };
   }
 

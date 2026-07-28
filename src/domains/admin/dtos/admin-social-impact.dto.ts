@@ -97,15 +97,6 @@ export class CreateSocialImpactCampaignDto {
   @IsString({ each: true })
   creatorTiers: string[];
 
-  @ApiProperty({ example: 100, description: 'Token reward per creator' })
-  @IsNumber()
-  tokenReward: number;
-
-  @ApiPropertyOptional({ example: 'uuid-token-batch-id' })
-  @IsOptional()
-  @IsUUID()
-  tokenBatchId?: string;
-
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()
   @IsString()
@@ -172,11 +163,6 @@ export class UpdateSocialImpactCampaignDto {
   @IsArray()
   @IsString({ each: true })
   creatorTiers?: string[];
-
-  @ApiPropertyOptional({ example: 100 })
-  @IsOptional()
-  @IsNumber()
-  tokenReward?: number;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()

@@ -342,16 +342,7 @@ export class CampaignRepository {
     return affected > 0;
   }
 
-  createApplication(data: {
-    campaignId: string;
-    creatorId: string;
-    contentIdea: string;
-    pastWorkLink?: string[];
-    primaryPlatformId: string;
-    secondaryPlatformId?: string;
-    feeRequest: number;
-    comments?: string;
-  }): Promise<CampaignApplication> {
+  createApplication(data: Partial<Attributes<CampaignApplication>>): Promise<CampaignApplication> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return (this.campaignApplicationModel as any).create(data) as Promise<CampaignApplication>;
   }

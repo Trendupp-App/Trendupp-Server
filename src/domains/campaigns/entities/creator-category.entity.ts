@@ -45,6 +45,14 @@ export class CreatorCategory extends BaseEntity<CreatorCategory> {
   })
   declare minCostAmplifyUsd: number;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'reward_tokens',
+  })
+  declare rewardTokens: number;
+
   @HasMany(() => Campaign)
   declare campaigns?: Campaign[];
 }

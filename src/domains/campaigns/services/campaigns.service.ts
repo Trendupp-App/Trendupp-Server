@@ -2114,6 +2114,96 @@ export class CampaignsService {
     await comment.update({ response });
     return comment;
   }
+
+  // ─── Social Impact Creator Flow ──────────────────────────────────────────
+
+  async participateInSocialImpact(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<CampaignApplication> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+    if (campaign.type !== 'social_impact') {
+      throw new BadRequestException('This campaign is not a Social Impact campaign');
+    }
+    const status = (campaign.status || '').toLowerCase();
+    if (status !== 'live' && status !== 'active') {
+      throw new ForbiddenException('This Social Impact campaign is not open for participation');
+    }
+
+    const existingApp = await this.campaignRepository.findApplicationByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (existingApp) {
+      throw new ForbiddenException('You have already participated in this Social Impact campaign');
+    }
+
+    const application = await this.campaignRepository.createApplication({
+      campaignId,
+      creatorId,
+      status: 'pending',
+    });
+
+    const populated = await this.campaignRepository.findApplicationById(application.id);
+    return populated || application;
+  }
+
+  async submitSocialImpactLiveLink(
+    campaignId: string,
+    creatorId: string,
+    liveLink: string,
+  ): Promise<ContentSubmission> {
+    const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (!application) {
+      throw new NotFoundException('You have not participated in this Social Impact campaign');
+    }
+
+    let submission = await this.campaignRepository.findLatestSubmissionByApplicationId(
+      application.id,
+    );
+
+    if (submission) {
+      await submission.update({
+        liveLink: { link: liveLink },
+        status: 'livelink_available',
+      });
+    } else {
+      submission = await this.campaignRepository.createSubmission({
+        campaignId,
+        applicationId: application.id,
+        creatorId,
+        liveLink: { link: liveLink },
+        status: 'livelink_available',
+      });
+    }
+
+    return submission;
+  }
+
+  async getMySocialImpactApplications(
+    creatorId: string,
+    tab: string = 'all',
+  ): Promise<CampaignApplication[]> {
+    const apps = await this.campaignRepository.findApplicationsByCreatorId(creatorId);
+
+    const socialApps = apps.filter((app) => app.campaign?.type === 'social_impact');
+
+    if (tab === 'pending') {
+      return socialApps.filter((app) => app.status === 'pending');
+    } else if (tab === 'accepted') {
+      return socialApps.filter((app) => app.status === 'accepted' || app.status === 'approved');
+    } else if (tab === 'rejected') {
+      return socialApps.filter((app) => app.status === 'rejected');
+    }
+
+    return socialApps;
+  }
 }
 
 export interface CampaignActivityItem {
