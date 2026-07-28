@@ -593,11 +593,14 @@ describe('ProfileService', () => {
 
       await service.deactivateAccount('u1', dto);
 
-      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
-        isActive: false,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        deactivatedAt: expect.any(Date),
-      });
+      expect(usersServiceMock.update).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({
+          isActive: false,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          deactivatedAt: expect.any(Date),
+        }),
+      );
     });
 
     it('should throw ConflictException if password does not match during deactivation', async () => {

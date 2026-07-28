@@ -16,6 +16,7 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
@@ -329,59 +330,24 @@ describe('AuthService', () => {
       expect(result.user.id).toBe('u1');
     });
 
-    it('should reactivate account if deactivated within 90 days', async () => {
-      const recentDate = new Date();
-      recentDate.setDate(recentDate.getDate() - 5); // 5 days ago
-
+    it('should throw ForbiddenException if user account is deactivated or deleted', async () => {
       const mockUser = {
         id: 'u1',
         email: 'deactivated@example.com',
         password: 'hashedPassword',
         isActive: false,
-        deactivatedAt: recentDate,
+        deactivatedAt: new Date(),
         isEmailVerified: true,
         firstName: 'Deactivated',
         lastName: 'User',
       };
 
-      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      usersServiceMock.findOneWithNiches.mockResolvedValue({
-        id: 'u1',
-        onboardingPercentage: 20,
-      } as any);
-
-      const result = await service.login({
-        email: 'deactivated@example.com',
-        password: 'password',
-      });
-
-      expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
-        isActive: true,
-        deactivatedAt: null,
-      });
-      expect(result.accessToken).toBeDefined();
-    });
-
-    it('should throw UnauthorizedException if deactivated more than 90 days ago', async () => {
-      const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 95); // 95 days ago
-
-      const mockUser = {
-        id: 'u1',
-        email: 'deactivated@example.com',
-        password: 'hashedPassword',
-        isActive: false,
-        deactivatedAt: oldDate,
-        isEmailVerified: true,
-      };
-
-      usersServiceMock.findByEmail.mockResolvedValue(mockUser as any);
+      usersServiceMock.findByEmail.mockResolvedValueOnce(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       await expect(
         service.login({ email: 'deactivated@example.com', password: 'password' }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

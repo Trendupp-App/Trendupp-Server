@@ -24,7 +24,10 @@ import {
   QuerySocialImpactParticipantsDto,
   SocialImpactParticipantsListResponseDto,
   ReviewParticipantSubmissionDto,
-  SocialImpactAdminActionDto,
+  ExtendDeadlineDto,
+  CancelCampaignDto,
+  CloseApplicationsDto,
+  PauseCampaignDto,
 } from '../dtos/admin-social-impact.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -200,7 +203,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Pause an active Social Impact Campaign' })
   async pauseCampaign(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: PauseCampaignDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.pauseCampaign(id, dto, admin.id);
@@ -213,7 +216,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Permanently cancel a Social Impact Campaign' })
   async cancelCampaign(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: CancelCampaignDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.cancelCampaign(id, dto, admin.id);
@@ -226,7 +229,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Extend submission deadline for a Social Impact Campaign' })
   async extendDeadline(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: ExtendDeadlineDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.extendDeadline(id, dto, admin.id);
@@ -239,7 +242,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Close application window for a Social Impact Campaign' })
   async closeApplications(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: CloseApplicationsDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.closeApplications(id, dto, admin.id);

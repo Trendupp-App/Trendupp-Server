@@ -416,16 +416,49 @@ export class ReviewParticipantSubmissionDto {
 
 // ── Admin Action DTOs ────────────────────────────────────────────────────────
 
-export class SocialImpactAdminActionDto {
-  @ApiProperty({ example: 'Compliance check initiated' })
+export class ExtendDeadlineDto {
+  @ApiProperty({
+    example: '2026-08-01',
+    description: 'New submission deadline date (ISO string or YYYY-MM-DD)',
+  })
   @IsString()
-  reason: string;
+  newDeadline: string;
 
   @ApiPropertyOptional({
-    example: '2026-08-01',
-    description: 'Required for extend-deadline action',
+    example: 'Extended duration for creator submissions',
+    description: 'Optional reason for deadline extension',
   })
   @IsOptional()
   @IsString()
-  newDeadline?: string;
+  reason?: string;
+}
+
+export class CancelCampaignDto {
+  @ApiPropertyOptional({
+    example: 'Cancelled by admin request',
+    description: 'Optional cancellation reason',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CloseApplicationsDto {
+  @ApiPropertyOptional({
+    example: 'Application window reached capacity',
+    description: 'Optional reason for closing applications',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class PauseCampaignDto {
+  @ApiPropertyOptional({
+    example: 'Temporary pause for administrative review',
+    description: 'Optional pause reason',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
