@@ -19,6 +19,8 @@ import { PortfolioItemRepository } from './repository/portfolio-item.repository'
 import { UsersService } from './services/users.service';
 import { AccountLifecycleScheduler } from './services/account-lifecycle.scheduler';
 import { PortfolioService } from './services/portfolio.service';
+import { TokenExpirationScheduler } from './services/token-expiration.scheduler';
+import { UserTokenLedger } from './entities/user-token-ledger.entity';
 import { EmailModule } from '../../integration/email/email.module';
 import { S3Service } from '../../integration/s3/s3.service';
 import { Role } from './entities/role.entity';
@@ -41,6 +43,7 @@ import { Campaign } from '../campaigns/entities/campaign.entity';
       UserIndustry,
       Campaign,
       PortfolioItem,
+      UserTokenLedger,
     ]),
     EmailModule,
   ],
@@ -55,6 +58,7 @@ import { Campaign } from '../campaigns/entities/campaign.entity';
     PortfolioItemRepository,
     UsersService,
     AccountLifecycleScheduler,
+    TokenExpirationScheduler,
     PortfolioService,
     S3Service,
   ],

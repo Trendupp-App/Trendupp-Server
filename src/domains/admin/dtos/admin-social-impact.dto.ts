@@ -97,9 +97,10 @@ export class CreateSocialImpactCampaignDto {
   @IsString({ each: true })
   creatorTiers: string[];
 
-  @ApiProperty({ example: 100, description: 'Token reward per creator' })
+  @ApiPropertyOptional({ example: 100, description: 'Optional fallback token reward per creator' })
+  @IsOptional()
   @IsNumber()
-  tokenReward: number;
+  tokenReward?: number;
 
   @ApiPropertyOptional({ example: 'uuid-token-batch-id' })
   @IsOptional()

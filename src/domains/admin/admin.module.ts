@@ -25,6 +25,7 @@ import { AdminNote } from './entities/admin-note.entity';
 import { TokenBatch } from './entities/token-batch.entity';
 import { Role } from '../users/entities/role.entity';
 import { User } from '../users/entities/user.entity';
+import { UserTokenLedger } from '../users/entities/user-token-ledger.entity';
 import { Niche } from '../users/entities/niche.entity';
 import { Industry } from '../users/entities/industry.entity';
 import { Nationality } from '../users/entities/nationality.entity';
@@ -86,6 +87,7 @@ import {
       ContentSubmission,
       Dispute,
       BrandCommissionTier,
+      UserTokenLedger,
       Faq,
       NewsCategory,
       SystemSetting,

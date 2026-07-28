@@ -7,6 +7,7 @@ import { CampaignApplication } from '../../campaigns/entities/campaign-applicati
 import { ContentSubmission } from '../../campaigns/entities/content-submission.entity';
 import { TokenBatch } from '../entities/token-batch.entity';
 import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { AuditLogService } from './audit-log.service';
 import {
   TokenBatchResponseDto,
@@ -39,6 +40,8 @@ export class AdminSocialImpactService {
     private readonly tokenBatchModel: typeof TokenBatch,
     @InjectModel(CreatorCategory)
     private readonly creatorCategoryModel: typeof CreatorCategory,
+    @InjectModel(UserTokenLedger)
+    private readonly tokenLedgerModel: typeof UserTokenLedger,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -561,20 +564,42 @@ export class AdminSocialImpactService {
             maxFollowers >= c.minFollowers && (!c.maxFollowers || maxFollowers <= c.maxFollowers),
         ) || (categories.length > 0 ? categories[categories.length - 1] : null);
 
-      awardedTokens = matchedCat?.rewardTokens ?? Number(application.campaign?.tokenReward || 100);
-      const newTotalTokens = (creator.totalTokens || 0) + awardedTokens;
+      awardedTokens = matchedCat?.rewardTokens ?? Number(application.campaign?.tokenReward || 1);
+
+      const awardedAt = new Date();
+      const expiresAt = new Date(awardedAt);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+      await this.tokenLedgerModel.create({
+        userId: creator.id,
+        campaignId,
+        tokensAwarded: awardedTokens,
+        tokensRemaining: awardedTokens,
+        awardedAt,
+        expiresAt,
+        isExpired: false,
+      } as unknown as UserTokenLedger);
+
+      const activeLedgers = await this.tokenLedgerModel.findAll({
+        where: {
+          userId: creator.id,
+          isExpired: false,
+        },
+      });
+
+      const totalTokens = activeLedgers.reduce((acc, l) => acc + (l.tokensRemaining || 0), 0);
 
       let badge: string | null = null;
-      if (newTotalTokens >= 50) {
-        badge = 'Gold';
-      } else if (newTotalTokens >= 20) {
-        badge = 'Silver';
-      } else if (newTotalTokens >= 1) {
-        badge = 'Bronze';
+      if (totalTokens >= 1000) {
+        badge = 'Impact Champion';
+      } else if (totalTokens >= 100) {
+        badge = 'Impact Leader';
+      } else if (totalTokens >= 10) {
+        badge = 'Impact Advocate';
       }
 
       await creator.update({
-        totalTokens: newTotalTokens,
+        totalTokens,
         badge,
       });
     }
