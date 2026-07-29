@@ -7,6 +7,7 @@ import {
   BelongsToMany,
   HasMany,
 } from 'sequelize-typescript';
+import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../core/base.entity';
 import { Nationality } from './nationality.entity';
 import { Role } from './role.entity';
@@ -327,6 +328,10 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'rep_phone' })
   declare repPhone?: string;
 
+  @ApiProperty({
+    description: 'Total active token balance accumulated from Social Impact campaigns',
+    example: 10,
+  })
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
@@ -335,6 +340,12 @@ export class User extends BaseEntity<User> {
   })
   declare totalTokens: number;
 
+  @ApiProperty({
+    description:
+      'Creator impact badge (Impact Advocate: 10+, Impact Leader: 100+, Impact Champion: 1000+)',
+    nullable: true,
+    example: 'Impact Advocate',
+  })
   @Column({
     type: DataType.STRING,
     allowNull: true,
