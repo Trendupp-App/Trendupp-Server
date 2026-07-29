@@ -21,15 +21,15 @@ export class CampaignApplication extends BaseEntity<CampaignApplication> {
   @BelongsTo(() => User)
   declare creator: User;
 
-  @Column({ type: DataType.TEXT, allowNull: false, field: 'content_idea' })
-  declare contentIdea: string;
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'content_idea' })
+  declare contentIdea?: string;
 
   @Column({ type: DataType.JSONB, allowNull: true, field: 'past_work_link' })
   declare pastWorkLink?: string[];
 
   @ForeignKey(() => Platform)
-  @Column({ type: DataType.UUID, allowNull: false, field: 'primary_platform_id' })
-  declare primaryPlatformId: string;
+  @Column({ type: DataType.UUID, allowNull: true, field: 'primary_platform_id' })
+  declare primaryPlatformId?: string;
 
   @BelongsTo(() => Platform, 'primary_platform_id')
   declare primaryPlatform: Platform;
@@ -41,8 +41,8 @@ export class CampaignApplication extends BaseEntity<CampaignApplication> {
   @BelongsTo(() => Platform, 'secondary_platform_id')
   declare secondaryPlatform?: Platform;
 
-  @Column({ type: DataType.INTEGER, allowNull: false, field: 'fee_request' })
-  declare feeRequest: number;
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'fee_request' })
+  declare feeRequest?: number;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare comments?: string;

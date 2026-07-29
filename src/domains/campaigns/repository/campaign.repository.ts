@@ -858,4 +858,43 @@ export class CampaignRepository {
       order: [['createdAt', 'ASC']],
     });
   }
+
+  async findSocialImpactCampaigns(
+    tab: 'all' | 'active' | 'completed' = 'active',
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedResult<Campaign>> {
+    const offset = (page - 1) * limit;
+    const where: Record<string | symbol, any> = {
+      type: 'social_impact',
+    };
+
+    if (tab === 'active') {
+      where['status'] = { [Op.in]: ['active', 'live'] };
+    } else if (tab === 'completed') {
+      where['status'] = 'completed';
+    } else {
+      where['status'] = { [Op.ne]: 'draft' };
+    }
+
+    const { rows, count } = await this.campaignModel.findAndCountAll({
+      where,
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']],
+      distinct: true,
+    });
+
+    const pages = Math.ceil(count / limit);
+
+    return {
+      data: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        pages,
+      },
+    };
+  }
 }

@@ -28,6 +28,10 @@ import { PayoutScheduler } from './services/payout.scheduler';
 import { TimelineService } from './services/timeline.service';
 import { CampaignTimelineScheduler } from './services/campaign-timeline.scheduler';
 
+import { UserTokenLedger } from '../users/entities/user-token-ledger.entity';
+import { User } from '../users/entities/user.entity';
+import { SocialImpactReminderScheduler } from './services/social-impact-reminder.scheduler';
+
 import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.entity';
 
 @Module({
@@ -48,6 +52,8 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
       Dispute,
       Niche,
       BrandCommissionTier,
+      UserTokenLedger,
+      User,
     ]),
     UsersModule,
 
@@ -63,6 +69,7 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
     PayoutScheduler,
     TimelineService,
     CampaignTimelineScheduler,
+    SocialImpactReminderScheduler,
   ],
   controllers: [CampaignsController, WebhooksController],
   exports: [CampaignsService, CampaignRepository, SequelizeModule, TimelineService],

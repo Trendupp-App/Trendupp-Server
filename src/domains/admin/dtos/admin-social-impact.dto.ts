@@ -88,9 +88,19 @@ export class CreateSocialImpactCampaignDto {
   @IsString()
   goal: string;
 
-  @ApiProperty({ example: 'uuid-brand-user-id', description: 'Selected Advertiser User ID' })
+  @ApiPropertyOptional({ example: 'uuid-brand-user-id', description: 'Selected Advertiser User ID (Optional)' })
+  @IsOptional()
   @IsUUID()
-  brandId: string;
+  brandId?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-15', description: 'Campaign end date (required for publishing)' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: { Nano: 50, Micro: 100 }, description: 'Reward amount by creator tier' })
+  @IsOptional()
+  tierRewards?: Record<string, number>;
 
   @ApiProperty({ example: ['Micro', 'Nano'], type: [String] })
   @IsArray()
@@ -157,6 +167,15 @@ export class UpdateSocialImpactCampaignDto {
   @IsOptional()
   @IsUUID()
   brandId?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-15', description: 'Campaign end date' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: { Nano: 50, Micro: 100 } })
+  @IsOptional()
+  tierRewards?: Record<string, number>;
 
   @ApiPropertyOptional({ example: ['Micro', 'Nano'], type: [String] })
   @IsOptional()
