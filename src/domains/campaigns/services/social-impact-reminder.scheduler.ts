@@ -42,7 +42,8 @@ export class SocialImpactReminderScheduler {
       for (const campaign of activeCampaigns) {
         const timeline = (campaign.timeline as Record<string, any>) || {};
         const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
-        const endDateRaw = timeline.endDate || stage1?.endedDate;
+        const endDateRaw =
+          (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
         if (!endDateRaw) continue;
 
         const endDateStr = String(endDateRaw);
@@ -58,7 +59,8 @@ export class SocialImpactReminderScheduler {
         }
 
         // 2. Reminder Notification Timing Calculations
-        const publishedAtRaw = timeline.publishedAt || campaign.approvedAt || campaign.createdAt;
+        const publishedAtRaw =
+          (timeline.publishedAt as string | undefined) || campaign.approvedAt || campaign.createdAt;
         const publishedAtStr = publishedAtRaw ? String(publishedAtRaw) : null;
         const publishedAt = publishedAtStr ? new Date(publishedAtStr) : now;
 
