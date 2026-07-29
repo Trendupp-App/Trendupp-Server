@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  ParseUUIDPipe,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from '../services/users.service';
 import { User } from '../entities/user.entity';
@@ -74,10 +85,17 @@ export class UsersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiResponse({ status: 200, type: User })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  @ApiOperation({
+    summary: 'Get user profile by ID (includes totalTokens & badge details)',
+  })
+  @ApiResponse({ status: 200, type: User, description: 'User profile with tokens & badge' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.usersService.findOne(id);
+    if (!user) {
+      throw new NotFoundException('User profile not found');
+    }
+    return user;
   }
 
   @Delete(':id')
