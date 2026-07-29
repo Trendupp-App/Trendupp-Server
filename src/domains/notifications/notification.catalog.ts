@@ -262,6 +262,15 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     // The admin app has no dispute detail route; the list page focuses via query param.
     actionUrl: (d) => `/admin/disputes?focus=${d.disputeId}`,
   },
+  'dispute.rejected': {
+    category: 'chatDispute',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: () => `Your dispute was declined`,
+    body: (d) =>
+      `The dispute on campaign ${d.campaignId} was reviewed and declined by an administrator. Reason: "${d.reason}".`,
+    actionUrl: (d) => `/disputes/${d.disputeId}`,
+  },
 
   // ── Admin / staff inbox ─────────────────────────────────────────────────────
   // Delivered via recipientRole fan-outs, which bypass all preference gating

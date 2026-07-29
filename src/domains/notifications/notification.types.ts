@@ -160,6 +160,7 @@ export interface NotificationPayloads {
     campaignId: string;
     escrowAction: string;
   };
+  'dispute.rejected': { disputeId: string; campaignId: string; reason: string };
 
   // ── Admin / staff inbox (delivered via role fan-outs; never suppressible) ──
   'admin.team_member_invited': { adminName: string; roleName: string };
