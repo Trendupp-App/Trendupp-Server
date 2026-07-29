@@ -46,10 +46,7 @@ export class TimelineService {
     };
   }
 
-  private normalizeTimeline(
-    timeline?: unknown,
-    fallbackDate: Date = new Date(),
-  ): CampaignTimeline {
+  private normalizeTimeline(timeline?: unknown, fallbackDate: Date = new Date()): CampaignTimeline {
     if (!timeline) {
       return this.initCampaignTimeline(fallbackDate);
     }

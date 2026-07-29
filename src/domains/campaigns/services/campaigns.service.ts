@@ -2143,8 +2143,9 @@ export class CampaignsService {
 
     const timeline = (campaign.timeline as Record<string, any>) || {};
     const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
-    const endDateRaw = timeline.endDate || stage1?.endedDate;
-    if (endDateRaw && new Date().getTime() >= new Date(String(endDateRaw)).getTime()) {
+    const endDateRaw =
+      (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
+    if (endDateRaw && new Date().getTime() >= new Date(endDateRaw).getTime()) {
       throw new ForbiddenException('This Social Impact campaign has reached its end date');
     }
 
@@ -2205,8 +2206,9 @@ export class CampaignsService {
 
     const timeline = (campaign.timeline as Record<string, any>) || {};
     const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
-    const endDateRaw = timeline.endDate || stage1?.endedDate;
-    if (endDateRaw && new Date().getTime() >= new Date(String(endDateRaw)).getTime()) {
+    const endDateRaw =
+      (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
+    if (endDateRaw && new Date().getTime() >= new Date(endDateRaw).getTime()) {
       throw new ForbiddenException(
         'The campaign end date has passed. New submissions are no longer accepted.',
       );

@@ -88,17 +88,26 @@ export class CreateSocialImpactCampaignDto {
   @IsString()
   goal: string;
 
-  @ApiPropertyOptional({ example: 'uuid-brand-user-id', description: 'Selected Advertiser User ID (Optional)' })
+  @ApiPropertyOptional({
+    example: 'uuid-brand-user-id',
+    description: 'Selected Advertiser User ID (Optional)',
+  })
   @IsOptional()
   @IsUUID()
   brandId?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-15', description: 'Campaign end date (required for publishing)' })
+  @ApiPropertyOptional({
+    example: '2026-08-15',
+    description: 'Campaign end date (required for publishing)',
+  })
   @IsOptional()
   @IsString()
   endDate?: string;
 
-  @ApiPropertyOptional({ example: { Nano: 50, Micro: 100 }, description: 'Reward amount by creator tier' })
+  @ApiPropertyOptional({
+    example: { Nano: 50, Micro: 100 },
+    description: 'Reward amount by creator tier',
+  })
   @IsOptional()
   tierRewards?: Record<string, number>;
 
