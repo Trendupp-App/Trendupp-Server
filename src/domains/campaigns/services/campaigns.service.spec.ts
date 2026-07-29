@@ -21,6 +21,7 @@ import { Fee } from '../entities/fee.entity';
 import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.entity';
 
 import { TimelineService } from './timeline.service';
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 
 describe('CampaignsService', () => {
   let service: CampaignsService;
@@ -34,6 +35,8 @@ describe('CampaignsService', () => {
   let creatorCategoryModelMock: { findAll: jest.Mock };
   let feeModelMock: { findOne: jest.Mock };
   let commissionTierModelMock: { findOne: jest.Mock };
+  let tokenLedgerModelMock: { create: jest.Mock; findAll: jest.Mock; update: jest.Mock };
+  let userModelMock: { update: jest.Mock };
 
   const mockCampaign = {
     id: 'c1',
@@ -179,6 +182,16 @@ describe('CampaignsService', () => {
       findOne: jest.fn().mockResolvedValue(null),
     };
 
+    tokenLedgerModelMock = {
+      create: jest.fn().mockResolvedValue({}),
+      findAll: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue([1]),
+    };
+
+    userModelMock = {
+      update: jest.fn().mockResolvedValue([1]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CampaignsService,
@@ -193,6 +206,8 @@ describe('CampaignsService', () => {
         { provide: getModelToken(CreatorCategory), useValue: creatorCategoryModelMock },
         { provide: getModelToken(Fee), useValue: feeModelMock },
         { provide: getModelToken(BrandCommissionTier), useValue: commissionTierModelMock },
+        { provide: getModelToken(UserTokenLedger), useValue: tokenLedgerModelMock },
+        { provide: getModelToken(User), useValue: userModelMock },
       ],
     }).compile();
 

@@ -167,6 +167,20 @@ export interface NotificationPayloads {
   'admin.team_member_reactivated': { adminName: string };
   'admin.team_member_removed': { adminName: string };
   'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
+
+  // ── Social Impact ─────────────────────────────────────────────────────────
+  'social_impact.tokens_awarded': {
+    campaignId: string;
+    campaignTitle: string;
+    reward: number;
+    totalTokens: number;
+  };
+  'social_impact.reminder': {
+    campaignId: string;
+    campaignTitle: string;
+    hoursRemaining: number;
+    reminderType: string;
+  };
 }
 
 export type NotificationType = keyof NotificationPayloads;

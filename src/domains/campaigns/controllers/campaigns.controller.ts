@@ -42,6 +42,7 @@ import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { CreateReviewDto } from '../dtos/create-review.dto';
 import { RespondToCommentDto } from '../dtos/respond-to-comment.dto';
 import { SubmitSocialImpactLiveLinkDto } from '../dtos/submit-social-impact-livelink.dto';
+import { QuerySocialImpactCampaignsDto } from '../dtos/social-impact-query.dto';
 import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -409,6 +410,74 @@ export class CampaignsController {
     };
   }
 
+  // ─── Social Impact Creator Endpoints ─────────────────────────────────────
+
+  @Get('social-impact')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get Social Impact campaigns for creators and brands' })
+  @ApiResponse({ status: 200, description: 'Paginated list of Social Impact campaigns' })
+  async getSocialImpactCampaigns(@Query() query: QuerySocialImpactCampaignsDto) {
+    return this.campaignsService.getSocialImpactCampaigns(query);
+  }
+
+  @Get('social-impact/my-applications')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('creator')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all Social Impact applications for the authenticated creator' })
+  @ApiQuery({
+    name: 'tab',
+    required: false,
+    enum: ['all', 'pending', 'accepted', 'rejected'],
+    description: 'Filter applications by status tab',
+  })
+  async getMySocialImpactApplications(@CurrentUser() user: User, @Query('tab') tab?: string) {
+    const data = await this.campaignsService.getMySocialImpactApplications(user.id, tab);
+    return { data };
+  }
+
+  @Post('social-impact/:id/participate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('creator')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Participate in a Social Impact campaign (creator only)' })
+  @ApiResponse({ status: 201, description: 'Participated successfully' })
+  async participateInSocialImpact(@Param('id') campaignId: string, @CurrentUser() user: User) {
+    const application = await this.campaignsService.participateInSocialImpact(campaignId, user.id);
+    return {
+      message: 'Participated in Social Impact campaign successfully.',
+      application,
+    };
+  }
+
+  @Post('social-impact/:id/submit-livelink')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('creator')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Submit published live link for a Social Impact campaign (creator only)',
+  })
+  @ApiResponse({ status: 200, description: 'Live link submitted successfully and tokens awarded' })
+  async submitSocialImpactLiveLink(
+    @Param('id') campaignId: string,
+    @Body() dto: SubmitSocialImpactLiveLinkDto,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.campaignsService.submitSocialImpactLiveLink(
+      campaignId,
+      user.id,
+      dto.liveLink,
+    );
+    return {
+      message: 'Live link submitted successfully. Token reward credited to your account!',
+      submission: result.submission,
+      tokensAwarded: result.tokensAwarded,
+    };
+  }
+
   @Get(':id')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @UseGuards(JwtAuthGuard)
@@ -742,64 +811,6 @@ export class CampaignsController {
     return {
       message: 'Response submitted successfully.',
       comment,
-    };
-  }
-
-  // ─── Social Impact Creator Endpoints ─────────────────────────────────────
-
-  @Get('social-impact/my-applications')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('creator')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all Social Impact applications for the authenticated creator' })
-  @ApiQuery({
-    name: 'tab',
-    required: false,
-    enum: ['all', 'pending', 'accepted', 'rejected'],
-    description: 'Filter applications by status tab',
-  })
-  async getMySocialImpactApplications(@CurrentUser() user: User, @Query('tab') tab?: string) {
-    const data = await this.campaignsService.getMySocialImpactApplications(user.id, tab);
-    return { data };
-  }
-
-  @Post('social-impact/:id/participate')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('creator')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Participate in a Social Impact campaign (creator only)' })
-  @ApiResponse({ status: 201, description: 'Participated successfully' })
-  async participateInSocialImpact(@Param('id') campaignId: string, @CurrentUser() user: User) {
-    const application = await this.campaignsService.participateInSocialImpact(campaignId, user.id);
-    return {
-      message: 'Participated in Social Impact campaign successfully.',
-      application,
-    };
-  }
-
-  @Post('social-impact/:id/submit-livelink')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('creator')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Submit published live link for a Social Impact campaign (creator only)',
-  })
-  @ApiResponse({ status: 200, description: 'Live link submitted successfully' })
-  async submitSocialImpactLiveLink(
-    @Param('id') campaignId: string,
-    @Body() dto: SubmitSocialImpactLiveLinkDto,
-    @CurrentUser() user: User,
-  ) {
-    const submission = await this.campaignsService.submitSocialImpactLiveLink(
-      campaignId,
-      user.id,
-      dto.liveLink,
-    );
-    return {
-      message: 'Live link submitted successfully for Social Impact campaign.',
-      submission,
     };
   }
 }

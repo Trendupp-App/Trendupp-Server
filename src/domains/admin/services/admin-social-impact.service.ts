@@ -230,13 +230,18 @@ export class AdminSocialImpactService {
     dto: CreateSocialImpactCampaignDto,
     adminId: string,
   ): Promise<Campaign> {
-    const brand = await this.userModel.findByPk(dto.brandId);
-    if (!brand) {
-      throw new NotFoundException('Selected Advertiser brand not found');
+    let brandId = dto.brandId;
+    if (brandId) {
+      const brand = await this.userModel.findByPk(brandId);
+      if (!brand) {
+        throw new NotFoundException('Selected Advertiser brand not found');
+      }
+    } else {
+      brandId = adminId;
     }
 
     const isDraft = dto.isDraft !== false;
-    const status = isDraft ? 'draft' : 'live';
+    const status = isDraft ? 'draft' : 'active';
 
     const contentGuidelines = {
       dos: dto.dos || [],
@@ -255,10 +260,29 @@ export class AdminSocialImpactService {
       creatorCategoryIds = categories.map((c) => c.id);
     }
 
+    const now = new Date();
+    const publishedAtIso = isDraft ? null : now.toISOString();
+    const endIso = dto.endDate
+      ? new Date(dto.endDate).toISOString()
+      : new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+
+    const timeline = {
+      publishedAt: publishedAtIso,
+      endDate: endIso,
+      tierRewards: dto.tierRewards || null,
+      stage1_application_window: {
+        goal: 'Campaign active window',
+        status: isDraft ? 'pending' : 'in_progress',
+        startedDate: publishedAtIso,
+        endedDate: endIso,
+        intendedFor: 'Campaign duration',
+      },
+    };
+
     const campaign = await this.campaignModel.create({
       title: dto.title,
       goal: dto.goal,
-      brandId: dto.brandId,
+      brandId,
       type: 'social_impact',
       totalBudget: 0,
       creatorCategoryIds,
@@ -270,6 +294,8 @@ export class AdminSocialImpactService {
       deliverables: dto.deliverables || [],
       contentDirection: dto.contentDirection || [],
       contentGuidelines,
+      timeline,
+      approvedAt: isDraft ? null : now,
     } as unknown as Campaign);
 
     await this.auditLogService.log({
@@ -344,7 +370,25 @@ export class AdminSocialImpactService {
       throw new NotFoundException('Social Impact campaign not found');
     }
 
-    await campaign.update({ status: 'live', currentStep: 3 });
+    const now = new Date();
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    timeline.publishedAt = now.toISOString();
+    if (!timeline.endDate) {
+      timeline.endDate = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+    }
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    if (stage1) {
+      stage1.status = 'in_progress';
+      stage1.startedDate = now.toISOString();
+      stage1.endedDate = String(timeline.endDate);
+    }
+
+    await campaign.update({
+      status: 'active',
+      currentStep: 3,
+      approvedAt: now,
+      timeline,
+    });
 
     await this.auditLogService.log({
       adminId,
@@ -765,7 +809,7 @@ export class AdminSocialImpactService {
     });
     if (!campaign) throw new NotFoundException('Social Impact campaign not found');
 
-    await campaign.update({ status: 'active' });
+    await campaign.update({ status: 'completed' });
 
     await this.auditLogService.log({
       adminId,

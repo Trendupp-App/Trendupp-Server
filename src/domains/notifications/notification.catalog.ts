@@ -306,4 +306,22 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) => `Your broadcast "${d.title}" was delivered to ${d.totalRecipients} user(s).`,
     actionUrl: () => `/admin/notifications`,
   },
+  'social_impact.tokens_awarded': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Tokens Credited! +${d.reward} Tokens`,
+    body: (d) =>
+      `Congratulations! You received ${d.reward} tokens for submitting your live link on "${d.campaignTitle}". Total balance: ${d.totalTokens} tokens.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.reminder': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Reminder: ${d.hoursRemaining}h left on "${d.campaignTitle}"`,
+    body: (d) =>
+      `Don't miss out! You joined "${d.campaignTitle}". Submit your live content link before the campaign ends to earn your token reward.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
 };

@@ -31,6 +31,9 @@ import { Op } from 'sequelize';
 import { InjectModel } from '@nestjs/sequelize';
 import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.entity';
 
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
+import { QuerySocialImpactCampaignsDto } from '../dtos/social-impact-query.dto';
+
 @Injectable()
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
@@ -50,6 +53,10 @@ export class CampaignsService {
     private readonly feeModel: typeof Fee,
     @InjectModel(BrandCommissionTier)
     private readonly commissionTierModel: typeof BrandCommissionTier,
+    @InjectModel(UserTokenLedger)
+    private readonly tokenLedgerModel: typeof UserTokenLedger,
+    @InjectModel(User)
+    private readonly userModel: typeof User,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -1733,7 +1740,7 @@ export class CampaignsService {
         campaignId,
         campaignTitle: campaign.title,
         submissionId,
-        amount: application.feeRequest,
+        amount: application.feeRequest ?? 0,
         currency: campaign.currency,
         releaseDate: releaseDate.toDateString(),
       },
@@ -2128,9 +2135,35 @@ export class CampaignsService {
     if (campaign.type !== 'social_impact') {
       throw new BadRequestException('This campaign is not a Social Impact campaign');
     }
+
     const status = (campaign.status || '').toLowerCase();
-    if (status !== 'live' && status !== 'active') {
-      throw new ForbiddenException('This Social Impact campaign is not open for participation');
+    if (status !== 'active' && status !== 'live') {
+      throw new ForbiddenException('This Social Impact campaign is not currently Active');
+    }
+
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    const endDateRaw = timeline.endDate || stage1?.endedDate;
+    if (endDateRaw && new Date().getTime() >= new Date(String(endDateRaw)).getTime()) {
+      throw new ForbiddenException('This Social Impact campaign has reached its end date');
+    }
+
+    const creator = await this.usersService.findOne(creatorId);
+    if (!creator) {
+      throw new NotFoundException('Creator profile not found');
+    }
+
+    // If campaign restricts eligible creator tiers, verify creator category matches
+    if (campaign.creatorCategoryIds && campaign.creatorCategoryIds.length > 0) {
+      const creatorCategory = creator.assignedTier
+        ? await this.creatorCategoryModel.findOne({ where: { name: creator.assignedTier } })
+        : null;
+
+      if (creatorCategory && !campaign.creatorCategoryIds.includes(creatorCategory.id)) {
+        throw new ForbiddenException(
+          `Your tier (${creator.assignedTier}) is not eligible for this Social Impact campaign`,
+        );
+      }
     }
 
     const existingApp = await this.campaignRepository.findApplicationByCampaignAndCreator(
@@ -2141,10 +2174,19 @@ export class CampaignsService {
       throw new ForbiddenException('You have already participated in this Social Impact campaign');
     }
 
+    let primaryPlatformId = campaign.preferredPlatforms?.[0]?.id;
+    if (!primaryPlatformId) {
+      const allPlatforms = await this.campaignRepository.findAllPlatforms();
+      primaryPlatformId = allPlatforms[0]?.id;
+    }
+
     const application = await this.campaignRepository.createApplication({
       campaignId,
       creatorId,
       status: 'pending',
+      contentIdea: 'Social Impact Campaign Participation',
+      feeRequest: 0,
+      primaryPlatformId,
     });
 
     const populated = await this.campaignRepository.findApplicationById(application.id);
@@ -2155,7 +2197,21 @@ export class CampaignsService {
     campaignId: string,
     creatorId: string,
     liveLink: string,
-  ): Promise<ContentSubmission> {
+  ): Promise<{ submission: ContentSubmission; tokensAwarded: number }> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    const endDateRaw = timeline.endDate || stage1?.endedDate;
+    if (endDateRaw && new Date().getTime() >= new Date(String(endDateRaw)).getTime()) {
+      throw new ForbiddenException(
+        'The campaign end date has passed. New submissions are no longer accepted.',
+      );
+    }
+
     const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
       campaignId,
       creatorId,
@@ -2164,26 +2220,104 @@ export class CampaignsService {
       throw new NotFoundException('You have not participated in this Social Impact campaign');
     }
 
-    let submission = await this.campaignRepository.findLatestSubmissionByApplicationId(
+    const existingSubmission = await this.campaignRepository.findLatestSubmissionByApplicationId(
       application.id,
     );
 
-    if (submission) {
-      await submission.update({
-        liveLink: { link: liveLink },
-        status: 'livelink_available',
-      });
-    } else {
-      submission = await this.campaignRepository.createSubmission({
-        campaignId,
-        applicationId: application.id,
-        creatorId,
-        liveLink: { link: liveLink },
-        status: 'livelink_available',
-      });
+    if (
+      existingSubmission &&
+      (existingSubmission.status === 'approved' || existingSubmission.liveLink?.link)
+    ) {
+      throw new ForbiddenException(
+        'You have already submitted a live link for this Social Impact campaign',
+      );
     }
 
-    return submission;
+    const submission = await this.campaignRepository.createSubmission({
+      campaignId,
+      applicationId: application.id,
+      creatorId,
+      liveLink: { link: liveLink },
+      status: 'approved',
+    });
+
+    await application.update({ status: 'approved' });
+
+    // Calculate token reward by creator tier from creator_categories table
+    const creator = await this.usersService.findOne(creatorId);
+    const tierName = creator?.assignedTier || 'Nano';
+
+    const category = await this.creatorCategoryModel.findOne({
+      where: { name: tierName },
+    });
+
+    let reward = category?.rewardTokens || 0;
+
+    if (!reward) {
+      const tierRewards = timeline.tierRewards as Record<string, number> | undefined;
+      if (tierRewards && tierRewards[tierName]) {
+        reward = Number(tierRewards[tierName]);
+      } else if (campaign.tokenReward) {
+        reward = Number(campaign.tokenReward);
+      } else {
+        if (tierName === 'Micro') reward = 3;
+        else if (tierName === 'Macro') reward = 5;
+        else if (tierName === 'Mega') reward = 10;
+        else reward = 1;
+      }
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 12 months expiry
+
+    await (
+      this.tokenLedgerModel as unknown as { create: (data: Record<string, any>) => Promise<any> }
+    ).create({
+      userId: creatorId,
+      campaignId: campaign.id,
+      tokensAwarded: reward,
+      tokensRemaining: reward,
+      awardedAt: now,
+      expiresAt,
+      isExpired: false,
+    });
+
+    // Recalculate user token balance & badges
+    const activeLedgers = await this.tokenLedgerModel.findAll({
+      where: {
+        userId: creatorId,
+        isExpired: false,
+      },
+    });
+
+    const activeTotal = activeLedgers.reduce((acc, l) => acc + (l.tokensRemaining || 0), 0);
+    let badge: string | null = null;
+    if (activeTotal >= 1000) badge = 'Impact Champion';
+    else if (activeTotal >= 100) badge = 'Impact Leader';
+    else if (activeTotal >= 10) badge = 'Impact Advocate';
+
+    await this.userModel.update({ totalTokens: activeTotal, badge }, { where: { id: creatorId } });
+
+    // Send Instant Push & In-App Success Notification
+    await this.notificationsService.notify({
+      type: 'social_impact.tokens_awarded',
+      recipientId: creatorId,
+      data: {
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        reward,
+        totalTokens: activeTotal,
+      },
+    });
+
+    return { submission, tokensAwarded: reward };
+  }
+
+  async getSocialImpactCampaigns(
+    query: QuerySocialImpactCampaignsDto,
+  ): Promise<PaginatedResult<Campaign>> {
+    const { tab = 'active', page = 1, limit = 20 } = query;
+    return this.campaignRepository.findSocialImpactCampaigns(tab, page, limit);
   }
 
   async getMySocialImpactApplications(
