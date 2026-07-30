@@ -96,6 +96,7 @@ export class AdminCreatorsService {
 
     const creators = await this.userModel.findAll({
       where: { roleId: creatorRoleId },
+      include: [{ model: Niche, as: 'niches', attributes: ['id'] }],
     });
 
     const totalCreators = creators.length;

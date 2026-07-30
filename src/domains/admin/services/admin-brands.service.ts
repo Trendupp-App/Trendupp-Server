@@ -93,6 +93,7 @@ export class AdminBrandsService {
 
     const advertisers = await this.userModel.findAll({
       where: { roleId: brandRoleId },
+      include: [{ model: Industry, as: 'industries', attributes: ['id'] }],
     });
 
     const totalAdvertisers = advertisers.length;

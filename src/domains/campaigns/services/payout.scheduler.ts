@@ -304,7 +304,7 @@ export class PayoutScheduler {
             payoutRef: refundRef,
             walletId: this.walletId,
             amount: refund.amount,
-            currency: refund.currency || 'USD',
+            currency: refund.currency,
             bankCode: brand.bank.code,
             accountNumber: brand.bankAccountNumber,
             accountName: brand.bankAccountName || `${brand.firstName} ${brand.lastName}`,
