@@ -2330,6 +2330,31 @@ export class CampaignsService {
 
     const socialApps = apps.filter((app) => app.campaign?.type === 'social_impact');
 
+    const creator = await this.usersService.findOne(creatorId);
+    const tierName = creator?.assignedTier || 'Nano';
+
+    let defaultReward = 1;
+    if (this.creatorCategoryModel) {
+      const categoryRecord = await this.creatorCategoryModel.findOne({
+        where: { name: tierName },
+      });
+      if (categoryRecord && categoryRecord.rewardTokens) {
+        defaultReward = Number(categoryRecord.rewardTokens);
+      }
+    }
+
+    for (const app of socialApps) {
+      const ledger = await this.tokenLedgerModel.findOne({
+        where: { userId: creatorId, campaignId: app.campaignId },
+      });
+
+      const tokenReward = defaultReward;
+      const tokensAwarded = ledger ? Number(ledger.tokensAwarded) : 0;
+
+      app.setDataValue('tokenReward' as keyof CampaignApplication, tokenReward as any);
+      app.setDataValue('tokensAwarded' as keyof CampaignApplication, tokensAwarded as any);
+    }
+
     if (tab === 'pending') {
       return socialApps.filter((app) => app.status === 'pending');
     } else if (tab === 'accepted') {
