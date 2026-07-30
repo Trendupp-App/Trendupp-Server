@@ -123,7 +123,7 @@ export class PandascrowService {
       },
     };
 
-    console.log({ check_body: body });
+    // console.log({ check_body: body });
 
     try {
       const response = await fetch(`${this.apiUrl}/escrow/initialize`, {
@@ -146,7 +146,7 @@ export class PandascrowService {
         throw new Error(resData.message || 'Failed to initialize escrow');
       }
 
-      console.log({ escrow_check: resData });
+      // console.log({ escrow_check: resData });
 
       return {
         escrow_id: resData.data.escrow_id,

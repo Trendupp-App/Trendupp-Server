@@ -96,36 +96,38 @@ export class CampaignsService {
       }
     }
 
-    // Trendupp commission and VAT are deducted from the brand's total payment.
-    // VAT rate is read from the fees table so it reflects any admin-configured value.
-    const trenduppFee = Math.round(budget * trenduppRate);
+    // 1. VAT (7.5%) is deducted first from the brand's total budget.
     const vatFeeRecord = await this.feeModel.findOne({ where: { name: 'VAT' } });
     const vatRate = vatFeeRecord?.value ?? 0.075; // safe fallback to 7.5%
     const vat = Math.round(budget * vatRate);
+    const amountAfterVat = budget - vat;
 
-    // Look up Pandascrow platform fee rate from the fees table
-    // NGN → Pandascrow routes via Paystack (3%), USD → via Stripe (5%)
+    // 2. Trendupp commission (15%) is deducted from the balance remaining after VAT.
+    const trenduppFee = Math.round(amountAfterVat * trenduppRate);
+
+    // 3. Final Creator budget pool = remaining balance after VAT minus Trendupp commission.
+    const campaignBudget = amountAfterVat - trenduppFee;
+
+    // 4. Pandascrow platform fee rate from fees table (3% NGN, 5% USD).
+    // Gateway fee is deducted FROM the 15% Trendupp commission pool, NOT from creator budget pool.
     const feeKey =
       currency === 'NGN' ? 'Pandascrow Gateway Fee (NGN)' : 'Pandascrow Gateway Fee (USD)';
     const feeRecord = await this.feeModel.findOne({ where: { name: feeKey } });
     const pandascrowRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
-    const pandascrowFee = Math.round(budget * pandascrowRate);
-
-    // Creator pool = total paid − Trendupp fee − VAT − Pandascrow platform fee
-    const campaignBudget = budget - trenduppFee - vat - pandascrowFee;
+    const pandascrowFee = Math.round(trenduppFee * pandascrowRate);
 
     const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
-      {
-        name: 'Trendupp Fee',
-        type: 'percentage',
-        value: trenduppRate,
-        amount: trenduppFee,
-      },
       {
         name: 'VAT',
         type: 'percentage',
         value: vatRate,
         amount: vat,
+      },
+      {
+        name: 'Trendupp Fee',
+        type: 'percentage',
+        value: trenduppRate,
+        amount: trenduppFee,
       },
       {
         name: `Pandascrow Gateway Fee (${currency})`,
@@ -537,6 +539,8 @@ export class CampaignsService {
       campaignId: campaign.id,
       amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
+      commissionFee: breakdown.trenduppFee,
+      vatFee: breakdown.vat,
       gatewayFee: breakdown.pandascrowFee,
       commissionRate: breakdown.commissionRate,
       vatRate: breakdown.vatRate,

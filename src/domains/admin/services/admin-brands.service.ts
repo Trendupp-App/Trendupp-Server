@@ -613,6 +613,9 @@ export class AdminBrandsService {
         amount: latestPayment ? Number(latestPayment.amount || 0) : Number(c.totalBudget || 0),
         currency: latestPayment?.currency || c.currency || 'USD',
         gatewayFee: latestPayment ? Number(latestPayment.gatewayFee || 0) : 0,
+        commissionFee:
+          latestPayment?.commissionFee ?? Math.round(Number(c.totalBudget || 0) * 0.15),
+        vatFee: latestPayment?.vatFee ?? Math.round(Number(c.totalBudget || 0) * 0.075),
         commissionRate: latestPayment?.commissionRate ?? 0.15,
         vatRate: latestPayment?.vatRate ?? 0.075,
         gatewayRate: latestPayment?.gatewayRate ?? 0.03,
