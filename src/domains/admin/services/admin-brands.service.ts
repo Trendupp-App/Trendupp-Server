@@ -8,6 +8,7 @@ import { Nationality } from '../../users/entities/nationality.entity';
 import { Bank } from '../../users/entities/bank.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
+import { Payment } from '../../campaigns/entities/payment.entity';
 import {
   QueryBrandWidgetTimeFilterDto,
   QueryTopBrandsWidgetDto,
@@ -93,7 +94,10 @@ export class AdminBrandsService {
 
     const advertisers = await this.userModel.findAll({
       where: { roleId: brandRoleId },
-      include: [{ model: Industry, as: 'industries', attributes: ['id'] }],
+      include: [
+        { model: Industry, as: 'industries', attributes: ['id'] },
+        { model: Role, as: 'role' },
+      ],
     });
 
     const totalAdvertisers = advertisers.length;
@@ -572,20 +576,54 @@ export class AdminBrandsService {
           as: 'applications',
           attributes: ['id'],
         },
+        {
+          model: Payment,
+          as: 'payments',
+        },
       ],
     });
 
-    const data: BrandCampaignHistoryItemDto[] = rows.map((c) => ({
-      id: c.id,
-      title: c.title,
-      totalBudget: Number(c.totalBudget || 0),
-      status: c.status,
-      paymentStatus: c.paymentStatus,
-      applicationsCount: c.applications ? c.applications.length : 0,
-      startDate: c.approvedAt || c.createdAt || null,
-      endDate: null,
-      createdAt: c.createdAt,
-    }));
+    const data: BrandCampaignHistoryItemDto[] = rows.map((c) => {
+      const timeline = (c.timeline as Record<string, unknown>) || {};
+      const stage1 = timeline.stage1_application_window as Record<string, unknown> | undefined;
+
+      const startDateRaw =
+        (timeline.startDate as string | Date | undefined) ||
+        (stage1?.startDate as string | Date | undefined) ||
+        c.approvedAt ||
+        c.createdAt ||
+        null;
+
+      const endDateRaw =
+        (timeline.endDate as string | Date | undefined) ||
+        (stage1?.endedDate as string | Date | undefined) ||
+        null;
+
+      const startDate: Date | string | null = startDateRaw;
+      const endDate: Date | string | null = endDateRaw;
+
+      const payments = c.payments || [];
+      const latestPayment = payments.length > 0 ? payments[payments.length - 1] : null;
+
+      return {
+        id: c.id,
+        title: c.title,
+        type: c.type || 'paid',
+        totalBudget: Number(c.totalBudget || 0),
+        amount: latestPayment ? Number(latestPayment.amount || 0) : Number(c.totalBudget || 0),
+        currency: latestPayment?.currency || c.currency || 'USD',
+        gatewayFee: latestPayment ? Number(latestPayment.gatewayFee || 0) : 0,
+        commissionRate: latestPayment?.commissionRate ?? 0.15,
+        vatRate: latestPayment?.vatRate ?? 0.075,
+        gatewayRate: latestPayment?.gatewayRate ?? 0.03,
+        status: (c.status || 'DRAFT').toUpperCase(),
+        paymentStatus: (c.paymentStatus || 'UNPAID').toUpperCase(),
+        applicationsCount: c.applications ? c.applications.length : 0,
+        startDate,
+        endDate,
+        createdAt: c.createdAt,
+      };
+    });
 
     return {
       data,
