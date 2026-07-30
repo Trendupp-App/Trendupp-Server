@@ -766,7 +766,7 @@ export class AdminCreatorsService {
         totalEarnings,
         onTimeSubmissionRate,
         totalFollowers,
-        totalTokens: 1200,
+        totalTokens: creator.totalTokens || 0,
       },
       profileDetails: {
         id: creator.id,
