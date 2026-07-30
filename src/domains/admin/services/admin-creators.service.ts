@@ -100,7 +100,10 @@ export class AdminCreatorsService {
 
     const creators = await this.userModel.findAll({
       where: { roleId: creatorRoleId },
-      include: [{ model: Niche, as: 'niches', attributes: ['id'] }],
+      include: [
+        { model: Niche, as: 'niches', attributes: ['id'] },
+        { model: Role, as: 'role' },
+      ],
     });
 
     const totalCreators = creators.length;
@@ -697,13 +700,15 @@ export class AdminCreatorsService {
       throw new NotFoundException('Creator profile not found');
     }
 
-    const applications = creator.applications || [];
-    const completedApps = applications.filter(
-      (a) => (a.status || '').toLowerCase() === 'completed',
-    );
+    const releasedPayouts = await this.releaseModel.findAll({
+      where: {
+        creatorId,
+        status: 'released',
+      },
+    });
 
-    const completedCampaigns = completedApps.length;
-    const totalEarnings = completedApps.reduce((acc, a) => acc + (a.feeRequest || 0), 0);
+    const completedCampaigns = releasedPayouts.length;
+    const totalEarnings = releasedPayouts.reduce((acc, r) => acc + Number(r.amount || 0), 0);
 
     const totalFollowers =
       (creator.instagramFollowers || 0) +

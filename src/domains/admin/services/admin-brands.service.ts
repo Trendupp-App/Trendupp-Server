@@ -94,7 +94,10 @@ export class AdminBrandsService {
 
     const advertisers = await this.userModel.findAll({
       where: { roleId: brandRoleId },
-      include: [{ model: Industry, as: 'industries', attributes: ['id'] }],
+      include: [
+        { model: Industry, as: 'industries', attributes: ['id'] },
+        { model: Role, as: 'role' },
+      ],
     });
 
     const totalAdvertisers = advertisers.length;
@@ -581,12 +584,23 @@ export class AdminBrandsService {
     });
 
     const data: BrandCampaignHistoryItemDto[] = rows.map((c) => {
-      const timeline = (c.timeline as Record<string, any>) || {};
-      const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+      const timeline = (c.timeline as Record<string, unknown>) || {};
+      const stage1 = timeline.stage1_application_window as Record<string, unknown> | undefined;
 
-      const startDate =
-        timeline.startDate || stage1?.startDate || c.approvedAt || c.createdAt || null;
-      const endDate = timeline.endDate || stage1?.endedDate || null;
+      const startDateRaw =
+        (timeline.startDate as string | Date | undefined) ||
+        (stage1?.startDate as string | Date | undefined) ||
+        c.approvedAt ||
+        c.createdAt ||
+        null;
+
+      const endDateRaw =
+        (timeline.endDate as string | Date | undefined) ||
+        (stage1?.endedDate as string | Date | undefined) ||
+        null;
+
+      const startDate: Date | string | null = startDateRaw;
+      const endDate: Date | string | null = endDateRaw;
 
       const payments = c.payments || [];
       const latestPayment = payments.length > 0 ? payments[payments.length - 1] : null;

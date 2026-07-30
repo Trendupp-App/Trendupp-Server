@@ -391,7 +391,10 @@ export class BrandCampaignHistoryItemDto {
   @ApiProperty({ example: 2500000 })
   totalBudget: number;
 
-  @ApiProperty({ example: 2000000, description: 'Net campaign budget for creator payouts after fee deductions' })
+  @ApiProperty({
+    example: 2000000,
+    description: 'Net campaign budget for creator payouts after fee deductions',
+  })
   amount: number;
 
   @ApiProperty({ example: 'USD' })
@@ -419,10 +422,10 @@ export class BrandCampaignHistoryItemDto {
   applicationsCount: number;
 
   @ApiProperty({ example: '2026-06-01', nullable: true })
-  startDate: Date | null;
+  startDate: Date | string | null;
 
   @ApiProperty({ example: '2026-07-01', nullable: true })
-  endDate: Date | null;
+  endDate: Date | string | null;
 
   @ApiProperty({ example: '2026-05-15T00:00:00Z' })
   createdAt: Date;

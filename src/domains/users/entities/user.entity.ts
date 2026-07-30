@@ -366,47 +366,55 @@ export class User extends BaseEntity<User> {
   declare applications?: CampaignApplication[];
 
   get onboardingPercentage(): number {
-    let percentage = 0;
-
-    // Signup & Email Verification: 20%
-    if (this.email && this.isEmailVerified) {
-      percentage += 20;
-    }
-
-    // Step 1 (Build Profile) complete: 20%
-    // Requires username, country (operating country), and state.
-    if (this.username && this.countryId && this.stateId) {
-      percentage += 20;
-    }
-
-    const roleName = this.role?.name || (typeof this.role === 'string' ? this.role : 'creator');
-    const isBrand = roleName.toLowerCase() === 'brand';
+    const roleName = this.role?.name || (typeof this.role === 'string' ? this.role : '');
+    const isBrand =
+      roleName.toLowerCase() === 'brand' ||
+      !!this.repEmail ||
+      (this.industries && this.industries.length > 0);
 
     if (isBrand) {
-      // Brand Step 2: Industries selection (20%)
+      let percentage = 0;
+
+      // 1. Account & Email Verification: 25%
+      if (this.email && this.isEmailVerified) {
+        percentage += 25;
+      }
+
+      // 2. Profile Details: 25% (Username/Name & Country)
+      if ((this.username || this.firstName) && (this.countryId || this.country)) {
+        percentage += 25;
+      }
+
+      // 3. Industries Selection: 25%
       if (this.industries && this.industries.length > 0) {
-        percentage += 20;
+        percentage += 25;
       }
-      // Brand Step 3: Representative details (20%)
-      if (this.repFirstName && this.repLastName && this.repEmail && this.repPhone) {
-        percentage += 20;
+
+      // 4. Representative Details: 25%
+      if (this.repFirstName && this.repLastName && this.repEmail) {
+        percentage += 25;
       }
-      // Brand Step 4: Socials connection (20%)
-      if (
-        this.instagramUsername ||
-        this.tiktokUsername ||
-        this.youtubeUsername ||
-        this.twitterUsername ||
-        this.facebookUsername
-      ) {
-        percentage += 20;
-      }
+
+      return percentage;
     } else {
-      // Creator Step 2: Niches selection (20%)
+      let percentage = 0;
+
+      // 1. Account & Email Verification: 20%
+      if (this.email && this.isEmailVerified) {
+        percentage += 20;
+      }
+
+      // 2. Profile Details: 20% (Username/Name & Country)
+      if ((this.username || this.firstName) && (this.countryId || this.country)) {
+        percentage += 20;
+      }
+
+      // 3. Niches Selection: 20%
       if (this.niches && this.niches.length > 0) {
         percentage += 20;
       }
-      // Creator Step 3: Socials connection (20%)
+
+      // 4. Socials Connection: 20%
       if (
         this.instagramUsername ||
         this.tiktokUsername ||
@@ -416,13 +424,14 @@ export class User extends BaseEntity<User> {
       ) {
         percentage += 20;
       }
-      // Creator Step 4: Payout Details (20%)
-      if (this.bankId && this.bankAccountNumber && this.bankAccountName) {
+
+      // 5. Payout Details: 20%
+      if (this.bankAccountNumber && (this.bankAccountName || this.bankId || this.bank)) {
         percentage += 20;
       }
-    }
 
-    return percentage;
+      return percentage;
+    }
   }
 
   get socialsConnected(): {
