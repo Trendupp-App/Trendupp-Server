@@ -7,6 +7,8 @@ import { Niche } from '../../users/entities/niche.entity';
 import { Nationality } from '../../users/entities/nationality.entity';
 import { Bank } from '../../users/entities/bank.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
 import {
   QueryWidgetTimeFilterDto,
   QueryTopCreatorsWidgetDto,
@@ -41,6 +43,8 @@ export class AdminCreatorsService {
     private readonly nationalityModel: typeof Nationality,
     @InjectModel(CampaignApplication)
     private readonly applicationModel: typeof CampaignApplication,
+    @InjectModel(PaymentRelease)
+    private readonly releaseModel: typeof PaymentRelease,
   ) {}
 
   private async getCreatorRoleId(): Promise<string | null> {
@@ -813,19 +817,61 @@ export class AdminCreatorsService {
 
     const { rows, count } = await this.applicationModel.findAndCountAll({
       where: { creatorId },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'title', 'status'],
+          include: [
+            {
+              model: User,
+              as: 'brand',
+              attributes: ['id', 'firstName', 'lastName', 'username'],
+            },
+          ],
+        },
+      ],
       limit,
       offset,
       order: [['createdAt', 'DESC']],
     });
 
-    const data = rows.map((app) => ({
-      id: app.id,
-      campaignTitle: `Campaign #${app.campaignId ? app.campaignId.slice(0, 8) : '101'}`,
-      brandName: 'Brand',
-      status: (app.status || 'PENDING').toUpperCase(),
-      fee: app.feeRequest || 0,
-      submittedAt: app.createdAt,
-    }));
+    const appIds = rows.map((r) => r.id);
+    const releasedPayments = await this.releaseModel.findAll({
+      where: {
+        applicationId: { [Op.in]: appIds },
+        status: 'released',
+      },
+      attributes: ['applicationId', 'status'],
+    });
+    const releasedAppIds = new Set(releasedPayments.map((r) => r.applicationId));
+
+    const data = rows.map((app) => {
+      const brand = app.campaign?.brand;
+      const brandName =
+        `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() || brand?.username || 'Brand';
+
+      const isFinalized = releasedAppIds.has(app.id) && app.campaign?.status === 'completed';
+
+      let status = 'PENDING';
+      if (isFinalized) {
+        status = 'COMPLETED';
+      } else if ((app.status || '').toLowerCase() === 'accepted') {
+        status = 'APPLICATION ACCEPTED';
+      } else {
+        status = (app.status || 'PENDING').toUpperCase();
+      }
+
+      return {
+        id: app.id,
+        campaignTitle:
+          app.campaign?.title || `Campaign #${app.campaignId ? app.campaignId.slice(0, 8) : '101'}`,
+        brandName,
+        status,
+        fee: app.feeRequest || 0,
+        submittedAt: app.createdAt,
+      };
+    });
 
     return {
       data,
