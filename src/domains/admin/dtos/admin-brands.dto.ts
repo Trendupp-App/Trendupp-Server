@@ -385,13 +385,34 @@ export class BrandCampaignHistoryItemDto {
   @ApiProperty({ example: 'Summer Launch Campaign' })
   title: string;
 
+  @ApiProperty({ example: 'paid', description: 'Campaign type: paid or social_impact' })
+  type: string;
+
   @ApiProperty({ example: 2500000 })
   totalBudget: number;
+
+  @ApiProperty({ example: 2000000, description: 'Net campaign budget for creator payouts after fee deductions' })
+  amount: number;
+
+  @ApiProperty({ example: 'USD' })
+  currency: string;
+
+  @ApiProperty({ example: 5000 })
+  gatewayFee: number;
+
+  @ApiProperty({ example: 0.15 })
+  commissionRate: number;
+
+  @ApiProperty({ example: 0.075 })
+  vatRate: number;
+
+  @ApiProperty({ example: 0.03 })
+  gatewayRate: number;
 
   @ApiProperty({ example: 'ACTIVE' })
   status: string;
 
-  @ApiProperty({ example: 'paid' })
+  @ApiProperty({ example: 'PAID' })
   paymentStatus: string;
 
   @ApiProperty({ example: 12 })

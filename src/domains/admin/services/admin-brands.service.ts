@@ -8,6 +8,7 @@ import { Nationality } from '../../users/entities/nationality.entity';
 import { Bank } from '../../users/entities/bank.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
+import { Payment } from '../../campaigns/entities/payment.entity';
 import {
   QueryBrandWidgetTimeFilterDto,
   QueryTopBrandsWidgetDto,
@@ -572,20 +573,43 @@ export class AdminBrandsService {
           as: 'applications',
           attributes: ['id'],
         },
+        {
+          model: Payment,
+          as: 'payments',
+        },
       ],
     });
 
-    const data: BrandCampaignHistoryItemDto[] = rows.map((c) => ({
-      id: c.id,
-      title: c.title,
-      totalBudget: Number(c.totalBudget || 0),
-      status: c.status,
-      paymentStatus: c.paymentStatus,
-      applicationsCount: c.applications ? c.applications.length : 0,
-      startDate: c.approvedAt || c.createdAt || null,
-      endDate: null,
-      createdAt: c.createdAt,
-    }));
+    const data: BrandCampaignHistoryItemDto[] = rows.map((c) => {
+      const timeline = (c.timeline as Record<string, any>) || {};
+      const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+
+      const startDate =
+        timeline.startDate || stage1?.startDate || c.approvedAt || c.createdAt || null;
+      const endDate = timeline.endDate || stage1?.endedDate || null;
+
+      const payments = c.payments || [];
+      const latestPayment = payments.length > 0 ? payments[payments.length - 1] : null;
+
+      return {
+        id: c.id,
+        title: c.title,
+        type: c.type || 'paid',
+        totalBudget: Number(c.totalBudget || 0),
+        amount: latestPayment ? Number(latestPayment.amount || 0) : Number(c.totalBudget || 0),
+        currency: latestPayment?.currency || c.currency || 'USD',
+        gatewayFee: latestPayment ? Number(latestPayment.gatewayFee || 0) : 0,
+        commissionRate: latestPayment?.commissionRate ?? 0.15,
+        vatRate: latestPayment?.vatRate ?? 0.075,
+        gatewayRate: latestPayment?.gatewayRate ?? 0.03,
+        status: (c.status || 'DRAFT').toUpperCase(),
+        paymentStatus: (c.paymentStatus || 'UNPAID').toUpperCase(),
+        applicationsCount: c.applications ? c.applications.length : 0,
+        startDate,
+        endDate,
+        createdAt: c.createdAt,
+      };
+    });
 
     return {
       data,
