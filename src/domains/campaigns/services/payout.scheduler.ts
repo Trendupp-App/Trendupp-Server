@@ -27,7 +27,9 @@ export class PayoutScheduler {
    * Cron job that checks for creator payouts that are due (scheduled release date has passed).
    * Runs daily at midnight. EVERY_5_SECONDS
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // EVERY_MINUTE
+  // EVERY_DAY_AT_MIDNIGHT
+  @Cron(CronExpression.EVERY_MINUTE)
   async processPendingPayouts() {
     this.logger.log('Starting daily payout check for creators...');
     const now = new Date();
@@ -51,7 +53,7 @@ export class PayoutScheduler {
 
           // Generate unique reference (idempotency key) for this release payout.
           // Must be <= 25 characters (limit enforced by Pandascrow /bank/transfers).
-          const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 20)}`;
+          const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 14)}_${Date.now().toString().slice(-5)}`;
 
           this.logger.log(
             `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
@@ -296,7 +298,7 @@ export class PayoutScheduler {
             continue;
           }
 
-          const refundRef = `ref_${refund.id.replace(/-/g, '').substring(0, 20)}`;
+          const refundRef = `ref_${refund.id.replace(/-/g, '').substring(0, 14)}_${Date.now().toString().slice(-5)}`;
 
           this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
 
