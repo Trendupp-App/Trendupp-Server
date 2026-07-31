@@ -118,7 +118,7 @@ describe('InstagramAuthService', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         json: jest.fn().mockResolvedValue({
-          id: 'real-user-id-123',
+          user_id: 'real-user-id-123',
           username: 'real_instagram_user',
         }),
       });
@@ -127,7 +127,7 @@ describe('InstagramAuthService', () => {
       const profile = await service.getUserProfile('real-access-token');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://graph.instagram.com/me?fields=id,username&access_token=real-access-token',
+        'https://graph.instagram.com/v25.0/me?fields=user_id,username&access_token=real-access-token',
         {
           method: 'GET',
         },

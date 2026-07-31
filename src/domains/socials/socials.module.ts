@@ -29,6 +29,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     MetaWebhooksService,
   ],
   controllers: [SocialsController, MetaWebhooksController],
-  exports: [SocialsService],
+  // SocialConnectionRepository is exported for PostMetricsModule: insights
+  // calls need the creator's stored per-platform access token.
+  exports: [SocialsService, SocialConnectionRepository],
 })
 export class SocialsModule {}

@@ -7,6 +7,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+/**
+ * Instagram API with Instagram Login requires a VERSIONED path. The
+ * versionless https://graph.instagram.com/me returns the misleading
+ * IGApiException "Unsupported request - method type: get" (code 100).
+ */
+const IG_GRAPH_BASE = 'https://graph.instagram.com/v25.0';
+
 export interface InstagramTokenResponse {
   accessToken: string;
   userId: string;
@@ -114,8 +121,8 @@ export class InstagramAuthService {
     this.assertConfigured();
 
     try {
-      const fields = 'id,username';
-      const profileUrl = `https://graph.instagram.com/me?fields=${fields}&access_token=${accessToken}`;
+      const fields = 'user_id,username';
+      const profileUrl = `${IG_GRAPH_BASE}/me?fields=${fields}&access_token=${accessToken}`;
 
       const response = await fetch(profileUrl, {
         method: 'GET',
@@ -130,7 +137,9 @@ export class InstagramAuthService {
       }
 
       const responseBody = (await response.json()) as Record<string, unknown>;
-      const rawId = responseBody.id;
+      // `user_id` is the Instagram professional account id; `id` (app-scoped)
+      // is kept as a fallback so either payload shape resolves.
+      const rawId = responseBody.user_id ?? responseBody.id;
       const id = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId) : '';
       const username = responseBody.username as string;
 
@@ -163,7 +172,7 @@ export class InstagramAuthService {
 
     try {
       const fields = 'user_id,username,followers_count,account_type';
-      const profileUrl = `https://graph.instagram.com/me?fields=${fields}&access_token=${accessToken}`;
+      const profileUrl = `${IG_GRAPH_BASE}/me?fields=${fields}&access_token=${accessToken}`;
 
       const response = await fetch(profileUrl, { method: 'GET' });
 

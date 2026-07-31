@@ -1,0 +1,209 @@
+name: Deploy to Production (AWS EC2)
+
+on:
+  push:
+    branches:
+      - production
+  # Manual re-run, e.g. to redeploy the current production commit after an
+  # infrastructure change without pushing an empty commit.
+  workflow_dispatch:
+
+# Never let two production deploys run at once. cancel-in-progress is
+# deliberately false: killing a deploy mid-way can leave the box with new code
+# and an un-reloaded process, so queue instead of cancel.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test
+
+      # Catch a compile break here rather than halfway through the EC2 deploy,
+      # where the old process has already been reloaded.
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to EC2
+    needs: verify
+    runs-on: ubuntu-latest
+    # No `environment:` binding on purpose. It exists to scope secrets to one
+    # deploy target, and `production` is the only branch that deploys, so
+    # repo-level secrets are already unambiguous. Add it back — and create the
+    # matching environment under Settings -> Environments — if you ever want a
+    # required-reviewer gate before a production deploy.
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 40s
+          command_timeout: 20m
+          sync: true
+          envs: GITHUB_SHA
+          script: |
+            set -euo pipefail
+
+            APP_DIR="/home/ec2-user/trendupp-server"
+            BRANCH="production"
+            HEALTH_URL="http://127.0.0.1:3000/api/v1/health"
+
+            # Non-interactive shells do not load the profile, so nvm/npm/pm2
+            # are not on PATH until we source it ourselves.
+            export HOME="/home/ec2-user"
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$HOME/.bash_profile" ] && source "$HOME/.bash_profile" || true
+            [ -s "$HOME/.bashrc" ] && source "$HOME/.bashrc" || true
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" || true
+            export PATH=$PATH:/usr/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin
+
+            export NODE_ENV=production
+
+            echo "--- STEP 1: Checkout $BRANCH ---"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "First deployment — cloning $BRANCH."
+              git clone --branch "$BRANCH" \
+                https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
+                "$APP_DIR"
+              cd "$APP_DIR"
+              PREVIOUS_SHA=""
+            else
+              cd "$APP_DIR"
+              # Remember where we were so a failed health check can roll back.
+              PREVIOUS_SHA="$(git rev-parse HEAD)"
+              echo "Current commit: $PREVIOUS_SHA"
+
+              git reset --hard
+              git clean -fd
+              git remote set-url origin \
+                https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git fetch origin "$BRANCH"
+              git checkout "$BRANCH"
+              git reset --hard "origin/$BRANCH"
+            fi
+
+            sudo chown -R ec2-user:ec2-user "$APP_DIR"
+            echo "Deploying commit: $(git rev-parse HEAD)"
+
+            echo "--- STEP 2: Inject environment ---"
+            echo "${{ secrets.ENV_FILE }}" | sudo tee "$APP_DIR/.env" > /dev/null
+            sudo chown ec2-user:ec2-user "$APP_DIR/.env"
+            sudo chmod 600 "$APP_DIR/.env"
+
+            # A duplicated key silently wins over the earlier one in dotenv and
+            # has already caused two production incidents here, so fail loudly.
+            DUPES="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$APP_DIR/.env" | sort | uniq -d || true)"
+            if [ -n "$DUPES" ]; then
+              echo "ERROR: duplicate keys in the ENV_FILE secret — the LAST occurrence wins:"
+              echo "$DUPES"
+              exit 1
+            fi
+
+            echo "--- STEP 3: Install dependencies ---"
+            npm ci --no-audit --no-fund \
+              || (echo "Lockfile mismatch — reinstalling from scratch." \
+                  && rm -rf node_modules && npm install --no-audit --no-fund)
+
+            echo "--- STEP 4: Build ---"
+            if [ -f "nest-cli.json" ]; then
+              sed -i 's/"watchAssets": *true/"watchAssets": false/g' nest-cli.json
+            fi
+            NODE_OPTIONS="--max-old-space-size=1536" ./node_modules/.bin/nest build
+
+            # STEP 5 must precede the prune: sequelize-cli is a devDependency,
+            # so pruning first would remove the migration runner entirely.
+            # The app sets `synchronize: false`, meaning schema changes ONLY
+            # reach the database through this step — skipping it is what left
+            # audit_logs missing in production.
+            echo "--- STEP 5: Run database migrations ---"
+            npm run migration:run
+
+            echo "--- STEP 6: Prune dev dependencies ---"
+            npm prune --omit=dev
+
+            echo "--- STEP 7: Reload PM2 ---"
+            PM2_BIN=""
+            if [ -f "./node_modules/.bin/pm2" ]; then
+              PM2_BIN="./node_modules/.bin/pm2"
+            elif command -v pm2 > /dev/null 2>&1; then
+              PM2_BIN="pm2"
+            else
+              echo "ERROR: no pm2 binary on this host."
+              exit 1
+            fi
+
+            # A client/daemon version mismatch makes pm2 hang instead of erroring.
+            if [ "$($PM2_BIN -v 2>&1 || true)" = "In-memory PM2" ]; then
+              echo "PM2 version mismatch — killing the stale daemon."
+              pkill -f pm2 || true
+              sleep 2
+            fi
+
+            if $PM2_BIN describe trendupp-api > /dev/null 2>&1; then
+              $PM2_BIN reload ecosystem.config.js --env production
+            else
+              $PM2_BIN start ecosystem.config.js --env production
+            fi
+            $PM2_BIN save
+
+            echo "--- STEP 8: Health check ---"
+            HEALTHY=0
+            for attempt in $(seq 1 20); do
+              if curl -fsS --max-time 5 "$HEALTH_URL" > /dev/null 2>&1; then
+                echo "Healthy after ${attempt} attempt(s)."
+                HEALTHY=1
+                break
+              fi
+              echo "Not ready yet (attempt ${attempt}/20)..."
+              sleep 3
+            done
+
+            if [ "$HEALTHY" -eq 1 ]; then
+              echo "--- DEPLOYMENT SUCCESSFUL ---"
+              exit 0
+            fi
+
+            echo "ERROR: the app did not become healthy within 60s."
+            $PM2_BIN logs trendupp-api --lines 60 --nostream || true
+
+            # Roll the CODE back. Migrations are NOT reverted: undoing one
+            # automatically risks destroying data, and our migrations are
+            # additive, so old code on the new schema is the safer state.
+            # Revert the schema by hand if a migration is the actual cause.
+            if [ -n "$PREVIOUS_SHA" ]; then
+              echo "--- ROLLING BACK to $PREVIOUS_SHA (code only) ---"
+              git reset --hard "$PREVIOUS_SHA"
+              npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+              NODE_OPTIONS="--max-old-space-size=1536" ./node_modules/.bin/nest build
+              npm prune --omit=dev
+              $PM2_BIN reload ecosystem.config.js --env production
+              $PM2_BIN save
+              echo "Rolled back. NOTE: database migrations from the failed deploy were NOT reverted."
+            else
+              echo "No previous commit to roll back to (first deployment)."
+            fi
+
+            exit 1
