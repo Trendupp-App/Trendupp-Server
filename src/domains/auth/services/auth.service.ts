@@ -316,6 +316,7 @@ export class AuthService {
     }
 
     // Load full user details with associations for percentage calculation
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = {
