@@ -52,30 +52,47 @@ export class AdminCreatorsService {
     return role ? role.id : null;
   }
 
-  private buildDateWhere(query: {
-    year?: number;
-    month?: number;
-    startDate?: string;
-    endDate?: string;
-  }): Record<string | symbol, unknown> {
+  private buildDateWhere(
+    query: {
+      year?: number;
+      month?: number;
+      startDate?: string;
+      endDate?: string;
+    },
+    dateField: string = 'createdAt',
+  ): Record<string | symbol, unknown> {
     const where: Record<string | symbol, unknown> = {};
 
-    if (query.year) {
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (query.startDate && query.endDate) {
+      start = new Date(query.startDate);
+      end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+    } else if (query.year) {
       const year = query.year;
       const month = query.month;
       if (month) {
-        const start = new Date(year, month - 1, 1);
-        const end = new Date(year, month, 0, 23, 59, 59, 999);
-        where.createdAt = { [Op.between]: [start, end] };
+        start = new Date(year, month - 1, 1);
+        end = new Date(year, month, 0, 23, 59, 59, 999);
       } else {
-        const start = new Date(year, 0, 1);
-        const end = new Date(year, 11, 31, 23, 59, 59, 999);
-        where.createdAt = { [Op.between]: [start, end] };
+        start = new Date(year, 0, 1);
+        end = new Date(year, 11, 31, 23, 59, 59, 999);
       }
-    } else if (query.startDate && query.endDate) {
-      where.createdAt = {
-        [Op.between]: [new Date(query.startDate), new Date(query.endDate)],
-      };
+    }
+
+    if (start && end) {
+      const dateRange = { [Op.between]: [start, end] };
+      if (dateField === 'lastLoginAt') {
+        where[Op.or] = [
+          { lastLoginAt: dateRange },
+          { [Op.and]: [{ lastLoginAt: null }, { updatedAt: dateRange }] },
+          { [Op.and]: [{ lastLoginAt: null }, { createdAt: dateRange }] },
+        ];
+      } else {
+        where[dateField] = dateRange;
+      }
     }
 
     return where;
@@ -172,13 +189,13 @@ export class AdminCreatorsService {
     const creatorRoleId = await this.getCreatorRoleId();
     if (!creatorRoleId) return [];
 
-    const dateWhere = this.buildDateWhere(query);
+    const dateWhere = this.buildDateWhere(query, 'lastLoginAt');
     const creators = await this.userModel.findAll({
       where: { roleId: creatorRoleId, ...dateWhere },
-      attributes: ['updatedAt'],
+      attributes: ['lastLoginAt', 'updatedAt', 'createdAt'],
     });
 
-    return this.generateActiveLoginsSeries(creators);
+    return this.generateTimeSeries(creators, query.period || 'monthly', 'lastLoginAt');
   }
 
   // ── 4. Top Creators Widget ───────────────────────────────────────────────────
@@ -613,7 +630,11 @@ export class AdminCreatorsService {
 
   // ── Time-series helper functions ──────────────────────────────────────────
 
-  private generateTimeSeries(creators: User[], period: 'daily' | 'weekly' | 'monthly') {
+  private generateTimeSeries(
+    creators: User[],
+    period: 'daily' | 'weekly' | 'monthly',
+    dateField: keyof User = 'createdAt',
+  ) {
     const months = [
       'Jan',
       'Feb',
@@ -629,11 +650,26 @@ export class AdminCreatorsService {
       'Dec',
     ];
 
+    const getTargetDate = (c: User): Date | null => {
+      const val = (c.getDataValue ? c.getDataValue(dateField) : c[dateField]) as
+        | Date
+        | string
+        | number
+        | null
+        | undefined;
+      if (val instanceof Date) return val;
+      if (typeof val === 'string' || typeof val === 'number') return new Date(val);
+      if (c.updatedAt) return new Date(c.updatedAt);
+      if (c.createdAt) return new Date(c.createdAt);
+      return null;
+    };
+
     if (period === 'monthly') {
       const monthCounts: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
       for (const c of creators) {
-        if (c.createdAt) {
-          const m = new Date(c.createdAt).getMonth();
+        const dt = getTargetDate(c);
+        if (dt) {
+          const m = dt.getMonth();
           monthCounts[m] = (monthCounts[m] || 0) + 1;
         }
       }
@@ -644,8 +680,9 @@ export class AdminCreatorsService {
       const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
       const weekCounts: number[] = [0, 0, 0, 0];
       for (const c of creators) {
-        if (c.createdAt) {
-          const day = new Date(c.createdAt).getDate();
+        const dt = getTargetDate(c);
+        if (dt) {
+          const day = dt.getDate();
           const w = Math.min(Math.floor((day - 1) / 7), 3);
           weekCounts[w] = (weekCounts[w] || 0) + 1;
         }
@@ -656,8 +693,9 @@ export class AdminCreatorsService {
     const daysInMonth = 30;
     const dailyCounts: number[] = new Array(daysInMonth).fill(0) as number[];
     for (const c of creators) {
-      if (c.createdAt) {
-        const d = Math.min(new Date(c.createdAt).getDate() - 1, daysInMonth - 1);
+      const dt = getTargetDate(c);
+      if (dt) {
+        const d = Math.min(dt.getDate() - 1, daysInMonth - 1);
         if (d >= 0) dailyCounts[d] = (dailyCounts[d] || 0) + 1;
       }
     }
@@ -665,19 +703,6 @@ export class AdminCreatorsService {
       label: `Day ${i + 1}`,
       count: cnt || 0,
     }));
-  }
-
-  private generateActiveLoginsSeries(creators: User[]) {
-    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-    const weekCounts: number[] = [0, 0, 0, 0];
-    for (const c of creators) {
-      if (c.updatedAt) {
-        const day = new Date(c.updatedAt).getDate();
-        const w = Math.min(Math.floor((day - 1) / 7), 3);
-        weekCounts[w] = (weekCounts[w] || 0) + 1;
-      }
-    }
-    return weeks.map((label, i) => ({ label, count: weekCounts[i] || 0 }));
   }
 
   // ── 11. Detailed Creator Profile Overview ───────────────────────────────────
