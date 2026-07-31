@@ -403,6 +403,12 @@ export class BrandCampaignHistoryItemDto {
   @ApiProperty({ example: 5000 })
   gatewayFee: number;
 
+  @ApiProperty({ example: 138750 })
+  commissionFee: number;
+
+  @ApiProperty({ example: 75000 })
+  vatFee: number;
+
   @ApiProperty({ example: 0.15 })
   commissionRate: number;
 

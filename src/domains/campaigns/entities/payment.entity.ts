@@ -43,6 +43,12 @@ export class Payment extends BaseEntity<Payment> {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0, field: 'gateway_fee' })
   declare gatewayFee: number;
 
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'commission_fee' })
+  declare commissionFee?: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'vat_fee' })
+  declare vatFee?: number;
+
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'USD' })
   declare currency: string;
 
