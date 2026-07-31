@@ -123,7 +123,7 @@ export class PandascrowService {
       },
     };
 
-    console.log({ check_body: body });
+    // console.log({ check_body: body });
 
     try {
       const response = await fetch(`${this.apiUrl}/escrow/initialize`, {
@@ -146,7 +146,7 @@ export class PandascrowService {
         throw new Error(resData.message || 'Failed to initialize escrow');
       }
 
-      console.log({ escrow_check: resData });
+      // console.log({ escrow_check: resData });
 
       return {
         escrow_id: resData.data.escrow_id,
@@ -290,8 +290,35 @@ export class PandascrowService {
         throw new Error(`Pandascrow payout failed: ${message}`);
       }
 
-      const resData = await this.parseJsonResponse<{ status?: boolean }>(response);
-      return !!resData.status;
+      const resData = await this.parseJsonResponse<{
+        status?: boolean;
+        message?: string;
+        data?: { status?: string; message?: string; reason?: string };
+      }>(response);
+
+      if (!resData.status) {
+        const errMsg =
+          resData.message || resData.data?.message || 'Pandascrow payout returned status false';
+        throw new Error(`Pandascrow payout failed: ${errMsg}`);
+      }
+
+      if (resData.data && typeof resData.data.status === 'string') {
+        const transferStatus = resData.data.status.toLowerCase();
+        if (
+          transferStatus === 'failed' ||
+          transferStatus === 'error' ||
+          transferStatus === 'rejected'
+        ) {
+          const errMsg =
+            resData.data.reason ||
+            resData.data.message ||
+            resData.message ||
+            'Transfer failed at gateway';
+          throw new Error(`Pandascrow payout failed: ${errMsg}`);
+        }
+      }
+
+      return true;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Pandascrow payout request exception: ${errMsg}`);

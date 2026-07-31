@@ -262,6 +262,15 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     // The admin app has no dispute detail route; the list page focuses via query param.
     actionUrl: (d) => `/admin/disputes?focus=${d.disputeId}`,
   },
+  'dispute.rejected': {
+    category: 'chatDispute',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: () => `Your dispute was declined`,
+    body: (d) =>
+      `The dispute on campaign ${d.campaignId} was reviewed and declined by an administrator. Reason: "${d.reason}".`,
+    actionUrl: (d) => `/disputes/${d.disputeId}`,
+  },
 
   // ── Admin / staff inbox ─────────────────────────────────────────────────────
   // Delivered via recipientRole fan-outs, which bypass all preference gating
@@ -305,5 +314,23 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Broadcast sent: "${d.title}"`,
     body: (d) => `Your broadcast "${d.title}" was delivered to ${d.totalRecipients} user(s).`,
     actionUrl: () => `/admin/notifications`,
+  },
+  'social_impact.tokens_awarded': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Tokens Credited! +${d.reward} Tokens`,
+    body: (d) =>
+      `Congratulations! You received ${d.reward} tokens for submitting your live link on "${d.campaignTitle}". Total balance: ${d.totalTokens} tokens.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.reminder': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: (d) => `Reminder: ${d.hoursRemaining}h left on "${d.campaignTitle}"`,
+    body: (d) =>
+      `Don't miss out! You joined "${d.campaignTitle}". Submit your live content link before the campaign ends to earn your token reward.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
   },
 };

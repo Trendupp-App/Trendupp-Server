@@ -160,6 +160,7 @@ export interface NotificationPayloads {
     campaignId: string;
     escrowAction: string;
   };
+  'dispute.rejected': { disputeId: string; campaignId: string; reason: string };
 
   // ── Admin / staff inbox (delivered via role fan-outs; never suppressible) ──
   'admin.team_member_invited': { adminName: string; roleName: string };
@@ -167,6 +168,20 @@ export interface NotificationPayloads {
   'admin.team_member_reactivated': { adminName: string };
   'admin.team_member_removed': { adminName: string };
   'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
+
+  // ── Social Impact ─────────────────────────────────────────────────────────
+  'social_impact.tokens_awarded': {
+    campaignId: string;
+    campaignTitle: string;
+    reward: number;
+    totalTokens: number;
+  };
+  'social_impact.reminder': {
+    campaignId: string;
+    campaignTitle: string;
+    hoursRemaining: number;
+    reminderType: string;
+  };
 }
 
 export type NotificationType = keyof NotificationPayloads;

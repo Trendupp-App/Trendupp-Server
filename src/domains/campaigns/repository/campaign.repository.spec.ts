@@ -9,6 +9,7 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { Fee } from '../entities/fee.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { CampaignComment } from '../entities/campaign-comment.entity';
 import { PaymentRelease } from '../entities/payment-release.entity';
 import { CampaignRefund } from '../entities/campaign-refund.entity';
 import { Dispute } from '../../disputes/entities/dispute.entity';
@@ -45,6 +46,7 @@ describe('CampaignRepository', () => {
         { provide: getModelToken(ContentSubmission), useValue: {} },
         { provide: getModelToken(Fee), useValue: {} },
         { provide: getModelToken(CampaignReview), useValue: {} },
+        { provide: getModelToken(CampaignComment), useValue: {} },
         { provide: getModelToken(PaymentRelease), useValue: {} },
         { provide: getModelToken(CampaignRefund), useValue: {} },
         { provide: getModelToken(Dispute), useValue: {} },

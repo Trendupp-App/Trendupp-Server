@@ -6,6 +6,8 @@ import { PaymentRelease } from '../../campaigns/entities/payment-release.entity'
 import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { User } from '../../users/entities/user.entity';
+import { Fee } from '../../campaigns/entities/fee.entity';
+import { BrandCommissionTier } from '../entities/brand-commission-tier.entity';
 import { CampaignsService } from '../../campaigns/services/campaigns.service';
 import {
   QueryEscrowOverviewDto,
@@ -37,11 +39,19 @@ export class AdminEscrowService {
     private readonly campaignModel: typeof Campaign,
     @InjectModel(User)
     private readonly userModel: typeof User,
+    @InjectModel(Fee)
+    private readonly feeModel: typeof Fee,
+    @InjectModel(BrandCommissionTier)
+    private readonly commissionTierModel: typeof BrandCommissionTier,
     private readonly campaignsService: CampaignsService,
   ) {}
 
   /**
-   * Global top-bar summary cards across all Escrow screens
+   * Global top-bar summary cards across all Escrow screens.
+   * Commission rate is read from the fees table (or BrandCommissionTier default)
+   * so it reflects any admin-configured value rather than a hardcoded 0.15.
+   * For new payments the snapshotted commission_rate column is used for precision;
+   * for legacy rows (null snapshot) the current live rate is used as a fallback.
    */
   async getGlobalSummary(): Promise<EscrowSummary> {
     const paidPayments = await this.paymentModel.findAll({
@@ -55,7 +65,17 @@ export class AdminEscrowService {
       totalAdvertisersSpend += p.totalAmount || p.amount || 0;
     }
 
-    const totalAgencyCommission = Math.round(totalAdvertisersSpend * 0.15);
+    // Fetch live commission rate from fees table for legacy rows fallback
+    const commissionFeeRecord = await this.feeModel.findOne({ where: { name: 'Trendupp Fee' } });
+    const defaultCommissionRate = commissionFeeRecord?.value ?? 0.15;
+
+    // Sum commission using snapshotted rate per payment; fall back to live rate
+    let totalAgencyCommission = 0;
+    for (const p of paidPayments) {
+      const amt = p.totalAmount || p.amount || 0;
+      const rate = p.commissionRate ?? defaultCommissionRate;
+      totalAgencyCommission += Math.round(amt * rate);
+    }
 
     const releasedPayouts = await this.paymentReleaseModel.findAll({
       where: { status: 'released' },
@@ -91,6 +111,10 @@ export class AdminEscrowService {
     const summary = await this.getGlobalSummary();
     const selectedYear = query.year || new Date().getFullYear();
 
+    // Fetch live commission rate from fees table for chart calculations
+    const commissionFeeRecord = await this.feeModel.findOne({ where: { name: 'Trendupp Fee' } });
+    const liveCommissionRate = commissionFeeRecord?.value ?? 0.15;
+
     const monthNames = [
       'Jan',
       'Feb',
@@ -123,9 +147,11 @@ export class AdminEscrowService {
     for (const p of paymentsThisYear) {
       const m = new Date(p.createdAt).getMonth();
       const amt = p.totalAmount || p.amount || 0;
+      // Use snapshotted commission rate if available; fall back to current live rate
+      const commissionRate = p.commissionRate ?? liveCommissionRate;
       if (['paid', 'escrowed', 'completed'].includes(p.paymentStatus)) {
         advertisersSpendChart[m].amount += amt;
-        agencyCommissionChart[m].amount += Math.round(amt * 0.15);
+        agencyCommissionChart[m].amount += Math.round(amt * commissionRate);
       }
       if (['paid', 'escrowed'].includes(p.paymentStatus)) {
         escrowBalanceChart[m].amount += amt;
@@ -273,37 +299,85 @@ export class AdminEscrowService {
       { page, limit },
     );
 
-    const data = paginated.data.map((p) => {
-      const campaign = p.campaign;
-      const brand = campaign?.brand;
-      const brandObj = brand as (User & { companyName?: string }) | undefined;
-      const brandName =
-        brandObj?.companyName ||
-        `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
-        'Advertiser';
+    const data = await Promise.all(
+      paginated.data.map(async (p) => {
+        const campaign = p.campaign;
+        const brand = campaign?.brand;
+        const brandObj = brand as (User & { companyName?: string }) | undefined;
+        const brandName =
+          brandObj?.companyName ||
+          `${brand?.firstName || ''} ${brand?.lastName || ''}`.trim() ||
+          'Advertiser';
 
-      let fundingStatus = 'pending';
-      if (['paid', 'escrowed', 'completed'].includes(p.paymentStatus)) {
-        fundingStatus = 'successful';
-      } else if (p.paymentStatus === 'failed') {
-        fundingStatus = 'failed';
-      }
+        let fundingStatus = 'pending';
+        if (['paid', 'escrowed', 'completed'].includes(p.paymentStatus)) {
+          fundingStatus = 'successful';
+        } else if (p.paymentStatus === 'failed') {
+          fundingStatus = 'failed';
+        }
 
-      return {
-        id: p.id,
-        campaignId: campaign?.id || null,
-        campaignTitle: campaign?.title || 'Campaign',
-        brand: {
-          id: brand?.id || null,
-          name: brandName,
-        },
-        totalFunded: p.totalAmount || p.amount || 0,
-        status: fundingStatus,
-        campaignStatus: campaign?.status || 'active',
-        paymentPortalUrl: p.paymentUrl || null,
-        lastUpdated: p.updatedAt,
-      };
-    });
+        const totalFunded = p.totalAmount || p.amount || 0;
+
+        // Build breakdown from snapshotted rates if available; fall back to live calculateBreakdown
+        let breakdownData: {
+          commission: number | null;
+          commissionRate: number | null;
+          vat: number | null;
+          vatRate: number | null;
+          gatewayFee: number;
+          gatewayRate: number | null;
+          netAmount: number | null;
+        };
+
+        if (p.commissionRate != null && p.vatRate != null && p.gatewayRate != null) {
+          // New payment — use snapshotted rates for historical accuracy
+          const commission = Math.round(totalFunded * p.commissionRate);
+          const vat = Math.round(totalFunded * p.vatRate);
+          const gatewayFee = p.gatewayFee ?? Math.round(totalFunded * p.gatewayRate);
+          breakdownData = {
+            commission,
+            commissionRate: p.commissionRate,
+            vat,
+            vatRate: p.vatRate,
+            gatewayFee,
+            gatewayRate: p.gatewayRate,
+            netAmount: totalFunded - commission - vat - gatewayFee,
+          };
+        } else {
+          // Legacy payment (pre-snapshot) — fall back to live calculateBreakdown
+          const bd = await this.campaignsService.calculateBreakdown(
+            totalFunded,
+            p.currency || campaign?.currency || 'NGN',
+            campaign?.brandId,
+          );
+          breakdownData = {
+            commission: bd.trenduppFee,
+            commissionRate: bd.commissionRate,
+            vat: bd.vat,
+            vatRate: bd.vatRate,
+            gatewayFee: p.gatewayFee ?? bd.pandascrowFee,
+            gatewayRate: bd.gatewayRate,
+            netAmount: bd.campaignBudget,
+          };
+        }
+
+        return {
+          id: p.id,
+          campaignId: campaign?.id || null,
+          campaignTitle: campaign?.title || 'Campaign',
+          brand: {
+            id: brand?.id || null,
+            name: brandName,
+          },
+          totalFunded,
+          breakdown: breakdownData,
+          status: fundingStatus,
+          campaignStatus: campaign?.status || 'active',
+          paymentPortalUrl: p.paymentUrl || null,
+          lastUpdated: p.updatedAt,
+        };
+      }),
+    );
 
     return {
       summary,

@@ -11,6 +11,7 @@ import { CampaignRepository } from '../../campaigns/repository/campaign.reposito
 import { CreateDisputeDto } from '../dtos/create-dispute.dto';
 import { ActivateDisputeDto } from '../dtos/activate-dispute.dto';
 import { ResolveDisputeDto } from '../dtos/resolve-dispute.dto';
+import { RejectDisputeDto } from '../dtos/reject-dispute.dto';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { TimelineService } from '../../campaigns/services/timeline.service';
 
@@ -179,6 +180,60 @@ export class DisputesService {
         dedupeKey: dispute.id,
       });
     }
+
+    return dispute;
+  }
+
+  /**
+   * Declines a raised dispute before it is ever activated (the admin "Decline
+   * Request" action). Only 'raised' disputes can be declined — once a dispute
+   * is under review it must be resolved through the escrow flow instead.
+   * Unblocks any payout release that raising the dispute had frozen, and
+   * notifies both parties with the reason.
+   */
+  async rejectDispute(id: string, rejectedById: string, dto: RejectDisputeDto): Promise<Dispute> {
+    const dispute = await this.disputeRepository.findById(id);
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    if (dispute.status !== 'raised') {
+      throw new BadRequestException(
+        `Dispute cannot be declined. Current status is: ${dispute.status}`,
+      );
+    }
+
+    dispute.status = 'rejected';
+    dispute.resolvedById = rejectedById;
+    dispute.resolvedAt = new Date();
+    dispute.resolutionNotes = dto.reason;
+    await dispute.save();
+
+    // Raising a dispute blocks the creator payout (release -> 'disputed').
+    // Declining the dispute means the original flow resumes, so unblock it.
+    const release = await this.campaignRepository.findReleaseByCampaignAndCreator(
+      dispute.campaignId,
+      dispute.creatorId,
+    );
+    if (release && release.status === 'disputed') {
+      await release.update({
+        status: 'pending',
+        errorDetails: `Dispute declined by admin. Reason: ${dto.reason}`,
+      });
+    }
+
+    // Both parties learn the dispute was declined and why.
+    await this.notificationsService.notify({
+      type: 'dispute.rejected',
+      recipientId: [dispute.creatorId, dispute.brandId],
+      actorId: rejectedById,
+      data: {
+        disputeId: dispute.id,
+        campaignId: dispute.campaignId,
+        reason: dto.reason,
+      },
+      dedupeKey: dispute.id,
+    });
 
     return dispute;
   }

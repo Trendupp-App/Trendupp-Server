@@ -6,6 +6,8 @@ import { User } from '../../users/entities/user.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { ContentSubmission } from '../../campaigns/entities/content-submission.entity';
 import { TokenBatch } from '../entities/token-batch.entity';
+import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { AuditLogService } from './audit-log.service';
 import {
   TokenBatchResponseDto,
@@ -20,7 +22,10 @@ import {
   SocialImpactParticipantsListResponseDto,
   SocialImpactParticipantItemDto,
   ReviewParticipantSubmissionDto,
-  SocialImpactAdminActionDto,
+  ExtendDeadlineDto,
+  CancelCampaignDto,
+  CloseApplicationsDto,
+  PauseCampaignDto,
 } from '../dtos/admin-social-impact.dto';
 
 @Injectable()
@@ -36,6 +41,10 @@ export class AdminSocialImpactService {
     private readonly submissionModel: typeof ContentSubmission,
     @InjectModel(TokenBatch)
     private readonly tokenBatchModel: typeof TokenBatch,
+    @InjectModel(CreatorCategory)
+    private readonly creatorCategoryModel: typeof CreatorCategory,
+    @InjectModel(UserTokenLedger)
+    private readonly tokenLedgerModel: typeof UserTokenLedger,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -221,25 +230,62 @@ export class AdminSocialImpactService {
     dto: CreateSocialImpactCampaignDto,
     adminId: string,
   ): Promise<Campaign> {
-    const brand = await this.userModel.findByPk(dto.brandId);
-    if (!brand) {
-      throw new NotFoundException('Selected Advertiser brand not found');
+    let brandId = dto.brandId;
+    if (brandId) {
+      const brand = await this.userModel.findByPk(brandId);
+      if (!brand) {
+        throw new NotFoundException('Selected Advertiser brand not found');
+      }
+    } else {
+      brandId = adminId;
     }
 
     const isDraft = dto.isDraft !== false;
-    const status = isDraft ? 'draft' : 'live';
+    const status = isDraft ? 'draft' : 'active';
 
     const contentGuidelines = {
       dos: dto.dos || [],
       donts: dto.donts || [],
     };
 
+    let creatorCategoryIds: string[] = [];
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      creatorCategoryIds = categories.map((c) => c.id);
+    }
+
+    const now = new Date();
+    const publishedAtIso = isDraft ? null : now.toISOString();
+    const endIso = dto.endDate
+      ? new Date(dto.endDate).toISOString()
+      : new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+
+    const timeline = {
+      publishedAt: publishedAtIso,
+      endDate: endIso,
+      tierRewards: dto.tierRewards || null,
+      stage1_application_window: {
+        goal: 'Campaign active window',
+        status: isDraft ? 'pending' : 'in_progress',
+        startedDate: publishedAtIso,
+        endedDate: endIso,
+        intendedFor: 'Campaign duration',
+      },
+    };
+
     const campaign = await this.campaignModel.create({
       title: dto.title,
       goal: dto.goal,
-      brandId: dto.brandId,
+      brandId,
       type: 'social_impact',
-      tokenReward: dto.tokenReward,
+      totalBudget: 0,
+      creatorCategoryIds,
       currentStep: dto.currentStep || 1,
       status,
       paymentStatus: 'paid',
@@ -248,12 +294,14 @@ export class AdminSocialImpactService {
       deliverables: dto.deliverables || [],
       contentDirection: dto.contentDirection || [],
       contentGuidelines,
+      timeline,
+      approvedAt: isDraft ? null : now,
     } as unknown as Campaign);
 
     await this.auditLogService.log({
       adminId,
       action: isDraft ? 'CREATE_SOCIAL_IMPACT_DRAFT' : 'PUBLISH_SOCIAL_IMPACT',
-      details: { campaignId: campaign.id, title: dto.title, tokenReward: dto.tokenReward },
+      details: { campaignId: campaign.id, title: dto.title },
     });
 
     return campaign;
@@ -277,8 +325,16 @@ export class AdminSocialImpactService {
 
     if (dto.title) updates.title = dto.title;
     if (dto.goal) updates.goal = dto.goal;
-    if (dto.brandId) updates.brandId = dto.brandId;
-    if (dto.tokenReward) updates.tokenReward = dto.tokenReward;
+    if (dto.creatorTiers && dto.creatorTiers.length > 0) {
+      const categories = await this.creatorCategoryModel.findAll({
+        where: {
+          name: {
+            [Op.in]: dto.creatorTiers,
+          },
+        },
+      });
+      updates.creatorCategoryIds = categories.map((c) => c.id);
+    }
     if (dto.coverImageUrl) updates.coverImageUrl = dto.coverImageUrl;
     if (dto.campaignBrief) updates.campaignBrief = dto.campaignBrief;
     if (dto.currentStep) updates.currentStep = dto.currentStep;
@@ -314,7 +370,25 @@ export class AdminSocialImpactService {
       throw new NotFoundException('Social Impact campaign not found');
     }
 
-    await campaign.update({ status: 'live', currentStep: 3 });
+    const now = new Date();
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    timeline.publishedAt = now.toISOString();
+    if (!timeline.endDate) {
+      timeline.endDate = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+    }
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    if (stage1) {
+      stage1.status = 'in_progress';
+      stage1.startedDate = now.toISOString();
+      stage1.endedDate = String(timeline.endDate);
+    }
+
+    await campaign.update({
+      status: 'active',
+      currentStep: 3,
+      approvedAt: now,
+      timeline,
+    });
 
     await this.auditLogService.log({
       adminId,
@@ -537,16 +611,82 @@ export class AdminSocialImpactService {
       await submission.update({ status: 'approved' });
     }
 
+    // Award tokens to creator based on their CreatorCategory and recalculate badge
+    const creator = await this.userModel.findByPk(application.creatorId);
+    let awardedTokens = 0;
+    if (creator) {
+      const maxFollowers = Math.max(
+        creator.instagramFollowers || 0,
+        creator.tiktokFollowers || 0,
+        creator.youtubeFollowers || 0,
+        creator.twitterFollowers || 0,
+        creator.facebookFollowers || 0,
+      );
+
+      const categories = await this.creatorCategoryModel.findAll({
+        order: [['minFollowers', 'DESC']],
+      });
+      const matchedCat =
+        categories.find(
+          (c) =>
+            maxFollowers >= c.minFollowers && (!c.maxFollowers || maxFollowers <= c.maxFollowers),
+        ) || (categories.length > 0 ? categories[categories.length - 1] : null);
+
+      awardedTokens = matchedCat?.rewardTokens ?? Number(application.campaign?.tokenReward || 1);
+
+      const awardedAt = new Date();
+      const expiresAt = new Date(awardedAt);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+      await this.tokenLedgerModel.create({
+        userId: creator.id,
+        campaignId,
+        tokensAwarded: awardedTokens,
+        tokensRemaining: awardedTokens,
+        awardedAt,
+        expiresAt,
+        isExpired: false,
+      } as unknown as UserTokenLedger);
+
+      const activeLedgers = await this.tokenLedgerModel.findAll({
+        where: {
+          userId: creator.id,
+          isExpired: false,
+        },
+      });
+
+      const totalTokens = activeLedgers.reduce((acc, l) => acc + (l.tokensRemaining || 0), 0);
+
+      let badge: string | null = null;
+      if (totalTokens >= 1000) {
+        badge = 'Impact Champion';
+      } else if (totalTokens >= 100) {
+        badge = 'Impact Leader';
+      } else if (totalTokens >= 10) {
+        badge = 'Impact Advocate';
+      }
+
+      await creator.update({
+        totalTokens,
+        badge,
+      });
+    }
+
     await this.auditLogService.log({
       adminId,
       action: 'APPROVE_SOCIAL_IMPACT_PARTICIPANT',
       targetUserId: application.creatorId,
-      details: { campaignId, applicationId: appId, reason: 'Approved content and awarded tokens' },
+      details: {
+        campaignId,
+        applicationId: appId,
+        awardedTokens,
+        reason: 'Approved content and awarded tokens',
+      },
     });
 
     return {
       success: true,
-      message: 'Participant submission approved and tokens awarded successfully.',
+      message: `Participant submission approved and ${awardedTokens} tokens awarded successfully.`,
     };
   }
 
@@ -594,11 +734,7 @@ export class AdminSocialImpactService {
 
   // ── 12. Administrative Actions ─────────────────────────────────────────────
 
-  async pauseCampaign(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async pauseCampaign(id: string, dto: PauseCampaignDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -609,17 +745,13 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'PAUSE_SOCIAL_IMPACT',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Campaign paused by admin' },
     });
 
     return campaign;
   }
 
-  async cancelCampaign(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async cancelCampaign(id: string, dto: CancelCampaignDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -630,17 +762,13 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'CANCEL_SOCIAL_IMPACT',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Campaign cancelled by admin' },
     });
 
     return campaign;
   }
 
-  async extendDeadline(
-    id: string,
-    dto: SocialImpactAdminActionDto,
-    adminId: string,
-  ): Promise<Campaign> {
+  async extendDeadline(id: string, dto: ExtendDeadlineDto, adminId: string): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
@@ -661,7 +789,11 @@ export class AdminSocialImpactService {
     await this.auditLogService.log({
       adminId,
       action: 'EXTEND_SOCIAL_IMPACT_DEADLINE',
-      details: { campaignId: id, reason: dto.reason, newDeadline: dto.newDeadline },
+      details: {
+        campaignId: id,
+        reason: dto.reason || 'Deadline extended by admin',
+        newDeadline: dto.newDeadline,
+      },
     });
 
     return campaign;
@@ -669,7 +801,7 @@ export class AdminSocialImpactService {
 
   async closeApplications(
     id: string,
-    dto: SocialImpactAdminActionDto,
+    dto: CloseApplicationsDto,
     adminId: string,
   ): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
@@ -677,12 +809,12 @@ export class AdminSocialImpactService {
     });
     if (!campaign) throw new NotFoundException('Social Impact campaign not found');
 
-    await campaign.update({ status: 'active' });
+    await campaign.update({ status: 'completed' });
 
     await this.auditLogService.log({
       adminId,
       action: 'CLOSE_SOCIAL_IMPACT_APPLICATIONS',
-      details: { campaignId: id, reason: dto.reason },
+      details: { campaignId: id, reason: dto.reason || 'Applications closed by admin' },
     });
 
     return campaign;

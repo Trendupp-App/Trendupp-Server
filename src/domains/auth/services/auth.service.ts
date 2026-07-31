@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -303,7 +304,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
 
     if (!user.isEmailVerified) {
       // Trigger a new registration OTP if they try to log in but haven't verified yet
@@ -315,6 +316,7 @@ export class AuthService {
     }
 
     // Load full user details with associations for percentage calculation
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
     const defaultSteps = {
@@ -419,7 +421,7 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
@@ -520,7 +522,7 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
@@ -625,7 +627,7 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
     const token = this.generateToken(user);
@@ -713,7 +715,7 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }
 
@@ -766,7 +768,7 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
-    await this.checkAndReactivateUser(user);
+    this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }
 
@@ -841,7 +843,7 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
     if (user) {
-      await this.checkAndReactivateUser(user);
+      this.checkAndReactivateUser(user);
 
       if (!user.isEmailVerified) {
         await this.usersService.update(user.id, { isEmailVerified: true });
@@ -949,26 +951,11 @@ export class AuthService {
     });
   }
 
-  private async checkAndReactivateUser(user: User): Promise<void> {
-    if (user.isActive === false) {
-      if (user.deactivatedAt) {
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-        if (user.deactivatedAt >= ninetyDaysAgo) {
-          await this.usersService.update(user.id, {
-            isActive: true,
-            deactivatedAt: null,
-          });
-          user.isActive = true;
-          user.deactivatedAt = null;
-        } else {
-          throw new UnauthorizedException(
-            'Account has been deactivated and is past the 90-day restoration period.',
-          );
-        }
-      } else {
-        throw new UnauthorizedException('Account is inactive.');
-      }
+  private checkAndReactivateUser(user: User): void {
+    if (user.isActive === false || user.deactivatedAt) {
+      throw new ForbiddenException(
+        'Your account has been deleted or deactivated. You cannot log in with this account.',
+      );
     }
   }
 

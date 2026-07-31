@@ -27,11 +27,11 @@ export class Dispute extends BaseEntity<Dispute> {
   declare brand: User;
 
   @Column({
-    type: DataType.ENUM('raised', 'under_review', 'resolved'),
+    type: DataType.ENUM('raised', 'under_review', 'resolved', 'rejected'),
     allowNull: false,
     defaultValue: 'raised',
   })
-  declare status: 'raised' | 'under_review' | 'resolved';
+  declare status: 'raised' | 'under_review' | 'resolved' | 'rejected';
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare reason: string;

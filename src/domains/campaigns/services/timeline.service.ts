@@ -46,6 +46,27 @@ export class TimelineService {
     };
   }
 
+  private normalizeTimeline(timeline?: unknown, fallbackDate: Date = new Date()): CampaignTimeline {
+    if (!timeline) {
+      return this.initCampaignTimeline(fallbackDate);
+    }
+    if (typeof timeline === 'string') {
+      try {
+        const parsed = JSON.parse(timeline) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as CampaignTimeline;
+        }
+      } catch {
+        // legacy date string or invalid JSON
+      }
+      return this.initCampaignTimeline(fallbackDate);
+    }
+    if (typeof timeline === 'object' && !Array.isArray(timeline)) {
+      return { ...(timeline as CampaignTimeline) };
+    }
+    return this.initCampaignTimeline(fallbackDate);
+  }
+
   /**
    * Marks Stage 1 (Application Window) as completed and starts Stage 2.
    */
@@ -53,7 +74,7 @@ export class TimelineService {
     timeline?: CampaignTimeline,
     endedDate: Date = new Date(),
   ): CampaignTimeline {
-    const current = timeline || this.initCampaignTimeline(endedDate);
+    const current = this.normalizeTimeline(timeline, endedDate);
     const endedIso = endedDate.toISOString();
 
     current.stage1_application_window = {
@@ -78,7 +99,7 @@ export class TimelineService {
     timeline?: CampaignTimeline,
     endedDate: Date = new Date(),
   ): CampaignTimeline {
-    const current = timeline || this.initCampaignTimeline(endedDate);
+    const current = this.normalizeTimeline(timeline, endedDate);
     const endedIso = endedDate.toISOString();
 
     if (current.stage2_application_review) {

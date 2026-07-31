@@ -76,8 +76,11 @@ export class GoogleAuthService {
 
       return payload;
     } catch (error) {
+      // Surface the reason: "Token used too late" = expired idToken (client
+      // replayed a stale session); "Wrong recipient" = audience mismatch.
+      const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : '';
-      this.logger.error('Google ID Token verification failed', stack);
+      this.logger.error(`Google ID Token verification failed: ${message}`, stack);
       throw new UnauthorizedException('Invalid Google ID Token');
     }
   }

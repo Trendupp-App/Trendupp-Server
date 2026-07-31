@@ -25,6 +25,7 @@ import { AdminNote } from './entities/admin-note.entity';
 import { TokenBatch } from './entities/token-batch.entity';
 import { Role } from '../users/entities/role.entity';
 import { User } from '../users/entities/user.entity';
+import { UserTokenLedger } from '../users/entities/user-token-ledger.entity';
 import { Niche } from '../users/entities/niche.entity';
 import { Industry } from '../users/entities/industry.entity';
 import { Nationality } from '../users/entities/nationality.entity';
@@ -54,6 +55,7 @@ import { PublicSettingsController } from '../users/controllers/public-settings.c
 import { PaymentRelease } from '../campaigns/entities/payment-release.entity';
 import { CampaignRefund } from '../campaigns/entities/campaign-refund.entity';
 import { Payment } from '../campaigns/entities/payment.entity';
+import { Fee } from '../campaigns/entities/fee.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../../integration/email/email.module';
@@ -85,6 +87,7 @@ import {
       ContentSubmission,
       Dispute,
       BrandCommissionTier,
+      UserTokenLedger,
       Faq,
       NewsCategory,
       SystemSetting,
@@ -92,6 +95,7 @@ import {
       PaymentRelease,
       CampaignRefund,
       Payment,
+      Fee,
     ]),
     ConfigModule,
     CampaignsModule,

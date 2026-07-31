@@ -20,6 +20,7 @@ import { DisputesService } from '../services/disputes.service';
 import { CreateDisputeDto } from '../dtos/create-dispute.dto';
 import { ActivateDisputeDto } from '../dtos/activate-dispute.dto';
 import { ResolveDisputeDto } from '../dtos/resolve-dispute.dto';
+import { RejectDisputeDto } from '../dtos/reject-dispute.dto';
 
 @ApiTags('disputes')
 @Controller('disputes')
@@ -87,6 +88,26 @@ export class DisputesController {
     @Body() dto: ActivateDisputeDto,
   ) {
     return this.disputesService.activateDispute(id, user.id, dto);
+  }
+
+  @Post(':id/reject')
+  @Audit('DISPUTE_REJECTED')
+  @UseGuards(RolesGuard)
+  @Roles('owner', 'super_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Decline a raised dispute before activation (Admins only)',
+  })
+  @ApiResponse({ status: 200, description: 'Dispute declined and parties notified' })
+  @ApiResponse({ status: 400, description: 'Dispute is not in a declinable state' })
+  @ApiResponse({ status: 403, description: 'Forbidden — admin role required' })
+  @ApiResponse({ status: 404, description: 'Dispute not found' })
+  async rejectDispute(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: RejectDisputeDto,
+  ) {
+    return this.disputesService.rejectDispute(id, user.id, dto);
   }
 
   @Post(':id/resolve')

@@ -14,6 +14,7 @@ import { CampaignApplication } from './entities/campaign-application.entity';
 import { ContentSubmission } from './entities/content-submission.entity';
 import { Fee } from './entities/fee.entity';
 import { CampaignReview } from './entities/campaign-review.entity';
+import { CampaignComment } from './entities/campaign-comment.entity';
 import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
@@ -26,6 +27,10 @@ import { WebhooksController } from './controllers/webhooks.controller';
 import { PayoutScheduler } from './services/payout.scheduler';
 import { TimelineService } from './services/timeline.service';
 import { CampaignTimelineScheduler } from './services/campaign-timeline.scheduler';
+
+import { UserTokenLedger } from '../users/entities/user-token-ledger.entity';
+import { User } from '../users/entities/user.entity';
+import { SocialImpactReminderScheduler } from './services/social-impact-reminder.scheduler';
 
 import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.entity';
 
@@ -41,11 +46,14 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
       ContentSubmission,
       Fee,
       CampaignReview,
+      CampaignComment,
       PaymentRelease,
       CampaignRefund,
       Dispute,
       Niche,
       BrandCommissionTier,
+      UserTokenLedger,
+      User,
     ]),
     UsersModule,
 
@@ -61,6 +69,7 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
     PayoutScheduler,
     TimelineService,
     CampaignTimelineScheduler,
+    SocialImpactReminderScheduler,
   ],
   controllers: [CampaignsController, WebhooksController],
   exports: [CampaignsService, CampaignRepository, SequelizeModule, TimelineService],

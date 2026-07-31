@@ -15,7 +15,6 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminSocialImpactService } from '../services/admin-social-impact.service';
 import {
-  TokenBatchResponseDto,
   AdminSocialImpactSummaryResponseDto,
   QueryAdminSocialImpactListDto,
   SocialImpactCampaignsListResponseDto,
@@ -25,7 +24,10 @@ import {
   QuerySocialImpactParticipantsDto,
   SocialImpactParticipantsListResponseDto,
   ReviewParticipantSubmissionDto,
-  SocialImpactAdminActionDto,
+  ExtendDeadlineDto,
+  CancelCampaignDto,
+  CloseApplicationsDto,
+  PauseCampaignDto,
 } from '../dtos/admin-social-impact.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -39,17 +41,6 @@ import { User } from '../../users/entities/user.entity';
 @ApiBearerAuth()
 export class AdminSocialImpactController {
   constructor(private readonly adminSocialImpactService: AdminSocialImpactService) {}
-
-  @Get('social-impact/token-batches')
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get available seeded Token Batches for creator rewards dropdown',
-  })
-  @ApiResponse({ status: 200, type: [TokenBatchResponseDto] })
-  async getTokenBatches(): Promise<TokenBatchResponseDto[]> {
-    return this.adminSocialImpactService.getTokenBatches();
-  }
 
   @Get('social-impact/summary')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
@@ -212,7 +203,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Pause an active Social Impact Campaign' })
   async pauseCampaign(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: PauseCampaignDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.pauseCampaign(id, dto, admin.id);
@@ -225,7 +216,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Permanently cancel a Social Impact Campaign' })
   async cancelCampaign(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: CancelCampaignDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.cancelCampaign(id, dto, admin.id);
@@ -238,7 +229,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Extend submission deadline for a Social Impact Campaign' })
   async extendDeadline(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: ExtendDeadlineDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.extendDeadline(id, dto, admin.id);
@@ -251,7 +242,7 @@ export class AdminSocialImpactController {
   @ApiOperation({ summary: 'Close application window for a Social Impact Campaign' })
   async closeApplications(
     @Param('id') id: string,
-    @Body() dto: SocialImpactAdminActionDto,
+    @Body() dto: CloseApplicationsDto,
     @CurrentUser() admin: User,
   ) {
     const campaign = await this.adminSocialImpactService.closeApplications(id, dto, admin.id);

@@ -19,6 +19,7 @@ import { PaginatedResult } from '../../../shared/utils/pagination.utils';
 import { CreateReviewDto } from '../dtos/create-review.dto';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { CampaignReview } from '../entities/campaign-review.entity';
+import { CampaignComment } from '../entities/campaign-comment.entity';
 import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
 import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
@@ -29,6 +30,9 @@ import { Niche } from '../../users/entities/niche.entity';
 import { Op } from 'sequelize';
 import { InjectModel } from '@nestjs/sequelize';
 import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.entity';
+
+import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
+import { QuerySocialImpactCampaignsDto } from '../dtos/social-impact-query.dto';
 
 @Injectable()
 export class CampaignsService {
@@ -49,6 +53,10 @@ export class CampaignsService {
     private readonly feeModel: typeof Fee,
     @InjectModel(BrandCommissionTier)
     private readonly commissionTierModel: typeof BrandCommissionTier,
+    @InjectModel(UserTokenLedger)
+    private readonly tokenLedgerModel: typeof UserTokenLedger,
+    @InjectModel(User)
+    private readonly userModel: typeof User,
   ) {}
 
   // ─── Billing Calculations ──────────────────────────────────────────────────
@@ -63,6 +71,9 @@ export class CampaignsService {
     vat: number;
     pandascrowFee: number;
     totalToPay: number;
+    commissionRate: number;
+    vatRate: number;
+    gatewayRate: number;
     breakdownItems: { name: string; type: string; value: number; amount: number }[];
   }> {
     let trenduppRate = 0.15;
@@ -85,33 +96,38 @@ export class CampaignsService {
       }
     }
 
-    // Trendupp commission and VAT (7.5%) are deducted from the brand's total payment
-    const trenduppFee = Math.round(budget * trenduppRate);
-    const vat = Math.round(budget * 0.075);
+    // 1. VAT (7.5%) is deducted first from the brand's total budget.
+    const vatFeeRecord = await this.feeModel.findOne({ where: { name: 'VAT' } });
+    const vatRate = vatFeeRecord?.value ?? 0.075; // safe fallback to 7.5%
+    const vat = Math.round(budget * vatRate);
+    const amountAfterVat = budget - vat;
 
-    // Look up Pandascrow platform fee rate from the fees table
-    // NGN → Pandascrow routes via Paystack (3%), USD → via Stripe (5%)
+    // 2. Trendupp commission (15%) is deducted from the balance remaining after VAT.
+    const trenduppFee = Math.round(amountAfterVat * trenduppRate);
+
+    // 3. Final Creator budget pool = remaining balance after VAT minus Trendupp commission.
+    const campaignBudget = amountAfterVat - trenduppFee;
+
+    // 4. Pandascrow platform fee rate from fees table (3% NGN, 5% USD).
+    // Gateway fee is deducted FROM the 15% Trendupp commission pool, NOT from creator budget pool.
     const feeKey =
       currency === 'NGN' ? 'Pandascrow Gateway Fee (NGN)' : 'Pandascrow Gateway Fee (USD)';
     const feeRecord = await this.feeModel.findOne({ where: { name: feeKey } });
     const pandascrowRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
-    const pandascrowFee = Math.round(budget * pandascrowRate);
-
-    // Creator pool = total paid − Trendupp fee − VAT − Pandascrow platform fee
-    const campaignBudget = budget - trenduppFee - vat - pandascrowFee;
+    const pandascrowFee = Math.round(trenduppFee * pandascrowRate);
 
     const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
+      {
+        name: 'VAT',
+        type: 'percentage',
+        value: vatRate,
+        amount: vat,
+      },
       {
         name: 'Trendupp Fee',
         type: 'percentage',
         value: trenduppRate,
         amount: trenduppFee,
-      },
-      {
-        name: 'VAT',
-        type: 'percentage',
-        value: 0.075,
-        amount: vat,
       },
       {
         name: `Pandascrow Gateway Fee (${currency})`,
@@ -127,6 +143,9 @@ export class CampaignsService {
       vat,
       pandascrowFee,
       totalToPay: budget,
+      commissionRate: trenduppRate,
+      vatRate,
+      gatewayRate: pandascrowRate,
       breakdownItems,
     };
   }
@@ -513,13 +532,19 @@ export class CampaignsService {
     });
 
     // Create pending payment record
-    // gatewayFee = Pandascrow platform fee already computed inside calculateBreakdown
+    // Snapshot the fee rates at payment time so the breakdown remains accurate
+    // even if the admin later updates commission/VAT/gateway rates.
     // (3% for NGN/Paystack, 5% for USD/Stripe)
     const payment = await this.campaignRepository.createPayment({
       campaignId: campaign.id,
       amount: breakdown.campaignBudget,
       totalAmount: breakdown.totalToPay,
+      commissionFee: breakdown.trenduppFee,
+      vatFee: breakdown.vat,
       gatewayFee: breakdown.pandascrowFee,
+      commissionRate: breakdown.commissionRate,
+      vatRate: breakdown.vatRate,
+      gatewayRate: breakdown.gatewayRate,
       paymentStatus: 'pending',
       currency: campaign.currency,
       paymentReference: escrow.transaction_ref,
@@ -778,6 +803,25 @@ export class CampaignsService {
       campaign.setDataValue('applications' as any, []);
     }
 
+    if (requestingUser) {
+      const roleRaw: unknown = requestingUser.role;
+      const role =
+        typeof roleRaw === 'object' && roleRaw !== null && 'name' in roleRaw
+          ? (roleRaw as { name: string }).name
+          : ((roleRaw as string | undefined) ?? '');
+
+      if (role === 'creator') {
+        const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+          id,
+          requestingUser.id,
+        );
+        campaign.setDataValue('campaignComment' as any, commentRecord);
+      } else if (role === 'brand' && campaign.brandId === requestingUser.id) {
+        const comments = await this.campaignRepository.findCommentsByCampaign(id);
+        campaign.setDataValue('campaignComments' as any, comments);
+      }
+    }
+
     return campaign;
   }
 
@@ -886,11 +930,34 @@ export class CampaignsService {
       throw new ForbiddenException(`You have already applied to this campaign`);
     }
 
+    const { comments, ...applicationData } = data;
+
+    if (comments && comments.trim()) {
+      const existingComment = await this.campaignRepository.findCommentByCampaignAndCreator(
+        campaignId,
+        creatorId,
+      );
+      if (existingComment) {
+        throw new ForbiddenException(
+          `You have already submitted a comment/question for this campaign`,
+        );
+      }
+    }
+
     const application = await this.campaignRepository.createApplication({
       campaignId,
       creatorId,
-      ...data,
+      ...applicationData,
     });
+
+    if (comments && comments.trim()) {
+      await this.campaignRepository.createComment({
+        campaignId,
+        creatorId,
+        brandId: campaign.brandId,
+        comment: comments,
+      });
+    }
 
     await this.notificationsService.notify({
       type: 'application.submitted',
@@ -905,8 +972,23 @@ export class CampaignsService {
     });
 
     const populated = await this.campaignRepository.findApplicationById(application.id);
-    if (populated && populated.campaign) {
-      await this.populateBreakdown(populated.campaign);
+    if (populated) {
+      if (populated.campaign) {
+        await this.populateBreakdown(populated.campaign);
+      }
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        populated.campaignId,
+        populated.creatorId,
+      );
+      if (typeof populated.setDataValue === 'function') {
+        populated.setDataValue('campaignComment' as any, commentRecord);
+        populated.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (populated as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (populated as any).comments;
+      }
     }
     return populated!;
   }
@@ -935,7 +1017,23 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    return this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    const applications = await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    for (const app of applications) {
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        app.campaignId,
+        app.creatorId,
+      );
+      if (typeof app.setDataValue === 'function') {
+        app.setDataValue('campaignComment' as any, commentRecord);
+        app.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (app as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (app as any).comments;
+      }
+    }
+    return applications;
   }
 
   async reviewCampaignApplication(
@@ -1166,6 +1264,19 @@ export class CampaignsService {
       if (app.campaign) {
         await this.populateBreakdown(app.campaign);
       }
+      const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+        app.campaignId,
+        app.creatorId,
+      );
+      if (typeof app.setDataValue === 'function') {
+        app.setDataValue('campaignComment' as any, commentRecord);
+        app.setDataValue('comments' as any, undefined);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (app as any).campaignComment = commentRecord;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        delete (app as any).comments;
+      }
     }
     return apps;
   }
@@ -1185,28 +1296,37 @@ export class CampaignsService {
       if (application.campaign) {
         await this.populateBreakdown(application.campaign);
       }
-      return application;
-    }
-
-    if (role === 'creator') {
+    } else if (role === 'creator') {
       if (application.creatorId !== userId) {
         throw new ForbiddenException(`You do not own this application`);
       }
       if (application.campaign) {
         await this.populateBreakdown(application.campaign);
       }
-      return application;
-    }
-
-    if (role === 'brand') {
+    } else if (role === 'brand') {
       if (application.campaign?.brandId !== userId) {
         throw new ForbiddenException(`You do not own the campaign for this application`);
       }
       await this.populateBreakdown(application.campaign);
-      return application;
+    } else {
+      throw new ForbiddenException(`Unauthorized access`);
     }
 
-    throw new ForbiddenException(`Unauthorized access`);
+    const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
+      application.campaignId,
+      application.creatorId,
+    );
+    if (typeof application.setDataValue === 'function') {
+      application.setDataValue('campaignComment' as any, commentRecord);
+      application.setDataValue('comments' as any, undefined);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (application as any).campaignComment = commentRecord;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      delete (application as any).comments;
+    }
+
+    return application;
   }
 
   // ─── Content Submissions Flow ─────────────────────────────────────────────
@@ -1624,7 +1744,7 @@ export class CampaignsService {
         campaignId,
         campaignTitle: campaign.title,
         submissionId,
-        amount: application.feeRequest,
+        amount: application.feeRequest ?? 0,
         currency: campaign.currency,
         releaseDate: releaseDate.toDateString(),
       },
@@ -1973,6 +2093,281 @@ export class CampaignsService {
       totalEvents: activities.length,
       activities,
     };
+  }
+
+  async respondToComment(
+    campaignId: string,
+    creatorId: string,
+    brandId: string,
+    response: string,
+  ): Promise<CampaignComment> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    if (campaign.brandId !== brandId) {
+      throw new ForbiddenException('You do not own this campaign');
+    }
+
+    const comment = await this.campaignRepository.findCommentByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (!comment) {
+      throw new NotFoundException('No comment/question found from this creator for this campaign');
+    }
+
+    if (comment.response) {
+      throw new ForbiddenException("You have already responded to this creator's comment");
+    }
+
+    await comment.update({ response });
+    return comment;
+  }
+
+  // ─── Social Impact Creator Flow ──────────────────────────────────────────
+
+  async participateInSocialImpact(
+    campaignId: string,
+    creatorId: string,
+  ): Promise<CampaignApplication> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+    if (campaign.type !== 'social_impact') {
+      throw new BadRequestException('This campaign is not a Social Impact campaign');
+    }
+
+    const status = (campaign.status || '').toLowerCase();
+    if (status !== 'active' && status !== 'live') {
+      throw new ForbiddenException('This Social Impact campaign is not currently Active');
+    }
+
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    const endDateRaw =
+      (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
+    if (endDateRaw && new Date().getTime() >= new Date(endDateRaw).getTime()) {
+      throw new ForbiddenException('This Social Impact campaign has reached its end date');
+    }
+
+    const creator = await this.usersService.findOne(creatorId);
+    if (!creator) {
+      throw new NotFoundException('Creator profile not found');
+    }
+
+    // If campaign restricts eligible creator tiers, verify creator category matches
+    if (campaign.creatorCategoryIds && campaign.creatorCategoryIds.length > 0) {
+      const creatorCategory = creator.assignedTier
+        ? await this.creatorCategoryModel.findOne({ where: { name: creator.assignedTier } })
+        : null;
+
+      if (creatorCategory && !campaign.creatorCategoryIds.includes(creatorCategory.id)) {
+        throw new ForbiddenException(
+          `Your tier (${creator.assignedTier}) is not eligible for this Social Impact campaign`,
+        );
+      }
+    }
+
+    const existingApp = await this.campaignRepository.findApplicationByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (existingApp) {
+      throw new ForbiddenException('You have already participated in this Social Impact campaign');
+    }
+
+    let primaryPlatformId = campaign.preferredPlatforms?.[0]?.id;
+    if (!primaryPlatformId) {
+      const allPlatforms = await this.campaignRepository.findAllPlatforms();
+      primaryPlatformId = allPlatforms[0]?.id;
+    }
+
+    const application = await this.campaignRepository.createApplication({
+      campaignId,
+      creatorId,
+      status: 'pending',
+      contentIdea: 'Social Impact Campaign Participation',
+      feeRequest: 0,
+      primaryPlatformId,
+    });
+
+    const populated = await this.campaignRepository.findApplicationById(application.id);
+    return populated || application;
+  }
+
+  async submitSocialImpactLiveLink(
+    campaignId: string,
+    creatorId: string,
+    liveLink: string,
+  ): Promise<{ submission: ContentSubmission; tokensAwarded: number }> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const timeline = (campaign.timeline as Record<string, any>) || {};
+    const stage1 = timeline.stage1_application_window as Record<string, any> | undefined;
+    const endDateRaw =
+      (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
+    if (endDateRaw && new Date().getTime() >= new Date(endDateRaw).getTime()) {
+      throw new ForbiddenException(
+        'The campaign end date has passed. New submissions are no longer accepted.',
+      );
+    }
+
+    const application = await this.campaignRepository.findApplicationByCampaignAndCreator(
+      campaignId,
+      creatorId,
+    );
+    if (!application) {
+      throw new NotFoundException('You have not participated in this Social Impact campaign');
+    }
+
+    const existingSubmission = await this.campaignRepository.findLatestSubmissionByApplicationId(
+      application.id,
+    );
+
+    if (
+      existingSubmission &&
+      (existingSubmission.status === 'approved' || existingSubmission.liveLink?.link)
+    ) {
+      throw new ForbiddenException(
+        'You have already submitted a live link for this Social Impact campaign',
+      );
+    }
+
+    const submission = await this.campaignRepository.createSubmission({
+      campaignId,
+      applicationId: application.id,
+      creatorId,
+      liveLink: { link: liveLink },
+      status: 'approved',
+    });
+
+    await application.update({ status: 'approved' });
+
+    // Calculate token reward by creator tier from creator_categories table
+    const creator = await this.usersService.findOne(creatorId);
+    const tierName = creator?.assignedTier || 'Nano';
+
+    const category = await this.creatorCategoryModel.findOne({
+      where: { name: tierName },
+    });
+
+    let reward = category?.rewardTokens || 0;
+
+    if (!reward) {
+      const tierRewards = timeline.tierRewards as Record<string, number> | undefined;
+      if (tierRewards && tierRewards[tierName]) {
+        reward = Number(tierRewards[tierName]);
+      } else if (campaign.tokenReward) {
+        reward = Number(campaign.tokenReward);
+      } else {
+        if (tierName === 'Micro') reward = 3;
+        else if (tierName === 'Macro') reward = 5;
+        else if (tierName === 'Mega') reward = 10;
+        else reward = 1;
+      }
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 12 months expiry
+
+    await (
+      this.tokenLedgerModel as unknown as { create: (data: Record<string, any>) => Promise<any> }
+    ).create({
+      userId: creatorId,
+      campaignId: campaign.id,
+      tokensAwarded: reward,
+      tokensRemaining: reward,
+      awardedAt: now,
+      expiresAt,
+      isExpired: false,
+    });
+
+    // Recalculate user token balance & badges
+    const activeLedgers = await this.tokenLedgerModel.findAll({
+      where: {
+        userId: creatorId,
+        isExpired: false,
+      },
+    });
+
+    const activeTotal = activeLedgers.reduce((acc, l) => acc + (l.tokensRemaining || 0), 0);
+    let badge: string | null = null;
+    if (activeTotal >= 1000) badge = 'Impact Champion';
+    else if (activeTotal >= 100) badge = 'Impact Leader';
+    else if (activeTotal >= 10) badge = 'Impact Advocate';
+
+    await this.userModel.update({ totalTokens: activeTotal, badge }, { where: { id: creatorId } });
+
+    // Send Instant Push & In-App Success Notification
+    await this.notificationsService.notify({
+      type: 'social_impact.tokens_awarded',
+      recipientId: creatorId,
+      data: {
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        reward,
+        totalTokens: activeTotal,
+      },
+    });
+
+    return { submission, tokensAwarded: reward };
+  }
+
+  async getSocialImpactCampaigns(
+    query: QuerySocialImpactCampaignsDto,
+  ): Promise<PaginatedResult<Campaign>> {
+    const { tab = 'active', page = 1, limit = 20 } = query;
+    return this.campaignRepository.findSocialImpactCampaigns(tab, page, limit);
+  }
+
+  async getMySocialImpactApplications(
+    creatorId: string,
+    tab: string = 'all',
+  ): Promise<CampaignApplication[]> {
+    const apps = await this.campaignRepository.findApplicationsByCreatorId(creatorId);
+
+    const socialApps = apps.filter((app) => app.campaign?.type === 'social_impact');
+
+    const creator = await this.usersService.findOne(creatorId);
+    const tierName = creator?.assignedTier || 'Nano';
+
+    let defaultReward = 1;
+    if (this.creatorCategoryModel) {
+      const categoryRecord = await this.creatorCategoryModel.findOne({
+        where: { name: tierName },
+      });
+      if (categoryRecord && categoryRecord.rewardTokens) {
+        defaultReward = Number(categoryRecord.rewardTokens);
+      }
+    }
+
+    for (const app of socialApps) {
+      const ledger = await this.tokenLedgerModel.findOne({
+        where: { userId: creatorId, campaignId: app.campaignId },
+      });
+
+      const tokenReward = defaultReward;
+      const tokensAwarded = ledger ? Number(ledger.tokensAwarded) : 0;
+
+      app.setDataValue('tokenReward' as keyof CampaignApplication, tokenReward as any);
+      app.setDataValue('tokensAwarded' as keyof CampaignApplication, tokensAwarded as any);
+    }
+
+    if (tab === 'pending') {
+      return socialApps.filter((app) => app.status === 'pending');
+    } else if (tab === 'accepted') {
+      return socialApps.filter((app) => app.status === 'accepted' || app.status === 'approved');
+    } else if (tab === 'rejected') {
+      return socialApps.filter((app) => app.status === 'rejected');
+    }
+
+    return socialApps;
   }
 }
 

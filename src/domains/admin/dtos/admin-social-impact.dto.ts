@@ -88,23 +88,33 @@ export class CreateSocialImpactCampaignDto {
   @IsString()
   goal: string;
 
-  @ApiProperty({ example: 'uuid-brand-user-id', description: 'Selected Advertiser User ID' })
+  @ApiPropertyOptional({
+    example: 'uuid-brand-user-id',
+    description: 'Selected Advertiser User ID (Optional)',
+  })
+  @IsOptional()
   @IsUUID()
-  brandId: string;
+  brandId?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-08-15',
+    description: 'Campaign end date (required for publishing)',
+  })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({
+    example: { Nano: 50, Micro: 100 },
+    description: 'Reward amount by creator tier',
+  })
+  @IsOptional()
+  tierRewards?: Record<string, number>;
 
   @ApiProperty({ example: ['Micro', 'Nano'], type: [String] })
   @IsArray()
   @IsString({ each: true })
   creatorTiers: string[];
-
-  @ApiProperty({ example: 100, description: 'Token reward per creator' })
-  @IsNumber()
-  tokenReward: number;
-
-  @ApiPropertyOptional({ example: 'uuid-token-batch-id' })
-  @IsOptional()
-  @IsUUID()
-  tokenBatchId?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()
@@ -167,16 +177,20 @@ export class UpdateSocialImpactCampaignDto {
   @IsUUID()
   brandId?: string;
 
+  @ApiPropertyOptional({ example: '2026-08-15', description: 'Campaign end date' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: { Nano: 50, Micro: 100 } })
+  @IsOptional()
+  tierRewards?: Record<string, number>;
+
   @ApiPropertyOptional({ example: ['Micro', 'Nano'], type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   creatorTiers?: string[];
-
-  @ApiPropertyOptional({ example: 100 })
-  @IsOptional()
-  @IsNumber()
-  tokenReward?: number;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()
@@ -430,16 +444,49 @@ export class ReviewParticipantSubmissionDto {
 
 // ── Admin Action DTOs ────────────────────────────────────────────────────────
 
-export class SocialImpactAdminActionDto {
-  @ApiProperty({ example: 'Compliance check initiated' })
+export class ExtendDeadlineDto {
+  @ApiProperty({
+    example: '2026-08-01',
+    description: 'New submission deadline date (ISO string or YYYY-MM-DD)',
+  })
   @IsString()
-  reason: string;
+  newDeadline: string;
 
   @ApiPropertyOptional({
-    example: '2026-08-01',
-    description: 'Required for extend-deadline action',
+    example: 'Extended duration for creator submissions',
+    description: 'Optional reason for deadline extension',
   })
   @IsOptional()
   @IsString()
-  newDeadline?: string;
+  reason?: string;
+}
+
+export class CancelCampaignDto {
+  @ApiPropertyOptional({
+    example: 'Cancelled by admin request',
+    description: 'Optional cancellation reason',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CloseApplicationsDto {
+  @ApiPropertyOptional({
+    example: 'Application window reached capacity',
+    description: 'Optional reason for closing applications',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class PauseCampaignDto {
+  @ApiPropertyOptional({
+    example: 'Temporary pause for administrative review',
+    description: 'Optional pause reason',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
