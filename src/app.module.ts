@@ -20,6 +20,7 @@ import { ProfileModule } from './domains/profile/profile.module';
 import { DisputesModule } from './domains/disputes/disputes.module';
 import { SocialsModule } from './domains/socials/socials.module';
 import { NotificationsModule } from './domains/notifications/notifications.module';
+import { PostMetricsModule } from './domains/post-metrics/post-metrics.module';
 import { NewsModule } from './domains/news/news.module';
 import { TransactionsModule } from './domains/transactions/transactions.module';
 import { AdsModule } from './domains/ads/ads.module';
@@ -115,6 +116,7 @@ import { AdsModule } from './domains/ads/ads.module';
     NewsModule,
     TransactionsModule,
     AdsModule,
+    PostMetricsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -6,6 +6,12 @@ import { YoutubeAuthService } from './youtube-auth.service';
 import { TwitterAuthService } from './twitter-auth.service';
 import { FacebookAuthService } from './facebook-auth.service';
 import { AppleAuthService } from './apple-auth.service';
+import { InstagramInsightsService } from './insights/instagram-insights.service';
+import { TiktokInsightsService } from './insights/tiktok-insights.service';
+import { YoutubeInsightsService } from './insights/youtube-insights.service';
+import { FacebookInsightsService } from './insights/facebook-insights.service';
+import { TwitterInsightsService } from './insights/twitter-insights.service';
+import { PostInsightsRegistry } from './insights/post-insights.registry';
 
 @Module({
   providers: [
@@ -16,6 +22,12 @@ import { AppleAuthService } from './apple-auth.service';
     TwitterAuthService,
     FacebookAuthService,
     AppleAuthService,
+    InstagramInsightsService,
+    TiktokInsightsService,
+    YoutubeInsightsService,
+    FacebookInsightsService,
+    TwitterInsightsService,
+    PostInsightsRegistry,
   ],
   exports: [
     GoogleAuthService,
@@ -25,6 +37,7 @@ import { AppleAuthService } from './apple-auth.service';
     TwitterAuthService,
     FacebookAuthService,
     AppleAuthService,
+    PostInsightsRegistry,
   ],
 })
 export class SocialApisModule {}

@@ -3,8 +3,11 @@ name: Lint and Format
 on:
   push:
     branches: [ main, staging, develop ]
+  # `production` is included here so a PR into it is gated before merge.
+  # Pushes to production are covered by the verify job in
+  # deploy-production.yml, so listing it above would only duplicate that run.
   pull_request:
-    branches: [ main, staging, develop ]
+    branches: [ main, staging, develop, production ]
 
 jobs:
   lint:
