@@ -25,7 +25,6 @@ import {
   ExtendDeadlineDto,
   CancelCampaignDto,
   CloseApplicationsDto,
-  PauseCampaignDto,
   ToggleSocialImpactStatusDto,
 } from '../dtos/admin-social-impact.dto';
 

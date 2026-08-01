@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Patch,
   Param,
   Query,
   Body,
@@ -9,6 +8,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Patch,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -19,7 +19,7 @@ import {
   AdminCampaignSummaryResponseDto,
   AdminCampaignsListResponseDto,
 } from '../dtos/admin-campaigns.dto';
-import { CancelAdminCampaignDto, PauseAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
+import { CancelAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
@@ -99,36 +99,5 @@ export class AdminCampaignsController {
     return this.adminCampaignsService.cancelCampaign(user.id, id, dto, ipAddress, userAgent);
   }
 
-  @Patch('campaigns/:id/pause')
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Pause a live or active campaign' })
-  @ApiResponse({ status: 200, description: 'Campaign paused successfully' })
-  async pauseCampaign(
-    @Param('id') id: string,
-    @CurrentUser() user: User,
-    @Body() dto: PauseAdminCampaignDto,
-    @Req() req: Record<string, unknown>,
-  ) {
-    const reqObj = req as { ip?: string; headers?: Record<string, string> };
-    const ipAddress = reqObj.ip || reqObj.headers?.['x-forwarded-for'] || '';
-    const userAgent = reqObj.headers?.['user-agent'] || '';
-    return this.adminCampaignsService.pauseCampaign(user.id, id, dto, ipAddress, userAgent);
-  }
-
-  @Patch('campaigns/:id/resume')
-  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resume a paused campaign back to live/active status' })
-  @ApiResponse({ status: 200, description: 'Campaign resumed successfully' })
-  async resumeCampaign(
-    @Param('id') id: string,
-    @CurrentUser() user: User,
-    @Req() req: Record<string, unknown>,
-  ) {
-    const reqObj = req as { ip?: string; headers?: Record<string, string> };
-    const ipAddress = reqObj.ip || reqObj.headers?.['x-forwarded-for'] || '';
-    const userAgent = reqObj.headers?.['user-agent'] || '';
-    return this.adminCampaignsService.resumeCampaign(user.id, id, ipAddress, userAgent);
-  }
 }
+
