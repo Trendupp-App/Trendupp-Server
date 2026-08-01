@@ -2141,6 +2141,11 @@ export class CampaignsService {
     }
 
     const status = (campaign.status || '').toLowerCase();
+    if (status === 'paused') {
+      throw new ForbiddenException(
+        'This Social Impact campaign is currently paused. Please check back later.',
+      );
+    }
     if (status !== 'active' && status !== 'live') {
       throw new ForbiddenException('This Social Impact campaign is not currently Active');
     }
@@ -2206,6 +2211,13 @@ export class CampaignsService {
     const campaign = await this.campaignRepository.findById(campaignId);
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
+    }
+
+    const campaignStatus = (campaign.status || '').toLowerCase();
+    if (campaignStatus === 'paused') {
+      throw new ForbiddenException(
+        'This Social Impact campaign is currently paused. New live link submissions are not accepted at this time.',
+      );
     }
 
     const timeline = (campaign.timeline as Record<string, any>) || {};

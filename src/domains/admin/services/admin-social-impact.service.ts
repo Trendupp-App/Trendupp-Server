@@ -25,7 +25,7 @@ import {
   ExtendDeadlineDto,
   CancelCampaignDto,
   CloseApplicationsDto,
-  PauseCampaignDto,
+  ToggleSocialImpactStatusDto,
 } from '../dtos/admin-social-impact.dto';
 
 @Injectable()
@@ -129,6 +129,8 @@ export class AdminSocialImpactService {
       where.status = 'live';
     } else if (tab === 'active') {
       where.status = 'active';
+    } else if (tab === 'paused') {
+      where.status = 'paused';
     } else if (tab === 'completed') {
       where.status = 'completed';
     }
@@ -734,19 +736,41 @@ export class AdminSocialImpactService {
 
   // ── 12. Administrative Actions ─────────────────────────────────────────────
 
-  async pauseCampaign(id: string, dto: PauseCampaignDto, adminId: string): Promise<Campaign> {
+  async toggleSocialImpactStatus(
+    id: string,
+    dto: ToggleSocialImpactStatusDto,
+    adminId: string,
+  ): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
     });
     if (!campaign) throw new NotFoundException('Social Impact campaign not found');
 
-    await campaign.update({ status: 'paused' });
-
-    await this.auditLogService.log({
-      adminId,
-      action: 'PAUSE_SOCIAL_IMPACT',
-      details: { campaignId: id, reason: dto.reason || 'Campaign paused by admin' },
-    });
+    if (dto.action === 'pause') {
+      if (campaign.status !== 'active' && campaign.status !== 'live') {
+        throw new BadRequestException(
+          `Cannot pause a campaign with status "${campaign.status}". Only active or live campaigns can be paused.`,
+        );
+      }
+      await campaign.update({ status: 'paused' });
+      await this.auditLogService.log({
+        adminId,
+        action: 'PAUSE_SOCIAL_IMPACT',
+        details: { campaignId: id, reason: dto.reason || 'Campaign paused by admin' },
+      });
+    } else {
+      if (campaign.status !== 'paused') {
+        throw new BadRequestException(
+          `Cannot resume a campaign with status "${campaign.status}". Only paused campaigns can be resumed.`,
+        );
+      }
+      await campaign.update({ status: 'active' });
+      await this.auditLogService.log({
+        adminId,
+        action: 'RESUME_SOCIAL_IMPACT',
+        details: { campaignId: id, reason: dto.reason || 'Campaign resumed by admin' },
+      });
+    }
 
     return campaign;
   }
