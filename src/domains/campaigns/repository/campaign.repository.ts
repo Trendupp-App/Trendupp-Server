@@ -874,7 +874,9 @@ export class CampaignRepository {
     } else if (tab === 'completed') {
       where['status'] = 'completed';
     } else {
-      where['status'] = { [Op.ne]: 'draft' };
+      // 'all' tab: show draft-excluded campaigns but also exclude 'paused'
+      // Paused campaigns are invisible to creators - only admins can see them
+      where['status'] = { [Op.notIn]: ['draft', 'paused'] };
     }
 
     const { rows, count } = await this.campaignModel.findAndCountAll({
