@@ -2197,6 +2197,24 @@ export class CampaignsService {
       primaryPlatformId,
     });
 
+    // Admin inbox: running participant count for this campaign. Keyed per
+    // application so a retried request cannot double-count.
+    const participantCount = (
+      await this.campaignRepository.findApplicationsByCampaignId(campaignId)
+    ).length;
+
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_participant_joined',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: creatorId,
+      data: {
+        campaignId,
+        campaignTitle: campaign.title,
+        participantCount,
+      },
+      dedupeKey: `si-participant:${application.id}`,
+    });
+
     const populated = await this.campaignRepository.findApplicationById(application.id);
     return populated || application;
   }
@@ -2312,6 +2330,11 @@ export class CampaignsService {
     else if (activeTotal >= 100) badge = 'Impact Leader';
     else if (activeTotal >= 10) badge = 'Impact Advocate';
 
+    // Read the user BEFORE overwriting the badge so "Badge earned" only fires
+    // on a genuine upgrade, not on every submission that keeps the same tier.
+    const submittingCreator = await this.usersService.findOne(creatorId);
+    const previousBadge = submittingCreator?.badge ?? null;
+
     await this.userModel.update({ totalTokens: activeTotal, badge }, { where: { id: creatorId } });
 
     // Send Instant Push & In-App Success Notification
@@ -2324,6 +2347,34 @@ export class CampaignsService {
         reward,
         totalTokens: activeTotal,
       },
+    });
+
+    if (badge && badge !== previousBadge) {
+      await this.notificationsService.notify({
+        type: 'social_impact.badge_earned',
+        recipientId: creatorId,
+        data: { badgeName: badge },
+        dedupeKey: `si-badge:${creatorId}:${badge}`,
+      });
+    }
+
+    // Admin inbox: a live link landed on this campaign.
+    const creatorName = submittingCreator
+      ? `${submittingCreator.firstName} ${submittingCreator.lastName}`.trim() ||
+        submittingCreator.username ||
+        'A creator'
+      : 'A creator';
+
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_live_link_submitted',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: creatorId,
+      data: {
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        creatorName,
+      },
+      dedupeKey: `si-livelink:${submission.id}`,
     });
 
     return { submission, tokensAwarded: reward };

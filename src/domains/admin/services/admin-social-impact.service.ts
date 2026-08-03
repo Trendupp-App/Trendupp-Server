@@ -9,6 +9,8 @@ import { TokenBatch } from '../entities/token-batch.entity';
 import { CreatorCategory } from '../../campaigns/entities/creator-category.entity';
 import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { AuditLogService } from './audit-log.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationRecipientRole } from '../../notifications/notification.types';
 import {
   TokenBatchResponseDto,
   AdminSocialImpactSummaryResponseDto,
@@ -46,7 +48,33 @@ export class AdminSocialImpactService {
     @InjectModel(UserTokenLedger)
     private readonly tokenLedgerModel: typeof UserTokenLedger,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Staff roles that receive Social Impact lifecycle events in the admin inbox. */
+  private static readonly SI_ADMIN_ROLES: NotificationRecipientRole[] = [
+    'owner',
+    'super_admin',
+    'moderator',
+  ];
+
+  /**
+   * Everyone who clicked Participate and wasn't rejected — the audience for
+   * the creator-facing paused/resumed/cancelled/extended notifications.
+   */
+  private async participantCreatorIds(campaignId: string): Promise<string[]> {
+    const applications = await this.applicationModel.findAll({
+      where: { campaignId },
+      attributes: ['creatorId', 'status'],
+    });
+    return [
+      ...new Set(
+        applications
+          .filter((a) => (a.status || '').toLowerCase() !== 'rejected')
+          .map((a) => a.creatorId),
+      ),
+    ];
+  }
 
   // ── 1. Token Batches Lookup ────────────────────────────────────────────────
 
@@ -396,6 +424,14 @@ export class AdminSocialImpactService {
       adminId,
       action: 'PUBLISH_SOCIAL_IMPACT',
       details: { campaignId: campaign.id, title: campaign.title },
+    });
+
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_published',
+      recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+      actorId: adminId,
+      data: { campaignId: campaign.id, campaignTitle: campaign.title },
+      dedupeKey: `si-published:${campaign.id}`,
     });
 
     return campaign;
@@ -758,6 +794,22 @@ export class AdminSocialImpactService {
         action: 'PAUSE_SOCIAL_IMPACT',
         details: { campaignId: id, reason: dto.reason || 'Campaign paused by admin' },
       });
+
+      const data = { campaignId: id, campaignTitle: campaign.title };
+      await this.notificationsService.notify({
+        type: 'social_impact.admin_paused',
+        recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+        actorId: adminId,
+        data,
+      });
+      const pausedAudience = await this.participantCreatorIds(id);
+      if (pausedAudience.length > 0) {
+        await this.notificationsService.notify({
+          type: 'social_impact.paused',
+          recipientId: pausedAudience,
+          data,
+        });
+      }
     } else {
       if (campaign.status !== 'paused') {
         throw new BadRequestException(
@@ -770,6 +822,22 @@ export class AdminSocialImpactService {
         action: 'RESUME_SOCIAL_IMPACT',
         details: { campaignId: id, reason: dto.reason || 'Campaign resumed by admin' },
       });
+
+      const data = { campaignId: id, campaignTitle: campaign.title };
+      await this.notificationsService.notify({
+        type: 'social_impact.admin_resumed',
+        recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+        actorId: adminId,
+        data,
+      });
+      const resumedAudience = await this.participantCreatorIds(id);
+      if (resumedAudience.length > 0) {
+        await this.notificationsService.notify({
+          type: 'social_impact.resumed',
+          recipientId: resumedAudience,
+          data,
+        });
+      }
     }
 
     return campaign;
@@ -788,6 +856,22 @@ export class AdminSocialImpactService {
       action: 'CANCEL_SOCIAL_IMPACT',
       details: { campaignId: id, reason: dto.reason || 'Campaign cancelled by admin' },
     });
+
+    const data = { campaignId: id, campaignTitle: campaign.title };
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_cancelled',
+      recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+      actorId: adminId,
+      data,
+    });
+    const cancelledAudience = await this.participantCreatorIds(id);
+    if (cancelledAudience.length > 0) {
+      await this.notificationsService.notify({
+        type: 'social_impact.cancelled',
+        recipientId: cancelledAudience,
+        data,
+      });
+    }
 
     return campaign;
   }
@@ -820,6 +904,29 @@ export class AdminSocialImpactService {
       },
     });
 
+    const newEndDate = new Date(newEndIso).toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const data = { campaignId: id, campaignTitle: campaign.title, newEndDate };
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_extended',
+      recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+      actorId: adminId,
+      data,
+    });
+    const extendedAudience = await this.participantCreatorIds(id);
+    if (extendedAudience.length > 0) {
+      await this.notificationsService.notify({
+        type: 'social_impact.extended',
+        recipientId: extendedAudience,
+        data,
+      });
+    }
+
     return campaign;
   }
 
@@ -839,6 +946,17 @@ export class AdminSocialImpactService {
       adminId,
       action: 'CLOSE_SOCIAL_IMPACT_APPLICATIONS',
       details: { campaignId: id, reason: dto.reason || 'Applications closed by admin' },
+    });
+
+    // Rewards are credited instantly at live-link submission, so by the time
+    // an admin closes the campaign every eligible creator has been paid out —
+    // which is exactly the "Campaign completed" condition in the spec.
+    await this.notificationsService.notify({
+      type: 'social_impact.admin_completed',
+      recipientRole: AdminSocialImpactService.SI_ADMIN_ROLES,
+      actorId: adminId,
+      data: { campaignId: id, campaignTitle: campaign.title },
+      dedupeKey: `si-completed:${id}`,
     });
 
     return campaign;

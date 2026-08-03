@@ -100,7 +100,7 @@ Category → settings-key mapping: `campaigns`/`applications` → `applicationUp
 `account` and `broadcast` have no toggle; `security` and `chatDispute` are
 non-suppressible.
 
-## Implemented notifications (24)
+## Implemented notifications (41)
 
 **Legend** — Channels: in-app + email unless noted. Gate: settings key, or
 **security** = non-suppressible. Dedupe: the `dedupeKey` passed (✗ = request-path
@@ -164,6 +164,33 @@ call, naturally single-fire).
 | `dispute.activated` | high | creator + brand | `DisputesService.activateDispute` — resolution chat opened (not re-sent on retry) | `<disputeId>` |
 | `dispute.resolved` | high | creator + brand | `DisputesService.resolveDispute` — outcome + notes (the chat freezes silently otherwise) | `<disputeId>` |
 | `dispute.escrow_action_required` | high | finance_admins (work item) | `resolveDispute` — execute the escrow decision in Pandascrow | `<disputeId>` |
+
+### Social Impact — creator-facing (gate: `newCampaigns` via `opportunities`, badge under `account`)
+
+Copy comes verbatim from the PM notification spec (Aug 2026).
+
+| Type | Priority | Recipients | Trigger | Dedupe |
+|---|---|---|---|---|
+| `social_impact.reminder` | high | participants without a live link | `SocialImpactReminderScheduler` — first reminder; tier by campaign duration: <24h → T-2h (only reminder), 1–3d → T-12h, 4–7d → T-24h, >7d → T-48h | `si-reminder-1:<campaignId>:<creatorId>` |
+| `social_impact.final_reminder` | critical | participants without a live link | same scheduler — always T-2h (campaigns ≥24h) | `si-reminder-final:<campaignId>:<creatorId>` |
+| `social_impact.tokens_awarded` | high | submitting creator | `submitSocialImpactLiveLink` — tokens credited instantly; **no CTA** per spec | ✗ (guarded by one-submission rule) |
+| `social_impact.badge_earned` | medium | creator | same call site — only when the badge actually changes | `si-badge:<creatorId>:<badge>` |
+| `social_impact.paused` / `resumed` / `cancelled` / `extended` | high/med | all non-rejected participants | `AdminSocialImpactService` toggle/cancel/extendDeadline | ✗ (admin action) |
+
+### Social Impact — admin inbox (role fan-out: owner, super_admin, moderator; never suppressible)
+
+Separate `admin_*` types because the deep link targets `/admin/campaigns/social/<id>`, not the creator app.
+
+| Type | Trigger |
+|---|---|
+| `social_impact.admin_published` | `publishSocialImpactCampaign` |
+| `social_impact.admin_paused` / `admin_resumed` | `toggleSocialImpactStatus` |
+| `social_impact.admin_cancelled` | `cancelCampaign` |
+| `social_impact.admin_extended` | `extendDeadline` (body carries the formatted new end date) |
+| `social_impact.admin_participant_joined` | `participateInSocialImpact` — running participant count, deduped per application |
+| `social_impact.admin_live_link_submitted` | `submitSocialImpactLiveLink` — deduped per submission |
+| `social_impact.admin_ended` | reminder scheduler auto-complete at the deadline (`si-ended:<campaignId>`) |
+| `social_impact.admin_completed` | `closeApplications` — rewards are credited at submission time, so closing = all eligible creators paid |
 
 ### Outside the system (legacy direct email, intentionally)
 

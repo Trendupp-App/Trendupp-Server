@@ -165,19 +165,60 @@ export interface NotificationPayloads {
   'admin.team_member_removed': { adminName: string };
   'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
 
-  // ── Social Impact ─────────────────────────────────────────────────────────
+  // ── Social Impact — creator-facing ────────────────────────────────────────
   'social_impact.tokens_awarded': {
     campaignId: string;
     campaignTitle: string;
     reward: number;
     totalTokens: number;
   };
+  /** First reminder — timing tier depends on campaign duration (see scheduler). */
   'social_impact.reminder': {
     campaignId: string;
     campaignTitle: string;
-    hoursRemaining: number;
-    reminderType: string;
+    /** Human-readable window, e.g. "12 hours" — rendered into the body. */
+    remainingTime: string;
+    tokenReward: number;
   };
+  /** Final reminder — always 2 hours before the campaign ends. */
+  'social_impact.final_reminder': {
+    campaignId: string;
+    campaignTitle: string;
+  };
+  'social_impact.badge_earned': { badgeName: string };
+  'social_impact.paused': { campaignId: string; campaignTitle: string };
+  'social_impact.resumed': { campaignId: string; campaignTitle: string };
+  'social_impact.cancelled': { campaignId: string; campaignTitle: string };
+  'social_impact.extended': {
+    campaignId: string;
+    campaignTitle: string;
+    /** Already formatted for display, e.g. "12 Aug 2026, 18:00". */
+    newEndDate: string;
+  };
+
+  // ── Social Impact — admin inbox (role fan-outs; separate types because the
+  //    deep link targets the admin console, not the creator app) ─────────────
+  'social_impact.admin_published': { campaignId: string; campaignTitle: string };
+  'social_impact.admin_paused': { campaignId: string; campaignTitle: string };
+  'social_impact.admin_resumed': { campaignId: string; campaignTitle: string };
+  'social_impact.admin_cancelled': { campaignId: string; campaignTitle: string };
+  'social_impact.admin_extended': {
+    campaignId: string;
+    campaignTitle: string;
+    newEndDate: string;
+  };
+  'social_impact.admin_participant_joined': {
+    campaignId: string;
+    campaignTitle: string;
+    participantCount: number;
+  };
+  'social_impact.admin_live_link_submitted': {
+    campaignId: string;
+    campaignTitle: string;
+    creatorName: string;
+  };
+  'social_impact.admin_ended': { campaignId: string; campaignTitle: string };
+  'social_impact.admin_completed': { campaignId: string; campaignTitle: string };
 }
 
 export type NotificationType = keyof NotificationPayloads;
