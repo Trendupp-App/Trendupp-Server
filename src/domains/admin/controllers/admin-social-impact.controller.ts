@@ -27,7 +27,7 @@ import {
   ExtendDeadlineDto,
   CancelCampaignDto,
   CloseApplicationsDto,
-  PauseCampaignDto,
+  ToggleSocialImpactStatusDto,
 } from '../dtos/admin-social-impact.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -197,17 +197,29 @@ export class AdminSocialImpactController {
     return this.adminSocialImpactService.rejectParticipant(id, appId, dto, admin.id);
   }
 
-  @Post('social-impact/:id/pause')
+  @Post('social-impact/:id/status')
+  @Audit('TOGGLE_SOCIAL_IMPACT_STATUS')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Pause an active Social Impact Campaign' })
-  async pauseCampaign(
+  @ApiOperation({
+    summary:
+      'Pause or resume a Social Impact Campaign. Pass action="pause" to pause an active/live campaign, action="resume" to reactivate a paused campaign.',
+  })
+  async toggleSocialImpactStatus(
     @Param('id') id: string,
-    @Body() dto: PauseCampaignDto,
+    @Body() dto: ToggleSocialImpactStatusDto,
     @CurrentUser() admin: User,
   ) {
-    const campaign = await this.adminSocialImpactService.pauseCampaign(id, dto, admin.id);
-    return { message: 'Social Impact campaign paused', campaign };
+    const campaign = await this.adminSocialImpactService.toggleSocialImpactStatus(
+      id,
+      dto,
+      admin.id,
+    );
+    const message =
+      dto.action === 'pause'
+        ? 'Social Impact campaign paused successfully'
+        : 'Social Impact campaign resumed successfully';
+    return { message, campaign };
   }
 
   @Post('social-impact/:id/cancel')

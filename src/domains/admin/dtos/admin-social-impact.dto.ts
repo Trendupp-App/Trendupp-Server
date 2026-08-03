@@ -8,6 +8,7 @@ import {
   IsArray,
   IsBoolean,
   IsUUID,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationMetaDto } from './admin-creators.dto';
@@ -53,14 +54,14 @@ export class QueryAdminSocialImpactListDto {
   q?: string;
 
   @ApiPropertyOptional({
-    example: 'live',
-    enum: ['all', 'draft', 'live', 'active', 'completed'],
+    example: 'active',
+    enum: ['all', 'draft', 'live', 'active', 'paused', 'completed'],
     description: 'Filter by campaign status tab',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['all', 'draft', 'live', 'active', 'completed'])
-  tab?: 'all' | 'draft' | 'live' | 'active' | 'completed' = 'all';
+  @IsIn(['all', 'draft', 'live', 'active', 'paused', 'completed'])
+  tab?: 'all' | 'draft' | 'live' | 'active' | 'paused' | 'completed' = 'all';
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -485,6 +486,25 @@ export class PauseCampaignDto {
   @ApiPropertyOptional({
     example: 'Temporary pause for administrative review',
     description: 'Optional pause reason',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class ToggleSocialImpactStatusDto {
+  @ApiProperty({
+    example: 'pause',
+    enum: ['pause', 'resume'],
+    description:
+      'Action to perform: "pause" to pause an active campaign, "resume" to reactivate a paused campaign',
+  })
+  @IsEnum(['pause', 'resume'])
+  action: 'pause' | 'resume';
+
+  @ApiPropertyOptional({
+    example: 'Temporary administrative review',
+    description: 'Optional reason for pausing or resuming',
   })
   @IsOptional()
   @IsString()

@@ -12,7 +12,7 @@ import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity'
 import { Payment } from '../../campaigns/entities/payment.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { AuditLogService } from './audit-log.service';
-import { CancelAdminCampaignDto, PauseAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
+import { CancelAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
 import {
   QueryAdminCampaignsListDto,
   AdminCampaignSummaryResponseDto,
@@ -427,101 +427,5 @@ export class AdminCampaignsService {
     };
   }
 
-  // ── 4. Campaign Pause & Resume ──────────────────────────────────────────────
-
-  async pauseCampaign(
-    adminId: string,
-    campaignId: string,
-    dto: PauseAdminCampaignDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<{ message: string; campaign: Campaign }> {
-    const campaign = await this.campaignModel.findByPk(campaignId);
-    if (!campaign) {
-      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
-    }
-
-    if (campaign.status === 'paused') {
-      throw new BadRequestException('Campaign is already paused.');
-    }
-
-    campaign.status = 'paused';
-    await campaign.save();
-
-    try {
-      await this.notificationsService.notify({
-        type: 'campaign.paused',
-        recipientId: campaign.brandId,
-        actorId: adminId,
-        data: {
-          campaignId,
-          campaignTitle: campaign.title,
-          reason: dto.reason || 'Campaign was paused by platform administration.',
-        },
-      });
-    } catch {
-      // ignore notification error
-    }
-
-    await this.auditLogService.log({
-      adminId,
-      action: 'CAMPAIGN_PAUSED',
-      targetUserId: campaign.brandId,
-      ipAddress,
-      userAgent,
-      details: { campaignId, reason: dto.reason || null },
-    });
-
-    return {
-      message: 'Campaign paused successfully.',
-      campaign,
-    };
-  }
-
-  async resumeCampaign(
-    adminId: string,
-    campaignId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<{ message: string; campaign: Campaign }> {
-    const campaign = await this.campaignModel.findByPk(campaignId);
-    if (!campaign) {
-      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
-    }
-
-    if (campaign.status !== 'paused') {
-      throw new BadRequestException('Campaign is not currently paused.');
-    }
-
-    campaign.status = 'live';
-    await campaign.save();
-
-    try {
-      await this.notificationsService.notify({
-        type: 'campaign.resumed',
-        recipientId: campaign.brandId,
-        actorId: adminId,
-        data: {
-          campaignId,
-          campaignTitle: campaign.title,
-        },
-      });
-    } catch {
-      // ignore notification error
-    }
-
-    await this.auditLogService.log({
-      adminId,
-      action: 'CAMPAIGN_RESUMED',
-      targetUserId: campaign.brandId,
-      ipAddress,
-      userAgent,
-      details: { campaignId },
-    });
-
-    return {
-      message: 'Campaign resumed successfully.',
-      campaign,
-    };
-  }
 }
+
