@@ -15,7 +15,9 @@ export default () => ({
   redis: {
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT as string, 10) || 6379,
-    tls: {}, // Enables TLS with default CA certificates
+    tls: {
+      servername: process.env.REDIS_HOST, // Enables TLS with default CA certificates
+    }, // Enables TLS with default CA certificates
   },
   betterstack: {
     sourceToken: process.env.BETTERSTACK_SOURCE_TOKEN,

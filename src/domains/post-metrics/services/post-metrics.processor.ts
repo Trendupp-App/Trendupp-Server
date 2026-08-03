@@ -36,15 +36,30 @@ export class PostMetricsProcessor extends WorkerHost implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    try {
-      await this.queue.upsertJobScheduler('post-metrics-tick', { every: TICK_INTERVAL_MS });
-      this.logger.log(
-        `Post-metrics collector registered (every ${TICK_INTERVAL_MS / 60_000} min).`,
+    // Same bounded wait as BroadcastSchedulerProcessor: with Redis down,
+    // ioredis never settles this promise (offline queue), and an unbounded
+    // await here stalls Nest bootstrap before app.listen().
+    const registration = this.queue
+      .upsertJobScheduler('post-metrics-tick', { every: TICK_INTERVAL_MS })
+      .then(() =>
+        this.logger.log(
+          `Post-metrics collector registered (every ${TICK_INTERVAL_MS / 60_000} min).`,
+        ),
+      )
+      .catch((err: Error) =>
+        this.logger.error(`Could not register the post-metrics job: ${err.message}`),
       );
-    } catch (err) {
-      // Redis down at boot: collection pauses, the app must still start.
-      this.logger.error(`Could not register the post-metrics job: ${(err as Error).message}`);
-    }
+
+    const timeout = new Promise<void>((resolve) =>
+      setTimeout(() => {
+        this.logger.error(
+          'Redis not reachable within 10s at boot — continuing startup; metric collection resumes when it reconnects.',
+        );
+        resolve();
+      }, 10_000).unref(),
+    );
+
+    await Promise.race([registration, timeout]);
   }
 
   async process(): Promise<void> {

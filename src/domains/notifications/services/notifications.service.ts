@@ -44,7 +44,7 @@ export class NotificationsService {
         return;
       }
 
-      await this.queue.add('dispatch', input, {
+      const enqueue = this.queue.add('dispatch', input, {
         // dedupeKey → jobId: N PM2 instances enqueueing the same cron-origin
         // event collapse into one job while it lives in the queue. The DB
         // unique index on notifications.dedupe_key is the authoritative guard.
@@ -54,6 +54,28 @@ export class NotificationsService {
         removeOnComplete: 1000,
         removeOnFail: 5000,
       });
+
+      // With Redis unreachable, ioredis parks add() in its offline queue and
+      // the promise NEVER settles — so without this bound the catch below
+      // (the inline-dispatch fallback) can never fire in production, and the
+      // request handler awaiting notify() hangs with it. Racing a rejection
+      // restores the fallback. Edge case: if Redis recovers moments after
+      // the timeout, the parked job may still deliver alongside the inline
+      // dispatch — for dedupeKey'd types the DB unique index collapses the
+      // pair; for the rest a rare duplicate beats a hung user request.
+      await Promise.race([
+        enqueue,
+        new Promise((_, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('queue.add() timed out after 3s — Redis likely unreachable')),
+            3_000,
+          );
+          // Don't hold the event loop open for the timer; also silence the
+          // eventual settlement of the losing promise.
+          timer.unref();
+          enqueue.then(() => clearTimeout(timer)).catch(() => clearTimeout(timer));
+        }),
+      ]);
     } catch (queueError: unknown) {
       const message = queueError instanceof Error ? queueError.message : String(queueError);
       this.logger.warn(

@@ -12,6 +12,7 @@ import { validationSchema } from './config/validation.schema';
 import { getLoggerConfig } from './shared/logger/logger.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { NOTIFICATIONS_QUEUE } from './domains/notifications/notifications.constants';
 import { UsersModule } from './domains/users/users.module';
 import { AuthModule } from './domains/auth/auth.module';
 import { CampaignsModule } from './domains/campaigns/campaigns.module';
@@ -81,7 +82,11 @@ import { AdsModule } from './domains/ads/ads.module';
             // AWS ElastiCache Serverless requires in-transit encryption (TLS).
             // Without this, the connection to the *.serverless.*.cache.amazonaws.com
             // endpoint silently fails/hangs. Only applied outside local dev.
-            ...(!isDev && { tls: configService.get('redis.tls') ?? {} }),
+            ...(!isDev && {
+              tls: configService.get('redis.tls') ?? {
+                servername: configService.get<string>('redis.host'),
+              },
+            }),
             // In development, connect lazily and stop retrying after the first failure
             // so the server starts cleanly without a local Redis instance.
             // NotificationsService already has a try/catch fallback dispatcher for when
@@ -96,6 +101,10 @@ import { AdsModule } from './domains/ads/ads.module';
         };
       },
     }),
+
+    // Health endpoint's Redis probe — registering an already-registered
+    // queue name reuses the same underlying queue token.
+    BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
 
     // Rate Limiting
     ThrottlerModule.forRoot({
