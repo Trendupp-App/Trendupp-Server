@@ -402,7 +402,7 @@ export class AdminEscrowService {
 
     if (status && status !== 'all') {
       if (status === 'successful') where.status = 'released';
-      else if (status === 'on_hold') where.status = 'escrow_pending';
+      else if (status === 'on_hold') where.status = { [Op.in]: ['escrow_pending', 'disputed'] };
       else where.status = status;
     }
 
@@ -435,7 +435,7 @@ export class AdminEscrowService {
       } else if (r.status === 'failed') {
         metrics.failed.count++;
         metrics.failed.totalAmount += amt;
-      } else if (r.status === 'escrow_pending') {
+      } else if (r.status === 'escrow_pending' || r.status === 'disputed') {
         metrics.onHold.count++;
         metrics.onHold.totalAmount += amt;
       }
@@ -483,7 +483,7 @@ export class AdminEscrowService {
 
       let uiStatus = 'pending';
       if (pr.status === 'released') uiStatus = 'successful';
-      else if (pr.status === 'escrow_pending') uiStatus = 'on_hold';
+      else if (pr.status === 'escrow_pending' || pr.status === 'disputed') uiStatus = 'on_hold';
       else if (pr.status === 'failed') uiStatus = 'failed';
 
       return {
@@ -497,7 +497,6 @@ export class AdminEscrowService {
           avatarUrl: creator?.avatarUrl || null,
         },
         amount: pr.amount,
-        transactionTrigger: 'Normal Automatic Release',
         status: uiStatus,
         failureReason: pr.errorDetails || null,
         lastUpdated: pr.updatedAt,
@@ -610,7 +609,6 @@ export class AdminEscrowService {
           avatarUrl: brand?.avatarUrl || null,
         },
         amount: rf.amount,
-        transactionTrigger: 'Dispute Refund',
         status: uiStatus,
         failureReason: rf.errorDetails || null,
         lastUpdated: rf.updatedAt,
