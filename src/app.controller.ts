@@ -12,7 +12,7 @@ export class AppController {
   }
 
   @Get('/health')
-  getHealth(): string {
+  getHealth() {
     return this.appService.getHealth();
   }
 }
