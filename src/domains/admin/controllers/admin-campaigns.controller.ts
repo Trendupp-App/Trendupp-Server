@@ -98,6 +98,4 @@ export class AdminCampaignsController {
     const userAgent = reqObj.headers?.['user-agent'] || '';
     return this.adminCampaignsService.cancelCampaign(user.id, id, dto, ipAddress, userAgent);
   }
-
 }
-

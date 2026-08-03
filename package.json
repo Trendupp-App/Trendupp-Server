@@ -24,6 +24,8 @@
     "migration:revert": "npx sequelize-cli db:migrate:undo",
     "seed:generate": "npx sequelize-cli seed:generate --name",
     "seed:run": "npx sequelize-cli db:seed:all",
+    "account:superadmin": "ts-node -r tsconfig-paths/register scripts/create-superadmin.ts",
+    "account:store-test": "ts-node -r tsconfig-paths/register scripts/create-store-test-accounts.ts",
     "prepare": "husky"
   },
   "dependencies": {

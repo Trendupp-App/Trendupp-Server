@@ -102,8 +102,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Live post submitted on "${d.campaignTitle}"`,
-    body: (d) =>
-      `The creator posted their content live for "${d.campaignTitle}". Verify the post and approve it to schedule their payout.`,
+    body: (d) => `The creator posted their content live for "${d.campaignTitle}". Review post.`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.live_approved': {
@@ -315,22 +314,153 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) => `Your broadcast "${d.title}" was delivered to ${d.totalRecipients} user(s).`,
     actionUrl: () => `/admin/notifications`,
   },
+  // ── Social Impact — creator-facing (copy from the PM notification spec) ───
   'social_impact.tokens_awarded': {
     category: 'opportunities',
     channels: ['inApp', 'email'],
     priority: 'high',
-    title: (d) => `Tokens Credited! +${d.reward} Tokens`,
-    body: (d) =>
-      `Congratulations! You received ${d.reward} tokens for submitting your live link on "${d.campaignTitle}". Total balance: ${d.totalTokens} tokens.`,
-    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+    title: () => `Tokens earned`,
+    // Spec: no CTA on this one — hence no actionUrl.
+    body: (d) => `You earned ${d.reward} token(s) for ${d.campaignTitle}.`,
   },
   'social_impact.reminder': {
     category: 'opportunities',
     channels: ['inApp', 'email'],
     priority: 'high',
-    title: (d) => `Reminder: ${d.hoursRemaining}h left on "${d.campaignTitle}"`,
+    title: () => `Campaign ending soon`,
     body: (d) =>
-      `Don't miss out! You joined "${d.campaignTitle}". Submit your live content link before the campaign ends to earn your token reward.`,
+      `Your ${d.campaignTitle} participation window closes in ${d.remainingTime}. ` +
+      `Publish your content and submit your live link before the deadline to earn ` +
+      `your ${d.tokenReward} token(s).`,
     actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.final_reminder': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'critical',
+    title: () => `Final reminder`,
+    body: (d) =>
+      `Only 2 hours remain before ${d.campaignTitle} closes. Submit your live content now to receive your reward.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.badge_earned': {
+    category: 'account',
+    channels: ['inApp', 'email'],
+    priority: 'medium',
+    title: () => `Badge earned`,
+    body: (d) => `You've earned the ${d.badgeName} badge. It's now displayed on your profile.`,
+    actionUrl: () => `/profile`,
+  },
+  'social_impact.paused': {
+    category: 'opportunities',
+    channels: ['inApp'],
+    priority: 'high',
+    title: () => `Campaign paused`,
+    body: (d) =>
+      `${d.campaignTitle} has been paused. Creator participation is temporarily unavailable.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.resumed': {
+    category: 'opportunities',
+    channels: ['inApp'],
+    priority: 'high',
+    title: () => `Campaign resumed`,
+    body: (d) => `${d.campaignTitle} has resumed and creators can participate again.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.cancelled': {
+    category: 'opportunities',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: () => `Campaign cancelled`,
+    body: (d) => `${d.campaignTitle} has been cancelled. No further participation is allowed.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+  'social_impact.extended': {
+    category: 'opportunities',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign extended`,
+    body: (d) =>
+      `The submission deadline for ${d.campaignTitle} has been extended to ${d.newEndDate}.`,
+    actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
+  },
+
+  // ── Social Impact — admin inbox (role fan-outs bypass preference gating;
+  //    inApp implies push for staff, mirroring the other admin.* types) ──────
+  'social_impact.admin_published': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign published`,
+    body: (d) => `${d.campaignTitle} is now live and visible to creators.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_paused': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign paused`,
+    body: (d) =>
+      `${d.campaignTitle} has been paused. Creator participation is temporarily unavailable.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_resumed': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign resumed`,
+    body: (d) => `${d.campaignTitle} has resumed and creators can participate again.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_cancelled': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'high',
+    title: () => `Campaign cancelled`,
+    body: (d) => `${d.campaignTitle} has been cancelled. No further participation is allowed.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_extended': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign extended`,
+    body: (d) =>
+      `The submission deadline for ${d.campaignTitle} has been extended to ${d.newEndDate}.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_participant_joined': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'low',
+    title: () => `New participant`,
+    body: (d) => `${d.participantCount} creator(s) have joined ${d.campaignTitle}.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_live_link_submitted': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Submission received`,
+    body: (d) => `${d.creatorName} submitted a live content link for ${d.campaignTitle}.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_ended': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign ended`,
+    body: (d) => `${d.campaignTitle} has reached its submission deadline.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
+  },
+  'social_impact.admin_completed': {
+    category: 'campaigns',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: () => `Campaign completed`,
+    body: (d) =>
+      `All eligible creators have received their rewards. ${d.campaignTitle} is now complete.`,
+    actionUrl: (d) => `/admin/campaigns/social/${d.campaignId}`,
   },
 };

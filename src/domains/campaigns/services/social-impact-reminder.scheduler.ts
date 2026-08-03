@@ -6,6 +6,33 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { ContentSubmission } from '../entities/content-submission.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 
+/**
+ * Reminder tiers from the PM spec — chosen by TOTAL campaign duration
+ * (published date → end date), fired by time REMAINING:
+ *
+ *   duration < 24h   → R1 at T-2h                 (no final reminder)
+ *   1–3 days         → R1 at T-12h, final at T-2h
+ *   4–7 days         → R1 at T-24h, final at T-2h
+ *   > 7 days         → R1 at T-48h, final at T-2h
+ *
+ * The cron runs hourly, so each trigger uses a ~1.2h-wide window; the
+ * dedupeKey (not the window) is what guarantees at-most-once per creator.
+ */
+const FINAL_REMINDER_HOURS = 2;
+
+function firstReminderHours(durationHours: number): number {
+  if (durationHours < 24) return 2;
+  if (durationHours <= 72) return 12;
+  if (durationHours <= 168) return 24;
+  return 48;
+}
+
+/** "48 hours" / "2 hours" — the human string rendered into the body copy. */
+function formatRemaining(hours: number): string {
+  const rounded = Math.max(1, Math.round(hours));
+  return `${rounded} hour${rounded === 1 ? '' : 's'}`;
+}
+
 @Injectable()
 export class SocialImpactReminderScheduler {
   private readonly logger = new Logger(SocialImpactReminderScheduler.name);
@@ -21,9 +48,11 @@ export class SocialImpactReminderScheduler {
   ) {}
 
   /**
-   * Runs every hour to check Active Social Impact campaigns.
-   * 1. Auto-completes campaigns whose endDate has passed (now >= endDate).
-   * 2. Sends Reminder 1 and Reminder 2 push/in-app notifications to creators who participated but have not submitted live content links.
+   * Hourly pass over Active Social Impact campaigns:
+   * 1. Auto-completes campaigns whose end date has passed and tells the
+   *    admin team ("Campaign ended").
+   * 2. Sends the first/final reminders to creators who participated but have
+   *    not submitted a live link yet.
    */
   @Cron(CronExpression.EVERY_HOUR)
   async processSocialImpactRemindersAndExpirations(): Promise<void> {
@@ -46,91 +75,86 @@ export class SocialImpactReminderScheduler {
           (timeline.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
         if (!endDateRaw) continue;
 
-        const endDateStr = String(endDateRaw);
-        const endDate = new Date(endDateStr);
+        const endDate = new Date(String(endDateRaw));
 
-        // 1. Auto-complete if end date has passed
+        // 1. Deadline reached → complete + notify the admin team.
         if (now >= endDate) {
           this.logger.log(
             `Social Impact Campaign ${campaign.id} (${campaign.title}) end date ${endDate.toISOString()} reached. Updating status to 'completed'.`,
           );
           await campaign.update({ status: 'completed' });
+
+          await this.notificationsService.notify({
+            type: 'social_impact.admin_ended',
+            recipientRole: ['owner', 'super_admin', 'moderator'],
+            data: { campaignId: campaign.id, campaignTitle: campaign.title },
+            dedupeKey: `si-ended:${campaign.id}`,
+          });
           continue;
         }
 
-        // 2. Reminder Notification Timing Calculations
+        // 2. Which reminder (if any) is due this tick?
         const publishedAtRaw =
           (timeline.publishedAt as string | undefined) || campaign.approvedAt || campaign.createdAt;
-        const publishedAtStr = publishedAtRaw ? String(publishedAtRaw) : null;
-        const publishedAt = publishedAtStr ? new Date(publishedAtStr) : now;
+        const publishedAt = publishedAtRaw ? new Date(String(publishedAtRaw)) : now;
 
         const durationHours = (endDate.getTime() - publishedAt.getTime()) / (1000 * 60 * 60);
-        const msRemaining = endDate.getTime() - now.getTime();
-        const hoursRemaining = msRemaining / (1000 * 60 * 60);
+        const hoursRemaining = (endDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-        let triggerReminder1 = false;
-        let triggerReminder2 = false;
+        const r1Hours = firstReminderHours(durationHours);
+        const hasFinal = durationHours >= 24;
 
-        if (durationHours < 24) {
-          // Less than 24h duration: Reminder 1 at 2 hours before end
-          if (hoursRemaining <= 2.2 && hoursRemaining >= 1.0) {
-            triggerReminder1 = true;
-          }
-        } else if (durationHours <= 72) {
-          // 1 to 3 days (24h to 72h): R1 at 12h, R2 at 2h
-          if (hoursRemaining <= 12.2 && hoursRemaining >= 11.0) {
-            triggerReminder1 = true;
-          } else if (hoursRemaining <= 2.2 && hoursRemaining >= 1.0) {
-            triggerReminder2 = true;
-          }
-        } else if (durationHours <= 168) {
-          // 4 to 7 days (96h to 168h): R1 at 24h, R2 at 2h
-          if (hoursRemaining <= 24.2 && hoursRemaining >= 23.0) {
-            triggerReminder1 = true;
-          } else if (hoursRemaining <= 2.2 && hoursRemaining >= 1.0) {
-            triggerReminder2 = true;
-          }
-        } else {
-          // More than 7 days (> 168h): R1 at 48h, R2 at 2h
-          if (hoursRemaining <= 48.2 && hoursRemaining >= 47.0) {
-            triggerReminder1 = true;
-          } else if (hoursRemaining <= 2.2 && hoursRemaining >= 1.0) {
-            triggerReminder2 = true;
-          }
-        }
+        // Window: from the trigger point until 1h before it, matching the
+        // hourly cadence. The dedupeKey below makes re-entry harmless.
+        const inWindow = (target: number) =>
+          hoursRemaining <= target + 0.2 && hoursRemaining >= target - 1.0;
 
-        if (!triggerReminder1 && !triggerReminder2) continue;
+        let reminder: 'first' | 'final' | null = null;
+        if (hasFinal && inWindow(FINAL_REMINDER_HOURS)) reminder = 'final';
+        else if (inWindow(r1Hours)) reminder = r1Hours === FINAL_REMINDER_HOURS ? 'final' : 'first';
+        // (<24h campaigns get ONE reminder at T-2h; the spec labels it
+        // Reminder 1, but the "Only 2 hours remain" copy is the accurate one.)
 
-        // Find participants who have NOT submitted live link yet
+        if (!reminder) continue;
+
+        // 3. Participants who have not submitted a live link.
         const applications = await this.applicationModel.findAll({
           where: { campaignId: campaign.id },
         });
 
         for (const app of applications) {
+          // Participants the admin rejected are out of the campaign — no nags.
+          if ((app.status || '').toLowerCase() === 'rejected') continue;
+
           const submission = await this.submissionModel.findOne({
             where: { applicationId: app.id },
           });
+          if (submission && submission.liveLink?.link) continue;
 
-          // If submission exists and liveLink is provided, skip (no reminders after submission)
-          if (submission && submission.liveLink?.link) {
-            continue;
-          }
-
-          const reminderType = triggerReminder1 ? 'Reminder 1' : 'Reminder 2';
           this.logger.log(
-            `Dispatching ${reminderType} for creator ${app.creatorId} on Social Impact Campaign ${campaign.title}`,
+            `Dispatching ${reminder} reminder for creator ${app.creatorId} on Social Impact Campaign ${campaign.title}`,
           );
 
-          await this.notificationsService.notify({
-            type: 'social_impact.reminder',
-            recipientId: app.creatorId,
-            data: {
-              campaignId: campaign.id,
-              campaignTitle: campaign.title,
-              hoursRemaining: Math.round(hoursRemaining),
-              reminderType,
-            },
-          });
+          if (reminder === 'final') {
+            await this.notificationsService.notify({
+              type: 'social_impact.final_reminder',
+              recipientId: app.creatorId,
+              data: { campaignId: campaign.id, campaignTitle: campaign.title },
+              dedupeKey: `si-reminder-final:${campaign.id}:${app.creatorId}`,
+            });
+          } else {
+            await this.notificationsService.notify({
+              type: 'social_impact.reminder',
+              recipientId: app.creatorId,
+              data: {
+                campaignId: campaign.id,
+                campaignTitle: campaign.title,
+                remainingTime: formatRemaining(hoursRemaining),
+                tokenReward: campaign.tokenReward ?? 0,
+              },
+              dedupeKey: `si-reminder-1:${campaign.id}:${app.creatorId}`,
+            });
+          }
         }
       }
     } catch (error: unknown) {
