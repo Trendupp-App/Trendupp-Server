@@ -603,13 +603,7 @@ export interface FormattedCreatorStage {
   goal: string;
   status: string;
   statusLabel:
-    | 'On time'
-    | 'Delayed'
-    | 'In progress'
-    | 'Not started'
-    | 'Skipped'
-    | 'Disputed'
-    | 'Extended';
+    'On time' | 'Delayed' | 'In progress' | 'Not started' | 'Skipped' | 'Disputed' | 'Extended';
   intendedFor: string | null;
   durationText: string;
   startedDate: string | null;

@@ -426,6 +426,4 @@ export class AdminCampaignsService {
       },
     };
   }
-
 }
-
