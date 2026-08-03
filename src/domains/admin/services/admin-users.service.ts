@@ -64,8 +64,8 @@ export class AdminUsersService {
     if (existingUser) {
       const existingOtp = await this.otpService.findPendingInviteOtp(email);
 
-      if (!existingOtp) {
-        // Account exists and invite OTP is gone → admin already completed setup
+      if (!existingOtp && existingUser.lastLoginAt) {
+        // Account exists and admin has completed initial login → setup fully done
         throw new ConflictException(
           'An account with this email already exists and has been fully set up. ' +
             'If you need to reset their access, use the suspend or delete options.',
@@ -193,8 +193,87 @@ export class AdminUsersService {
         email: newAdmin.email,
         firstName: newAdmin.firstName,
         lastName: newAdmin.lastName,
-        role: role.name as unknown as Role,
+        role: role,
         isActive: newAdmin.isActive,
+      },
+    };
+  }
+
+  async resendInvite(
+    callerId: string,
+    id: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; code: string; admin: Partial<User> }> {
+    const adminUser = await this.userModel.findByPk(id, {
+      include: [{ model: Role, as: 'role' }],
+    });
+
+    if (!adminUser) {
+      throw new NotFoundException(`Sub-admin with ID '${id}' not found.`);
+    }
+
+    const roleName =
+      adminUser.role?.name || (typeof adminUser.role === 'string' ? adminUser.role : '');
+    const isStaff = [
+      'owner',
+      'super_admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(roleName);
+
+    if (!isStaff) {
+      throw new BadRequestException('Target user is not a sub-admin staff member.');
+    }
+
+    if (adminUser.lastLoginAt) {
+      throw new ConflictException(
+        'This admin user has already completed setup and logged into the platform.',
+      );
+    }
+
+    // Wipe any existing OTP and issue a fresh 7-day activation OTP link
+    const freshOtp = await this.otpService.generateOtp(
+      adminUser.email,
+      'password-reset',
+      this.INVITE_OTP_EXPIRES_MINUTES,
+    );
+
+    const displayName = adminUser.role?.displayName || roleName || 'Sub-Admin';
+
+    try {
+      await this.emailService.sendAdminInvitationEmail(
+        adminUser.email,
+        `${adminUser.firstName || ''} ${adminUser.lastName || ''}`.trim() || 'Admin User',
+        displayName,
+        freshOtp.code,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to resend invitation email to ${adminUser.email}: ${(err as Error).message}`,
+      );
+    }
+
+    await this.auditLogService.log({
+      adminId: callerId,
+      action: 'ADMIN_INVITE_RESENT',
+      targetUserId: adminUser.id,
+      ipAddress,
+      userAgent,
+      details: { email: adminUser.email, role: roleName },
+    });
+
+    return {
+      message: `Invitation resent successfully. A new 7-day activation link has been emailed to ${adminUser.email}.`,
+      code: freshOtp.code,
+      admin: {
+        id: adminUser.id,
+        email: adminUser.email,
+        firstName: adminUser.firstName,
+        lastName: adminUser.lastName,
+        role: adminUser.role,
+        isActive: adminUser.isActive,
       },
     };
   }

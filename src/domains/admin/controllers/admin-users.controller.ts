@@ -57,6 +57,21 @@ export class AdminUsersController {
     return this.adminUsersService.inviteAdmin(user.id, dto, ipAddress, userAgent);
   }
 
+  @Post('users/:id/resend-invite')
+  @Roles('owner', 'super_admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Resend activation link to a pending sub-admin account by ID (Owner & SuperAdmin only)',
+  })
+  @ApiResponse({ status: 200, description: 'Sub-admin activation link resent successfully' })
+  @ApiResponse({ status: 404, description: 'Sub-admin user not found' })
+  @ApiResponse({ status: 409, description: 'Admin user has already completed setup' })
+  async resendInvite(@CurrentUser() user: User, @Param('id') id: string, @Req() req: Request) {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminUsersService.resendInvite(user.id, id, ipAddress, userAgent);
+  }
+
   @Get('users')
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
