@@ -78,6 +78,10 @@ import { AdsModule } from './domains/ads/ads.module';
           connection: {
             host: isDev ? '127.0.0.1' : configService.get<string>('redis.host'),
             port: isDev ? 6379 : configService.get<number>('redis.port'),
+            // AWS ElastiCache Serverless requires in-transit encryption (TLS).
+            // Without this, the connection to the *.serverless.*.cache.amazonaws.com
+            // endpoint silently fails/hangs. Only applied outside local dev.
+            ...(!isDev && { tls: configService.get('redis.tls') ?? {} }),
             // In development, connect lazily and stop retrying after the first failure
             // so the server starts cleanly without a local Redis instance.
             // NotificationsService already has a try/catch fallback dispatcher for when
