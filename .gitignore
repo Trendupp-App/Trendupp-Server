@@ -51,3 +51,8 @@ lerna-debug.log*
 
 # NestJS
 .nestcli.json
+
+# scripts
+/scripts
+/scripts/*
+/scripts*

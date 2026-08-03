@@ -651,12 +651,14 @@ export class AdminCreatorsService {
     ];
 
     const getTargetDate = (c: User): Date | null => {
-      const val = (c.getDataValue ? c.getDataValue(dateField) : c[dateField]) as
-        | Date
-        | string
-        | number
-        | null
-        | undefined;
+      // `dateField` is `keyof User`, so `c[dateField]` can type as one of the
+      // model's methods, which trips @typescript-eslint/unbound-method. Index
+      // through a plain record instead — the value is only ever a date column.
+      const val = (
+        typeof c.getDataValue === 'function'
+          ? c.getDataValue(dateField)
+          : (c as unknown as Record<string, unknown>)[dateField]
+      ) as Date | string | number | null | undefined;
       if (val instanceof Date) return val;
       if (typeof val === 'string' || typeof val === 'number') return new Date(val);
       if (c.updatedAt) return new Date(c.updatedAt);
