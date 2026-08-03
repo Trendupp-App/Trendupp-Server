@@ -83,7 +83,12 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" || true
             export PATH=$PATH:/usr/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin
 
-            export NODE_ENV=production
+            # NOTE: NODE_ENV is deliberately NOT exported here. With
+            # NODE_ENV=production, npm skips devDependencies — which breaks
+            # the husky `prepare` hook, the nest build, and the sequelize-cli
+            # migrations, all of which are devDependencies. The app gets its
+            # NODE_ENV from ecosystem.config.js (`--env production`) instead,
+            # and STEP 6 prunes devDependencies once they've done their job.
 
             echo "--- STEP 1: Checkout $BRANCH ---"
             if [ ! -d "$APP_DIR" ]; then
@@ -126,9 +131,11 @@ jobs:
             fi
 
             echo "--- STEP 3: Install dependencies ---"
-            npm ci --no-audit --no-fund \
+            # --include=dev: the box's own profile may export NODE_ENV, and the
+            # build/migration tooling lives in devDependencies (see note above).
+            npm ci --include=dev --no-audit --no-fund \
               || (echo "Lockfile mismatch — reinstalling from scratch." \
-                  && rm -rf node_modules && npm install --no-audit --no-fund)
+                  && rm -rf node_modules && npm install --include=dev --no-audit --no-fund)
 
             echo "--- STEP 4: Build ---"
             if [ -f "nest-cli.json" ]; then
@@ -199,7 +206,7 @@ jobs:
             if [ -n "$PREVIOUS_SHA" ]; then
               echo "--- ROLLING BACK to $PREVIOUS_SHA (code only) ---"
               git reset --hard "$PREVIOUS_SHA"
-              npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+              npm ci --include=dev --no-audit --no-fund || npm install --include=dev --no-audit --no-fund
               NODE_OPTIONS="--max-old-space-size=1536" ./node_modules/.bin/nest build
               npm prune --omit=dev
               $PM2_BIN reload ecosystem.config.js --env production
