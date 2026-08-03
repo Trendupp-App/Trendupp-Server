@@ -545,6 +545,14 @@ export class AdminUsersService {
 
     const email = targetAdmin.email;
     const deletedName = AdminUsersService.adminDisplayName(targetAdmin);
+
+    // Mangle email so unique constraint is freed up in DB when re-inviting this email address
+    const timestamp = Date.now();
+    await targetAdmin.update({
+      email: `deleted_${timestamp}_${email}`,
+      isActive: false,
+    });
+
     await targetAdmin.destroy();
 
     await this.notificationsService.notify({
