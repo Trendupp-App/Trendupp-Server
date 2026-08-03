@@ -3,7 +3,7 @@ export default () => ({
   port: parseInt(process.env.PORT as string, 10) || 3000,
   app: {
     // Base URL of the web client — used to build deep links in notification emails
-    webUrl: process.env.WEB_APP_URL || 'https://trendupp.com',
+    webUrl: process.env.WEB_APP_URL || 'https://app.trendupp.com',
   },
   database: {
     host: process.env.DB_HOST,
@@ -15,6 +15,7 @@ export default () => ({
   redis: {
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT as string, 10) || 6379,
+    tls: {}, // Enables TLS with default CA certificates
   },
   betterstack: {
     sourceToken: process.env.BETTERSTACK_SOURCE_TOKEN,
