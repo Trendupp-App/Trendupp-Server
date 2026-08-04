@@ -225,6 +225,13 @@ export class AdminCreatorsService {
           model: CampaignApplication,
           as: 'applications',
           attributes: ['id', 'status', 'feeRequest'],
+          include: [
+            {
+              model: Campaign,
+              as: 'campaign',
+              attributes: ['status'],
+            },
+          ],
         },
       ],
     });
@@ -234,7 +241,9 @@ export class AdminCreatorsService {
     return creators
       .map((cr) => {
         const completedApps = (cr.applications || []).filter(
-          (a) => (a.status || '').toLowerCase() === 'completed',
+          (a) =>
+            ['accepted', 'approved'].includes((a.status || '').toLowerCase()) &&
+            a.campaign?.status === 'completed',
         );
         const name = `${cr.firstName || ''} ${cr.lastName || ''}`.trim() || 'Creator';
         const handle = cr.username
@@ -545,6 +554,13 @@ export class AdminCreatorsService {
           model: CampaignApplication,
           as: 'applications',
           attributes: ['id', 'status', 'feeRequest'],
+          include: [
+            {
+              model: Campaign,
+              as: 'campaign',
+              attributes: ['status'],
+            },
+          ],
         },
       ],
     });
@@ -589,7 +605,9 @@ export class AdminCreatorsService {
 
       const applications = creator.applications || [];
       const completedApps = applications.filter(
-        (a) => (a.status || '').toLowerCase() === 'completed',
+        (a) =>
+          ['accepted', 'approved'].includes((a.status || '').toLowerCase()) &&
+          a.campaign?.status === 'completed',
       );
       const totalEarnings = completedApps.reduce((acc, a) => acc + (a.feeRequest || 0), 0);
 
@@ -609,7 +627,7 @@ export class AdminCreatorsService {
         status: creatorStatus,
         profileCompletion: creator.onboardingPercentage,
         platformsConnected,
-        campaignsCount: applications.length,
+        campaignsCount: completedApps.length,
         totalEarnings,
         createdAt: creator.createdAt,
       };

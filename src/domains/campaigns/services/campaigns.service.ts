@@ -498,7 +498,9 @@ export class CampaignsService {
 
     // Initialize escrow on Pandascrow
     const timelineObj = campaign.timeline as
-      Record<string, { endedDate?: string }> | null | undefined;
+      | Record<string, { endedDate?: string }>
+      | null
+      | undefined;
     const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
     const rawDeliveryDate = endedDateStr
       ? new Date(endedDateStr)
@@ -750,7 +752,10 @@ export class CampaignsService {
         isAuthorized = true;
       } else if (role === 'creator') {
         const hasAcceptedApp = campaign.applications?.some(
-          (app) => app.creatorId === requestingUser.id && app.status === 'accepted',
+          (app) =>
+            app.creatorId === requestingUser.id &&
+            (app.status === 'accepted' ||
+              (campaign.type === 'social_impact' && ['approved', 'pending'].includes(app.status))),
         );
         if (hasAcceptedApp) {
           isAuthorized = true;
@@ -1260,7 +1265,22 @@ export class CampaignsService {
     const apps = await this.campaignRepository.findApplicationsByCreatorId(creatorId);
     for (const app of apps) {
       if (app.campaign) {
-        await this.populateBreakdown(app.campaign);
+        const rawAsset = app.campaign.amplificationAsset;
+        await this.populateBreakdown(app.campaign, creatorId);
+
+        let isAuthorized = false;
+        if (
+          app.status === 'accepted' ||
+          (app.campaign.type === 'social_impact' && ['approved', 'pending'].includes(app.status))
+        ) {
+          isAuthorized = true;
+        }
+
+        if (isAuthorized && rawAsset) {
+          app.campaign.setDataValue('amplificationAsset' as any, rawAsset);
+        } else {
+          app.campaign.setDataValue('amplificationAsset' as any, null);
+        }
       }
       const commentRecord = await this.campaignRepository.findCommentByCampaignAndCreator(
         app.campaignId,
