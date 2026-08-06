@@ -204,10 +204,38 @@ export class AdminCreatorsService {
     const creatorRoleId = await this.getCreatorRoleId();
     if (!creatorRoleId) return [];
 
-    const dateWhere = this.buildDateWhere(query);
+    const limit = query.limit || 5;
 
+    // Step 1: Aggregate actual released payments per creator.
+    // PaymentRelease.status = 'released' is the only source of truth for earnings.
+    const releases = await this.releaseModel.findAll({
+      where: { status: 'released' },
+      attributes: ['creatorId', 'amount', 'campaignId'],
+    });
+
+    // Build a map: creatorId → { totalEarnings, unique campaignIds }
+    const earningsMap = new Map<string, { totalEarnings: number; campaignIds: Set<string> }>();
+    for (const r of releases) {
+      const entry = earningsMap.get(r.creatorId) ?? {
+        totalEarnings: 0,
+        campaignIds: new Set<string>(),
+      };
+      entry.totalEarnings += Number(r.amount || 0);
+      entry.campaignIds.add(r.campaignId);
+      earningsMap.set(r.creatorId, entry);
+    }
+
+    // Step 2: Sort creator IDs by totalEarnings DESC and take the top N.
+    const topCreatorIds = [...earningsMap.entries()]
+      .sort((a, b) => b[1].totalEarnings - a[1].totalEarnings)
+      .slice(0, limit)
+      .map(([id]) => id);
+
+    if (topCreatorIds.length === 0) return [];
+
+    // Step 3: Fetch the creator user records for those IDs only.
     const creators = await this.userModel.findAll({
-      where: { roleId: creatorRoleId, ...dateWhere },
+      where: { id: topCreatorIds, roleId: creatorRoleId },
       attributes: [
         'id',
         'firstName',
@@ -220,35 +248,22 @@ export class AdminCreatorsService {
         'youtubeFollowers',
         'twitterFollowers',
       ],
-      include: [
-        {
-          model: CampaignApplication,
-          as: 'applications',
-          attributes: ['id', 'status', 'feeRequest'],
-          include: [
-            {
-              model: Campaign,
-              as: 'campaign',
-              attributes: ['status'],
-            },
-          ],
-        },
-      ],
     });
 
-    const limit = query.limit || 5;
+    // Step 4: Build response, preserving the earnings-sorted order.
+    const creatorMap = new Map(creators.map((c) => [c.id, c]));
 
-    return creators
-      .map((cr) => {
-        const completedApps = (cr.applications || []).filter(
-          (a) =>
-            ['accepted', 'approved'].includes((a.status || '').toLowerCase()) &&
-            a.campaign?.status === 'completed',
-        );
+    return topCreatorIds
+      .map((creatorId) => {
+        const cr = creatorMap.get(creatorId);
+        if (!cr) return null;
+
+        const { totalEarnings, campaignIds } = earningsMap.get(creatorId)!;
+
         const name = `${cr.firstName || ''} ${cr.lastName || ''}`.trim() || 'Creator';
         const handle = cr.username
           ? `@${cr.username.replace(/^@/, '')}`
-          : `@${cr.firstName.toLowerCase()}`;
+          : `@${(cr.firstName || '').toLowerCase()}`;
 
         const maxFollowers = Math.max(
           cr.instagramFollowers || 0,
@@ -271,12 +286,11 @@ export class AdminCreatorsService {
           handle,
           avatarUrl: cr.avatarUrl || null,
           tier,
-          campaignsCount: completedApps.length,
-          totalEarnings: completedApps.reduce((acc, a) => acc + (a.feeRequest || 0), 0),
+          campaignsCount: campaignIds.size,
+          totalEarnings,
         };
       })
-      .sort((a, b) => b.campaignsCount - a.campaignsCount)
-      .slice(0, limit);
+      .filter((item): item is TopCreatorWidgetDto => item !== null);
   }
 
   // ── 5. Creator Tier Distribution Widget ─────────────────────────────────────
