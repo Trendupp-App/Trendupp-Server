@@ -1,6 +1,7 @@
 import { Audit } from '../audit/audit.decorator';
 import {
   Controller,
+  BadRequestException,
   Get,
   Post,
   Patch,
@@ -11,8 +12,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { AdminSocialImpactService } from '../services/admin-social-impact.service';
 import {
   AdminSocialImpactSummaryResponseDto,
@@ -71,6 +75,8 @@ export class AdminSocialImpactController {
   @Post('social-impact')
   @Audit('CREATE_SOCIAL_IMPACT')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('coverImage'))
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
@@ -79,8 +85,22 @@ export class AdminSocialImpactController {
   async createSocialImpactCampaign(
     @Body() dto: CreateSocialImpactCampaignDto,
     @CurrentUser() admin: User,
+    @UploadedFile() coverImageFile?: Express.Multer.File,
   ) {
-    const campaign = await this.adminSocialImpactService.createSocialImpactCampaign(dto, admin.id);
+    if (coverImageFile) {
+      if (coverImageFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestException('Cover image is too large. Max allowed size is 5MB.');
+      }
+      if (!/(jpeg|jpg|png|webp)$/i.test(coverImageFile.mimetype)) {
+        throw new BadRequestException('Invalid cover image file type.');
+      }
+    }
+
+    const campaign = await this.adminSocialImpactService.createSocialImpactCampaign(
+      dto,
+      admin.id,
+      coverImageFile,
+    );
     return {
       message:
         dto.isDraft !== false ? 'Social Impact draft saved' : 'Social Impact campaign published',
@@ -102,6 +122,8 @@ export class AdminSocialImpactController {
 
   @Patch('social-impact/:id')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('coverImage'))
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update an existing Social Impact Campaign draft or section',
@@ -110,11 +132,22 @@ export class AdminSocialImpactController {
     @Param('id') id: string,
     @Body() dto: UpdateSocialImpactCampaignDto,
     @CurrentUser() admin: User,
+    @UploadedFile() coverImageFile?: Express.Multer.File,
   ) {
+    if (coverImageFile) {
+      if (coverImageFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestException('Cover image is too large. Max allowed size is 5MB.');
+      }
+      if (!/(jpeg|jpg|png|webp)$/i.test(coverImageFile.mimetype)) {
+        throw new BadRequestException('Invalid cover image file type.');
+      }
+    }
+
     const campaign = await this.adminSocialImpactService.updateSocialImpactCampaign(
       id,
       dto,
       admin.id,
+      coverImageFile,
     );
     return {
       message: 'Social Impact campaign updated successfully',
