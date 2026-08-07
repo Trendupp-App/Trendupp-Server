@@ -68,6 +68,8 @@ import {
   BROADCASTS_QUEUE,
 } from './services/broadcast-scheduler.processor';
 
+import { S3Service } from '../../integration/s3/s3.service';
+
 @Module({
   imports: [
     BullModule.registerQueue({ name: BROADCASTS_QUEUE }),
@@ -111,6 +113,7 @@ import {
     RolesSeederService,
     AuditLogRepository,
     AuditLogService,
+    S3Service,
     // Global: no-ops on routes without @Audit(...). Lives here so it can
     // inject AuditLogService.
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },

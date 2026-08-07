@@ -11,6 +11,7 @@ import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { AuditLogService } from './audit-log.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationRecipientRole } from '../../notifications/notification.types';
+import { S3Service } from '../../../integration/s3/s3.service';
 import {
   TokenBatchResponseDto,
   AdminSocialImpactSummaryResponseDto,
@@ -49,6 +50,7 @@ export class AdminSocialImpactService {
     private readonly tokenLedgerModel: typeof UserTokenLedger,
     private readonly auditLogService: AuditLogService,
     private readonly notificationsService: NotificationsService,
+    private readonly s3Service: S3Service,
   ) {}
 
   /** Staff roles that receive Social Impact lifecycle events in the admin inbox. */
@@ -259,6 +261,7 @@ export class AdminSocialImpactService {
   async createSocialImpactCampaign(
     dto: CreateSocialImpactCampaignDto,
     adminId: string,
+    coverImageFile?: Express.Multer.File,
   ): Promise<Campaign> {
     let brandId = dto.brandId;
     if (brandId) {
@@ -268,6 +271,11 @@ export class AdminSocialImpactService {
       }
     } else {
       brandId = adminId;
+    }
+
+    let coverImageUrl = dto.coverImageUrl;
+    if (coverImageFile) {
+      coverImageUrl = await this.s3Service.uploadFile(coverImageFile);
     }
 
     const isDraft = dto.isDraft !== false;
@@ -319,7 +327,7 @@ export class AdminSocialImpactService {
       currentStep: dto.currentStep || 1,
       status,
       paymentStatus: 'paid',
-      coverImageUrl: dto.coverImageUrl,
+      coverImageUrl,
       campaignBrief: dto.campaignBrief,
       deliverables: dto.deliverables || [],
       contentDirection: dto.contentDirection || [],
@@ -343,6 +351,7 @@ export class AdminSocialImpactService {
     id: string,
     dto: UpdateSocialImpactCampaignDto,
     adminId: string,
+    coverImageFile?: Express.Multer.File,
   ): Promise<Campaign> {
     const campaign = await this.campaignModel.findOne({
       where: { id, type: 'social_impact' } as unknown as Record<string, unknown>,
@@ -352,6 +361,12 @@ export class AdminSocialImpactService {
     }
 
     const updates: Partial<Campaign> = {};
+
+    if (coverImageFile) {
+      updates.coverImageUrl = await this.s3Service.uploadFile(coverImageFile);
+    } else if (dto.coverImageUrl) {
+      updates.coverImageUrl = dto.coverImageUrl;
+    }
 
     if (dto.title) updates.title = dto.title;
     if (dto.goal) updates.goal = dto.goal;
@@ -365,7 +380,6 @@ export class AdminSocialImpactService {
       });
       updates.creatorCategoryIds = categories.map((c) => c.id);
     }
-    if (dto.coverImageUrl) updates.coverImageUrl = dto.coverImageUrl;
     if (dto.campaignBrief) updates.campaignBrief = dto.campaignBrief;
     if (dto.currentStep) updates.currentStep = dto.currentStep;
     if (dto.deliverables) updates.deliverables = dto.deliverables;

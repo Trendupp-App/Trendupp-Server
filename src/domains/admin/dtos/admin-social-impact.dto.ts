@@ -10,7 +10,7 @@ import {
   IsUUID,
   IsEnum,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { PaginationMetaDto } from './admin-creators.dto';
 
 // ── Token Batch DTO ─────────────────────────────────────────────────────────
@@ -109,13 +109,50 @@ export class CreateSocialImpactCampaignDto {
     example: { Nano: 50, Micro: 100 },
     description: 'Reward amount by creator tier',
   })
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsOptional()
   tierRewards?: Record<string, number>;
 
   @ApiProperty({ example: ['Micro', 'Nano'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] => {
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return [];
+  })
   @IsArray()
   @IsString({ each: true })
   creatorTiers: string[];
+
+  @ApiPropertyOptional({
+    description: 'Campaign cover image file (upload binary file)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  coverImage?: any;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()
@@ -128,35 +165,121 @@ export class CreateSocialImpactCampaignDto {
   campaignBrief?: string;
 
   @ApiPropertyOptional({ example: ['1x Instagram Reel (30-60 seconds)'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   deliverables?: string[];
 
   @ApiPropertyOptional({ example: ['Film in warm, golden-hour lighting'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   contentDirection?: string[];
 
   @ApiPropertyOptional({ example: ['Tag brand account'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   dos?: string[];
 
   @ApiPropertyOptional({ example: ['No competitor brands visible'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   donts?: string[];
 
   @ApiPropertyOptional({ example: 1, description: 'Current step in creation wizard (1, 2, or 3)' })
+  @Transform(({ value }: { value: unknown }) => (value !== undefined ? Number(value) : 1))
   @IsOptional()
   @IsNumber()
   currentStep?: number = 1;
 
   @ApiPropertyOptional({ example: true, description: 'Set to false if publishing directly' })
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'false' || value === false) return false;
+    if (value === 'true' || value === true) return true;
+    return true;
+  })
   @IsOptional()
   @IsBoolean()
   isDraft?: boolean = true;
@@ -184,14 +307,52 @@ export class UpdateSocialImpactCampaignDto {
   endDate?: string;
 
   @ApiPropertyOptional({ example: { Nano: 50, Micro: 100 } })
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsOptional()
   tierRewards?: Record<string, number>;
 
   @ApiPropertyOptional({ example: ['Micro', 'Nano'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   creatorTiers?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Campaign cover image file (upload binary file)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  coverImage?: any;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.jpg' })
   @IsOptional()
@@ -204,30 +365,111 @@ export class UpdateSocialImpactCampaignDto {
   campaignBrief?: string;
 
   @ApiPropertyOptional({ example: ['1x Instagram Reel (30-60 seconds)'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   deliverables?: string[];
 
   @ApiPropertyOptional({ example: ['Film in warm, golden-hour lighting'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   contentDirection?: string[];
 
   @ApiPropertyOptional({ example: ['Tag brand account'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   dos?: string[];
 
   @ApiPropertyOptional({ example: ['No competitor brands visible'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] | undefined => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return undefined;
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   donts?: string[];
 
   @ApiPropertyOptional({ example: 2 })
+  @Transform(({ value }: { value: unknown }) => (value !== undefined ? Number(value) : undefined))
   @IsOptional()
   @IsNumber()
   currentStep?: number;
