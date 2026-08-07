@@ -59,10 +59,10 @@ describe('CampaignsService', () => {
 
     setDataValue: jest.fn(),
     paymentBreakdown: {
-      campaignBudget: 2325000,
+      campaignBudget: 3000000,
       trenduppFee: 450000,
-      vat: 225000,
-      totalToPay: 3000000,
+      vat: 33750,
+      totalToPay: 3483750,
     },
   } as unknown as Campaign;
 
@@ -410,9 +410,9 @@ describe('CampaignsService', () => {
       const mockPayment = {
         id: 'pay1',
         campaignId: 'c1',
-        amount: 2325000,
-        totalAmount: 3000000,
-        gatewayFee: 117000,
+        amount: 3000000,
+        totalAmount: 3483750,
+        gatewayFee: 174188,
         paymentStatus: 'pending',
         paymentReference: 'tx_ref_123',
         escrowId: '12345',

@@ -96,38 +96,45 @@ export class CampaignsService {
       }
     }
 
-    // 1. VAT (7.5%) is deducted first from the brand's total budget.
+    // 1. Agency commission is calculated ON the campaign budget and added ON TOP.
+    //    e.g. 15% of ₦1,000,000 = ₦150,000
+    const trenduppFee = Math.round(budget * trenduppRate);
+
+    // 2. VAT is applied only to the commission amount (not the full budget) and added ON TOP.
+    //    e.g. 7.5% of ₦150,000 = ₦11,250
     const vatFeeRecord = await this.feeModel.findOne({ where: { name: 'VAT' } });
     const vatRate = vatFeeRecord?.value ?? 0.075; // safe fallback to 7.5%
-    const vat = Math.round(budget * vatRate);
-    const amountAfterVat = budget - vat;
+    const vat = Math.round(trenduppFee * vatRate);
 
-    // 2. Trendupp commission (15%) is deducted from the balance remaining after VAT.
-    const trenduppFee = Math.round(amountAfterVat * trenduppRate);
+    // 3. Campaign budget (creator pool) is the original untouched budget.
+    //    Stored in campaigns.total_budget.
+    const campaignBudget = budget;
 
-    // 3. Final Creator budget pool = remaining balance after VAT minus Trendupp commission.
-    const campaignBudget = amountAfterVat - trenduppFee;
+    // 4. Grand total charged to the brand = budget + commission + VAT.
+    //    e.g. ₦1,000,000 + ₦150,000 + ₦11,250 = ₦1,161,250
+    const totalToPay = budget + trenduppFee + vat;
 
-    // 4. Pandascrow platform fee rate from fees table (3% NGN, 5% USD).
-    // Gateway fee is deducted FROM the 15% Trendupp commission pool, NOT from creator budget pool.
+    // 5. Gateway fee rate from fees table (3% NGN/Paystack, 5% USD/Stripe).
+    //    The gateway processes totalToPay through the checkout, so fee is calculated on totalToPay.
+    //    Trendupp absorbs this fee out of its commission (it is NOT added to brand's totalToPay).
     const feeKey =
       currency === 'NGN' ? 'Pandascrow Gateway Fee (NGN)' : 'Pandascrow Gateway Fee (USD)';
     const feeRecord = await this.feeModel.findOne({ where: { name: feeKey } });
     const pandascrowRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
-    const pandascrowFee = Math.round(trenduppFee * pandascrowRate);
+    const pandascrowFee = Math.round(totalToPay * pandascrowRate);
 
     const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
+      {
+        name: 'Agency Commission',
+        type: 'percentage',
+        value: trenduppRate,
+        amount: trenduppFee,
+      },
       {
         name: 'VAT',
         type: 'percentage',
         value: vatRate,
         amount: vat,
-      },
-      {
-        name: 'Trendupp Fee',
-        type: 'percentage',
-        value: trenduppRate,
-        amount: trenduppFee,
       },
       {
         name: `Pandascrow Gateway Fee (${currency})`,
@@ -142,7 +149,7 @@ export class CampaignsService {
       trenduppFee,
       vat,
       pandascrowFee,
-      totalToPay: budget,
+      totalToPay,
       commissionRate: trenduppRate,
       vatRate,
       gatewayRate: pandascrowRate,
