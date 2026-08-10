@@ -15,6 +15,7 @@ export class FindAllCampaignsQueryDto extends PaginationDto {
       'social_impact',
       'content_review',
       'revisions',
+      'all',
     ],
   })
   @IsOptional()
@@ -28,6 +29,7 @@ export class FindAllCampaignsQueryDto extends PaginationDto {
     'social_impact',
     'content_review',
     'revisions',
+    'all',
   ])
   status?: string;
 

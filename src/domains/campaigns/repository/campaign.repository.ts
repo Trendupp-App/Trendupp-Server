@@ -137,7 +137,10 @@ export class CampaignRepository {
 
     // 1. Filter by Status
     if (status) {
-      if (status === 'past') {
+      if (status === 'all') {
+        // Only fetch campaigns that are live or past (completed, cancelled)
+        where['status'] = { [Op.in]: ['live', 'completed', 'cancelled'] };
+      } else if (status === 'past') {
         // Past = completed or cancelled campaigns
         where['status'] = { [Op.in]: ['completed', 'cancelled'] };
       } else if (status === 'content_review') {
