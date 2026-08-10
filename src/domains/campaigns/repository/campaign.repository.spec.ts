@@ -91,4 +91,23 @@ describe('CampaignRepository', () => {
       { page: 1, limit: 10 },
     );
   });
+
+  it('should construct correct where option when status is all', async () => {
+    await repository.findAll({
+      status: 'all',
+      page: 1,
+      limit: 10,
+    });
+
+    expect(paginate).toHaveBeenCalledWith(
+      campaignModelMock,
+      expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        where: expect.objectContaining({
+          status: { [Op.in]: ['live', 'completed', 'cancelled'] },
+        }),
+      }),
+      { page: 1, limit: 10 },
+    );
+  });
 });
