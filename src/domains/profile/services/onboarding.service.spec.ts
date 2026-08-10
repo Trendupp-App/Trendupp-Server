@@ -12,6 +12,8 @@ import { Nationality } from '../../users/entities/nationality.entity';
 import { State } from '../../users/entities/state.entity';
 import { User } from '../../users/entities/user.entity';
 import { Industry } from '../../users/entities/industry.entity';
+import { MarketingBudgetRepository } from '../../users/repository/marketing-budget.repository';
+import { MarketingBudget } from '../../users/entities/marketing-budget.entity';
 
 describe('OnboardingService', () => {
   let service: OnboardingService;
@@ -21,6 +23,7 @@ describe('OnboardingService', () => {
   let bankRepositoryMock: jest.Mocked<BankRepository>;
   let industryRepositoryMock: jest.Mocked<IndustryRepository>;
   let userRepositoryMock: jest.Mocked<UserRepository>;
+  let marketingBudgetRepositoryMock: jest.Mocked<MarketingBudgetRepository>;
 
   beforeEach(async () => {
     nicheRepositoryMock = {
@@ -50,6 +53,10 @@ describe('OnboardingService', () => {
       findById: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
 
+    marketingBudgetRepositoryMock = {
+      findAll: jest.fn(),
+    } as unknown as jest.Mocked<MarketingBudgetRepository>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OnboardingService,
@@ -59,6 +66,7 @@ describe('OnboardingService', () => {
         { provide: BankRepository, useValue: bankRepositoryMock },
         { provide: IndustryRepository, useValue: industryRepositoryMock },
         { provide: UserRepository, useValue: userRepositoryMock },
+        { provide: MarketingBudgetRepository, useValue: marketingBudgetRepositoryMock },
       ],
     }).compile();
 
@@ -183,6 +191,19 @@ describe('OnboardingService', () => {
       const result = await service.getCitiesByCountryAndState('c-1', 's-1');
       expect(result.length).toBeGreaterThan(0);
       expect(result).toContainEqual(expect.objectContaining({ name: 'Ikeja' }));
+    });
+  });
+
+  describe('getMarketingBudgets', () => {
+    it('should call marketingBudgetRepository.findAll with filters', async () => {
+      const mockBudgets = [
+        { id: '1', value: '$100 - $1000', currency: 'USD' },
+      ] as unknown as MarketingBudget[];
+      marketingBudgetRepositoryMock.findAll.mockResolvedValue(mockBudgets);
+
+      const result = await service.getMarketingBudgets({ currency: 'USD' });
+      expect(result).toEqual(mockBudgets);
+      expect(marketingBudgetRepositoryMock.findAll).toHaveBeenCalledWith({ currency: 'USD' });
     });
   });
 });

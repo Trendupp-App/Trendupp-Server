@@ -171,6 +171,20 @@ export class OnboardingController {
     return this.onboardingService.getBanks({ region, country, search });
   }
 
+  @Get('marketing-budgets')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @ApiOperation({ summary: 'Get all marketing budgets lookup' })
+  @ApiQuery({
+    name: 'currency',
+    required: false,
+    enum: ['USD', 'NGN'],
+    description: 'Filter budgets by currency',
+  })
+  @ApiResponse({ status: 200, description: 'List of marketing budgets retrieved' })
+  async getMarketingBudgets(@Query('currency') currency?: string) {
+    return this.onboardingService.getMarketingBudgets({ currency });
+  }
+
   // ─── Onboarding Steps ──────────────────────────────────────────────────────
 
   @Patch('profile')
