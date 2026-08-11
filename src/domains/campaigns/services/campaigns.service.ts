@@ -1187,6 +1187,15 @@ export class CampaignsService {
         }
       }
 
+      if (status === 'accepted' || status === 'rejected') {
+        await this.notificationsService.notify({
+          type: status === 'accepted' ? 'application.accepted' : 'application.rejected',
+          recipientId: application.creatorId,
+          actorId: callerId,
+          data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
+        });
+      }
+
       const updated = await this.campaignRepository.findApplicationById(appId);
       if (updated) {
         if (updated.campaign) {
@@ -1203,6 +1212,12 @@ export class CampaignsService {
       for (const app of allApplications) {
         if (!applicationIds.includes(app.id) && app.status !== 'rejected') {
           await app.update({ status: 'rejected' });
+          await this.notificationsService.notify({
+            type: 'application.rejected',
+            recipientId: app.creatorId,
+            actorId: callerId,
+            data: { campaignId, campaignTitle: campaign.title, applicationId: app.id },
+          });
         }
       }
     }
