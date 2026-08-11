@@ -28,6 +28,8 @@ import { RoleRepository } from './repository/role.repository';
 import { UsersController } from './controllers/users.controller';
 import { PortfolioController } from './controllers/portfolio.controller';
 import { Campaign } from '../campaigns/entities/campaign.entity';
+import { MarketingBudget } from './entities/marketing-budget.entity';
+import { MarketingBudgetRepository } from './repository/marketing-budget.repository';
 
 @Module({
   imports: [
@@ -44,6 +46,7 @@ import { Campaign } from '../campaigns/entities/campaign.entity';
       Campaign,
       PortfolioItem,
       UserTokenLedger,
+      MarketingBudget,
     ]),
     EmailModule,
   ],
@@ -61,6 +64,7 @@ import { Campaign } from '../campaigns/entities/campaign.entity';
     TokenExpirationScheduler,
     PortfolioService,
     S3Service,
+    MarketingBudgetRepository,
   ],
   controllers: [UsersController, PortfolioController],
   exports: [
@@ -72,6 +76,7 @@ import { Campaign } from '../campaigns/entities/campaign.entity';
     StateRepository,
     BankRepository,
     IndustryRepository,
+    MarketingBudgetRepository,
   ],
 })
 export class UsersModule {}

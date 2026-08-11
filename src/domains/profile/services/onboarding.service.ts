@@ -12,6 +12,8 @@ import { Bank } from '../../users/entities/bank.entity';
 import { Industry } from '../../users/entities/industry.entity';
 import { User } from '../../users/entities/user.entity';
 import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
+import { MarketingBudgetRepository } from '../../users/repository/marketing-budget.repository';
+import { MarketingBudget } from '../../users/entities/marketing-budget.entity';
 import { Op, WhereOptions } from 'sequelize';
 
 @Injectable()
@@ -23,6 +25,7 @@ export class OnboardingService {
     private readonly bankRepository: BankRepository,
     private readonly industryRepository: IndustryRepository,
     private readonly userRepository: UserRepository,
+    private readonly marketingBudgetRepository: MarketingBudgetRepository,
   ) {}
 
   async getAllNiches(): Promise<Niche[]> {
@@ -116,5 +119,9 @@ export class OnboardingService {
     return cscCities.map((c) => ({
       name: c.name,
     }));
+  }
+
+  async getMarketingBudgets(filters?: { currency?: string }): Promise<MarketingBudget[]> {
+    return this.marketingBudgetRepository.findAll(filters);
   }
 }

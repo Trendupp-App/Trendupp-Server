@@ -47,6 +47,7 @@ module.exports = {
         { platform: 'tiktok', min_followers: 1000 },
         { platform: 'youtube', min_followers: 500 },
         { platform: 'twitter', min_followers: 500 },
+        { platform: 'facebook', min_followers: 1000 },
       ].map((row) => ({
         ...row,
         id: Sequelize.literal('gen_random_uuid()'),
