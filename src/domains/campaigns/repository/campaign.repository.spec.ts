@@ -74,6 +74,7 @@ describe('CampaignRepository', () => {
       expect.objectContaining({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         where: expect.objectContaining({
+          type: { [Op.ne]: 'social_impact' },
           status: 'live',
           goal: 'Create Content',
           '$preferredPlatforms.name$': {
@@ -104,6 +105,7 @@ describe('CampaignRepository', () => {
       expect.objectContaining({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         where: expect.objectContaining({
+          type: { [Op.ne]: 'social_impact' },
           status: { [Op.in]: ['live', 'completed', 'cancelled'] },
         }),
       }),

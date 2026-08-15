@@ -296,14 +296,21 @@ export class UsersService {
 
     // 2. Perform concurrent lookups
     const [campaignsResult, creatorsResult, brandsResult] = await Promise.all([
-      // Campaign search: status = 'live', title matches
+      // Campaign search: status in ('live', 'completed'), title matches
       paginate(
         this.campaignModel,
         {
           where: {
-            status: 'live',
+            status: { [Op.in]: ['live', 'completed'] },
             title: { [Op.iLike]: searchPattern },
           },
+          include: [
+            {
+              model: User,
+              as: 'brand',
+              attributes: ['id', 'firstName', 'lastName', 'username', 'avatarUrl'],
+            },
+          ],
           order: [['createdAt', 'DESC']],
         },
         { page, limit },

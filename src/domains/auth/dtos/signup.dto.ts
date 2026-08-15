@@ -91,7 +91,7 @@ export class SignupDto {
     description: 'Acceptance of terms and conditions',
     example: true,
   })
-  @Equals(true, { message: 'Terms and conditions must be accepted' })
+  @Equals(true, { message: 'No account found, please signup first to continue.' })
   @IsNotEmpty()
   acceptedTerms: boolean;
 

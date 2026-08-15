@@ -130,7 +130,9 @@ export class CampaignRepository {
   ): Promise<PaginatedResult<Campaign>> {
     const { status, sortBy, platforms, niches, nicheIds, goal, page = 1, limit = 10 } = query;
 
-    const where: Record<string | symbol, any> = {};
+    const where: Record<string | symbol, any> = {
+      type: { [Op.ne]: 'social_impact' },
+    };
 
     // Extra includes appended for virtual status lookups (active, content_review, revisions)
     const extraIncludes: object[] = [];
