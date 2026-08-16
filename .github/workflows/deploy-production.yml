@@ -151,10 +151,19 @@ jobs:
             echo "--- STEP 5: Run database migrations ---"
             npm run migration:run
 
-            echo "--- STEP 6: Prune dev dependencies ---"
+            # Seeders load reference/initial data (roles, countries, banks,
+            # categories, fee rates, ...). Safe to run every deploy because
+            # database/config.js sets seederStorage:'sequelize' — the CLI records
+            # applied seeders in SequelizeData and skips them next time, so this
+            # only ever inserts NEW seeders. Must run before the prune (sequelize-cli
+            # is a devDependency). Super-admin creation stays a manual one-off.
+            echo "--- STEP 6: Run database seeders ---"
+            npm run seed:run
+
+            echo "--- STEP 7: Prune dev dependencies ---"
             npm prune --omit=dev
 
-            echo "--- STEP 7: Reload PM2 ---"
+            echo "--- STEP 8: Reload PM2 ---"
             PM2_BIN=""
             if [ -f "./node_modules/.bin/pm2" ]; then
               PM2_BIN="./node_modules/.bin/pm2"
@@ -179,7 +188,7 @@ jobs:
             fi
             $PM2_BIN save
 
-            echo "--- STEP 8: Health check ---"
+            echo "--- STEP 9: Health check ---"
             HEALTHY=0
             for attempt in $(seq 1 20); do
               if curl -fsS --max-time 5 "$HEALTH_URL" > /dev/null 2>&1; then
