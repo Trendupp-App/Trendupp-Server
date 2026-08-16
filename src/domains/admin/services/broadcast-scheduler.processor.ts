@@ -39,16 +39,22 @@ export class BroadcastSchedulerProcessor extends WorkerHost implements OnModuleI
         this.logger.error(`Could not register the scheduled-broadcast job: ${err.message}`),
       );
 
-    const timeout = new Promise<void>((resolve) =>
-      setTimeout(() => {
-        this.logger.error(
-          'Redis not reachable within 10s at boot — continuing startup; scheduled broadcasts resume when it reconnects.',
+    // The timer must be cleared when registration wins the race — .unref()
+    // alone does not cancel it, so it used to log a false "not reachable"
+    // error 10s into every successful boot.
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        this.logger.warn(
+          'Redis still connecting 10s into boot — continuing startup; scheduled broadcasts start once it connects.',
         );
         resolve();
-      }, 10_000).unref(),
-    );
+      }, 10_000);
+      timer.unref();
+    });
 
     await Promise.race([registration, timeout]);
+    clearTimeout(timer);
   }
 
   async process(): Promise<void> {
