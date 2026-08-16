@@ -377,7 +377,7 @@ export class AuthService {
         user = await this.usersService.findOne(user.id);
       } else {
         if (googleLoginDto.acceptedTerms !== true) {
-          throw new BadRequestException('Terms and conditions must be accepted to sign up');
+          throw new BadRequestException('No account found, please signup first to continue.');
         }
 
         let roleRecord: Role | null = null;
@@ -481,7 +481,7 @@ export class AuthService {
 
     if (!user) {
       if (tiktokLoginDto.acceptedTerms !== true) {
-        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        throw new BadRequestException('No account found, please sign up first to continue.');
       }
 
       let roleRecord: Role | null = null;
@@ -578,7 +578,7 @@ export class AuthService {
 
     if (!user) {
       if (instagramLoginDto.acceptedTerms !== true) {
-        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        throw new BadRequestException('No account found, please signup first to continue.');
       }
 
       let roleRecord: Role | null = null;
@@ -690,7 +690,7 @@ export class AuthService {
 
     if (!user) {
       if (facebookLoginDto.acceptedTerms !== true) {
-        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        throw new BadRequestException('No account found, please signup first to continue.');
       }
 
       const roleRecord = await this.resolveSignupRole(role);
@@ -741,7 +741,7 @@ export class AuthService {
 
     if (!user) {
       if (appleLoginDto.acceptedTerms !== true) {
-        throw new BadRequestException('Terms and conditions must be accepted to sign up');
+        throw new BadRequestException('No account found, please signup first to continue.');
       }
 
       const roleRecord = await this.resolveSignupRole(role);

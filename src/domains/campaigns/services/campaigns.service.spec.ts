@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { CampaignsService } from './campaigns.service';
 import { CampaignRepository } from '../repository/campaign.repository';
@@ -59,10 +59,10 @@ describe('CampaignsService', () => {
 
     setDataValue: jest.fn(),
     paymentBreakdown: {
-      campaignBudget: 2325000,
+      campaignBudget: 3000000,
       trenduppFee: 450000,
-      vat: 225000,
-      totalToPay: 3000000,
+      vat: 33750,
+      totalToPay: 3483750,
     },
   } as unknown as Campaign;
 
@@ -235,7 +235,6 @@ describe('CampaignsService', () => {
 
       const result = await service.create('b1', createData);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.create).toHaveBeenCalledWith({
         title: 'Summer Campaign',
         goal: 'Create Content',
@@ -253,7 +252,6 @@ describe('CampaignsService', () => {
         currency: 'USD',
       });
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findById).toHaveBeenCalledWith('c1');
       expect(result).toEqual(mockCampaign);
     });
@@ -279,9 +277,8 @@ describe('CampaignsService', () => {
 
       await service.create('b1', createData, { coverImage: mockFile });
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(s3ServiceMock.uploadFile).toHaveBeenCalledWith(mockFile);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.create).toHaveBeenCalledWith({
         title: 'Summer Campaign',
         goal: 'Create Content',
@@ -319,7 +316,6 @@ describe('CampaignsService', () => {
 
       await service.updateDraft('c1', 'b1', updateData);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(draft.update).toHaveBeenCalledWith({
         deliverables: ['1x post'],
       });
@@ -410,9 +406,9 @@ describe('CampaignsService', () => {
       const mockPayment = {
         id: 'pay1',
         campaignId: 'c1',
-        amount: 2325000,
-        totalAmount: 3000000,
-        gatewayFee: 117000,
+        amount: 3000000,
+        totalAmount: 3483750,
+        gatewayFee: 174188,
         paymentStatus: 'pending',
         paymentReference: 'tx_ref_123',
         escrowId: '12345',
@@ -425,7 +421,6 @@ describe('CampaignsService', () => {
 
       const result = await service.submit('c1', 'b1');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(completeCampaign.update).toHaveBeenCalledWith({
         status: 'pending_payment',
         currentStep: 5,
@@ -519,13 +514,13 @@ describe('CampaignsService', () => {
       const result = await service.submit('c1', 'b1');
 
       // Old payment should be cancelled
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.updatePayment).toHaveBeenCalledWith('pay-old', {
         paymentStatus: 'cancelled',
       });
 
       // Campaign should be updated to pending_payment again with fresh escrow
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(pendingPaymentCampaign.update).toHaveBeenCalledWith({
         status: 'pending_payment',
         currentStep: 5,
@@ -562,7 +557,6 @@ describe('CampaignsService', () => {
       const user = { id: 'u1', role: { name: 'brand' } } as unknown as User;
       const result = await service.findAll(query, user);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, undefined);
       expect(result).toEqual(mockResult);
     });
@@ -585,7 +579,6 @@ describe('CampaignsService', () => {
       } as unknown as User;
       const result = await service.findAll(query, user);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, ['niche1', 'niche2']);
       expect(result).toEqual(mockResult);
     });
@@ -605,7 +598,6 @@ describe('CampaignsService', () => {
       } as unknown as User;
       const result = await service.findAll(query, user);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findAll).toHaveBeenCalledWith(query, undefined);
       expect(result).toEqual(mockResult);
     });
@@ -625,9 +617,8 @@ describe('CampaignsService', () => {
 
       const result = await service.findById('c1');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.countApplications).toHaveBeenCalledWith('c1');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignWithApps.setDataValue as jest.Mock).toHaveBeenCalledWith('applicationsCount', {
         total: 5,
       });
@@ -655,7 +646,6 @@ describe('CampaignsService', () => {
 
       await service.findById('c1', { id: 'creator1', role: 'creator' });
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignWithApps.setDataValue as jest.Mock).toHaveBeenCalledWith('applications', [
         creatorApp,
       ]);
@@ -668,7 +658,6 @@ describe('CampaignsService', () => {
 
       const result = await service.findByBrandId('b1');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findByBrandId).toHaveBeenCalledWith('b1', undefined);
       expect(result).toEqual([mockCampaign]);
     });
@@ -684,7 +673,6 @@ describe('CampaignsService', () => {
 
       const result = await service.findLive();
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findLiveCampaigns).toHaveBeenCalledWith(1, 10);
       expect(result).toEqual(mockResult);
     });
@@ -700,7 +688,6 @@ describe('CampaignsService', () => {
 
       const result = await service.findPast();
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findPastCampaigns).toHaveBeenCalledWith(1, 10);
       expect(result).toEqual(mockResult);
     });
@@ -723,7 +710,6 @@ describe('CampaignsService', () => {
 
       const result = await service.approve('c1');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.updateStatus).toHaveBeenCalledWith(
         'c1',
         'approved',
@@ -786,7 +772,7 @@ describe('CampaignsService', () => {
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { comments, ...expectedDto } = mockAppDto;
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.createApplication).toHaveBeenCalledWith({
         campaignId: 'c1',
         creatorId: 'creator1',
@@ -916,18 +902,21 @@ describe('CampaignsService', () => {
       const mockApp1 = {
         id: 'app1',
         campaignId: 'c1',
+        creatorId: 'creator1',
         status: 'pending',
         update: jest.fn().mockResolvedValue(undefined),
       };
       const mockApp2 = {
         id: 'app2',
         campaignId: 'c1',
+        creatorId: 'creator2',
         status: 'pending',
         update: jest.fn().mockResolvedValue(undefined),
       };
       const mockApp3 = {
         id: 'app3',
         campaignId: 'c1',
+        creatorId: 'creator3',
         status: 'pending',
         update: jest.fn().mockResolvedValue(undefined),
       };
@@ -961,6 +950,25 @@ describe('CampaignsService', () => {
         timeline: expect.any(Object),
       });
       expect(mockApp3.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledTimes(3);
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith({
+        type: 'application.accepted',
+        recipientId: 'creator1',
+        actorId: 'brand1',
+        data: { campaignId: 'c1', campaignTitle: 'Summer Campaign', applicationId: 'app1' },
+      });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith({
+        type: 'application.accepted',
+        recipientId: 'creator2',
+        actorId: 'brand1',
+        data: { campaignId: 'c1', campaignTitle: 'Summer Campaign', applicationId: 'app2' },
+      });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith({
+        type: 'application.rejected',
+        recipientId: 'creator3',
+        actorId: 'brand1',
+        data: { campaignId: 'c1', campaignTitle: 'Summer Campaign', applicationId: 'app3' },
+      });
       expect(results.length).toBe(2);
     });
 
@@ -969,12 +977,14 @@ describe('CampaignsService', () => {
       const mockApp1 = {
         id: 'app1',
         campaignId: 'c1',
+        creatorId: 'creator1',
         status: 'pending',
         update: jest.fn().mockResolvedValue(undefined),
       };
       const mockApp2 = {
         id: 'app2',
         campaignId: 'c1',
+        creatorId: 'creator2',
         status: 'pending',
         update: jest.fn().mockResolvedValue(undefined),
       };
@@ -992,6 +1002,13 @@ describe('CampaignsService', () => {
         'brand1',
         'rejected',
       );
+
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith({
+        type: 'application.rejected',
+        recipientId: 'creator1',
+        actorId: 'brand1',
+        data: { campaignId: 'c1', campaignTitle: 'Summer Campaign', applicationId: 'app1' },
+      });
 
       expect(mockApp1.update).toHaveBeenCalledWith({ status: 'rejected' });
       expect(mockApp2.update).not.toHaveBeenCalled();
@@ -1075,7 +1092,7 @@ describe('CampaignsService', () => {
 
       expect(result).toBeDefined();
       expect(result.draftLink).toBe('link1');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.createSubmission).toHaveBeenCalledWith({
         campaignId: 'c1',
         applicationId: 'app1',
@@ -1189,7 +1206,7 @@ describe('CampaignsService', () => {
         status: 'disputeraised',
         brandFeedback: 'Still bad quality content',
       });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.raiseDispute).toHaveBeenCalledWith({
         campaignId: 'c1',
         creatorId: 'creator-1',
@@ -1240,7 +1257,7 @@ describe('CampaignsService', () => {
 
       expect(mockCreator.creatorStrikes).toContain('brand1');
       expect(mockCreator.save).toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(emailServiceMock.sendStrikeWarningEmail).toHaveBeenCalledWith(
         'creator@example.com',
         'Creator',
@@ -1294,7 +1311,7 @@ describe('CampaignsService', () => {
       expect(mockCreator.isActive).toBe(false);
       expect(mockCreator.flaggedReason).toContain('Blocked: Received 3 strikes');
       expect(mockCreator.save).toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(emailServiceMock.sendCreatorBlockEmail).toHaveBeenCalledWith(
         'creator@example.com',
         'Creator',
@@ -1354,7 +1371,7 @@ describe('CampaignsService', () => {
       const result = await service.approveLivePost('c1', 'sub1', 'b1');
 
       expect(mockSubmission.update).toHaveBeenCalledWith({ status: 'done' });
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.createPaymentRelease).toHaveBeenCalledWith(
         expect.objectContaining({
           campaignId: 'c1',
@@ -1431,14 +1448,14 @@ describe('CampaignsService', () => {
       const result = await service.submitReview(mockReviewDto, mockBrandUser);
 
       expect(result).toBeDefined();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.createReview).toHaveBeenCalled();
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.recalculateCreatorRating).toHaveBeenCalledWith(
         'creator1',
         expect.any(Object),
       );
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(User.update).toHaveBeenCalledWith(
         { avgRating: 4.5, totalReviews: 2 },
         { where: { id: 'creator1' }, transaction: expect.any(Object) as unknown },
@@ -1526,9 +1543,8 @@ describe('CampaignsService', () => {
 
       await expect(service.deleteDraft('c1', 'b1')).resolves.toBeUndefined();
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.findByIdAndBrandId).toHaveBeenCalledWith('c1', 'b1');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.deleteDraftById).toHaveBeenCalledWith('c1', 'b1');
     });
 
@@ -1545,7 +1561,7 @@ describe('CampaignsService', () => {
       await expect(service.deleteDraft('c2', 'b1')).rejects.toThrow(ForbiddenException);
 
       // deleteDraftById must NOT have been called
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(campaignRepoMock.deleteDraftById).not.toHaveBeenCalled();
     });
   });
@@ -1685,7 +1701,6 @@ describe('CampaignsService', () => {
         instagram: 'https://instagram.com/p/123',
       });
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.createSubmission).toHaveBeenCalledWith({
         campaignId: 'c1',
         applicationId: 'app1',
@@ -1734,7 +1749,6 @@ describe('CampaignsService', () => {
 
       await service.applyToCampaign('c1', 'creator1', dto);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(campaignRepoMock.createComment).toHaveBeenCalledWith({
         campaignId: 'c1',
         creatorId: 'creator1',

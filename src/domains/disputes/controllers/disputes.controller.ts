@@ -113,16 +113,16 @@ export class DisputesController {
   @Post(':id/resolve')
   @Audit('DISPUTE_RESOLVED')
   @UseGuards(RolesGuard)
-  @Roles('owner', 'super_admin', 'finance_admin')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Resolve a campaign dispute and lock the chat (Owner, Admin, Finance Admin & Super Admin only)',
+      'Resolve a campaign dispute and lock the chat (Owner, Admin, Finance Admin, Moderator & Super Admin only)',
   })
   @ApiResponse({ status: 200, description: 'Dispute resolved and chat channel frozen' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden — owner, admin, finance_admin or super_admin role required',
+    description: 'Forbidden — owner, admin, finance_admin, moderator or super_admin role required',
   })
   @ApiResponse({ status: 404, description: 'Dispute not found' })
   async resolveDispute(
@@ -132,10 +132,10 @@ export class DisputesController {
   ) {
     // Standard role gate is handled by guard, but verify role just in case
     const roleName = (user.role?.name || '').toLowerCase();
-    const canResolve = ['owner', 'super_admin', 'finance_admin'].includes(roleName);
+    const canResolve = ['owner', 'super_admin', 'finance_admin', 'moderator'].includes(roleName);
     if (!canResolve) {
       throw new ForbiddenException(
-        'Only Owner, Admin, Finance Admin or Super Admin can resolve disputes',
+        'Only Owner, Admin, Finance Admin, Moderator or Super Admin can resolve disputes',
       );
     }
     return this.disputesService.resolveDispute(id, user.id, dto);

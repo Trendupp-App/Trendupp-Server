@@ -555,8 +555,8 @@ describe('UsersService', () => {
 
       // Mock paginate to return different values depending on options.where details
       (paginate as jest.Mock).mockImplementation(
-        (model: unknown, options: { where?: { status?: string; roleId?: string } }) => {
-          if (options?.where?.status === 'live') {
+        (model: unknown, options: { where?: { status?: any; roleId?: string } }) => {
+          if (options?.where?.status) {
             return Promise.resolve({
               data: [mockCampaign],
               pagination: { total: 1, page: 1, limit: 10, pages: 1 },

@@ -40,14 +40,14 @@ export class AdminController {
   @Patch('campaigns/:id/approve')
   @Audit('CAMPAIGN_APPROVED')
   @Throttle({ default: THROTTLE_LIMITS.ONBOARDING_STEP })
-  @Roles('owner', 'super_admin')
+  @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Approve a pending campaign (admin / super_admin only)',
+    summary: 'Approve a pending campaign (admin / super_admin / moderator only)',
   })
   @ApiResponse({ status: 200, description: 'Campaign approved and now live' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden — admin role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden — admin / moderator role required' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   async approveCampaign(@Param('id') id: string) {
     const campaign = await this.campaignsService.approve(id);

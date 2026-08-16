@@ -28,6 +28,7 @@ module.exports = {
       { name: 'TikTok' },
       { name: 'YouTube' },
       { name: 'Twitter' },
+      { name: 'facebook' },
     ].map((plat) => ({
       id: crypto.randomUUID(),
       name: plat.name,
