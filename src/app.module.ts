@@ -76,6 +76,11 @@ import { AdsModule } from './domains/ads/ads.module';
       useFactory: (configService: ConfigService) => {
         const isDev = configService.get<string>('env') === 'development';
         return {
+          // ElastiCache Serverless is cluster-mode: BullMQ's multi-key Lua
+          // scripts throw CROSSSLOT unless every key hashes to the same slot.
+          // A hash-tagged prefix ({...}) pins all bull keys to one slot.
+          // Applies to every queue registered via BullModule.registerQueue.
+          prefix: '{trendupp}',
           connection: {
             host: isDev ? '127.0.0.1' : configService.get<string>('redis.host'),
             port: isDev ? 6379 : configService.get<number>('redis.port'),
