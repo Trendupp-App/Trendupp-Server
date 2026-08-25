@@ -61,7 +61,8 @@ export class AdminUsersController {
   @Roles('owner', 'super_admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Resend activation link to a pending sub-admin account by ID (Owner & SuperAdmin only)',
+    summary:
+      'Resend activation link to a pending sub-admin account by ID (Owner & SuperAdmin only)',
   })
   @ApiResponse({ status: 200, description: 'Sub-admin activation link resent successfully' })
   @ApiResponse({ status: 404, description: 'Sub-admin user not found' })

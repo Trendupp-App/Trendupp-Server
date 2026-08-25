@@ -505,9 +505,7 @@ export class CampaignsService {
 
     // Initialize escrow on Pandascrow
     const timelineObj = campaign.timeline as
-      | Record<string, { endedDate?: string }>
-      | null
-      | undefined;
+      Record<string, { endedDate?: string }> | null | undefined;
     const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
     const rawDeliveryDate = endedDateStr
       ? new Date(endedDateStr)

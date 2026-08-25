@@ -129,6 +129,23 @@ export class AuthService {
     return roleRecord;
   }
 
+  /**
+   * Derive a presentable first name from an email's local part —
+   * "ada.obi99@gmail.com" → "Ada". Returns null for addresses whose local
+   * part means nothing to a human: Apple private relay (random tokens like
+   * "x9f3k2q@privaterelay.appleid.com") and our own synthetic fallbacks.
+   */
+  private static nameFromEmail(email?: string | null): string | null {
+    if (!email) return null;
+    const [localPart, domain] = email.split('@');
+    if (!localPart || !domain) return null;
+    if (/privaterelay\.appleid\.com$/i.test(domain) || /^trendupp\./i.test(domain)) return null;
+
+    const word = localPart.split(/[._\-+]/)[0]?.replace(/\d+$/g, '') ?? '';
+    if (word.length < 2) return null;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }
+
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
     const { password, firstName, lastName, phoneNumber, role } = signupDto;
     // Normalise email: force lowercase and strip surrounding whitespace.
@@ -722,7 +739,28 @@ export class AuthService {
   async appleLogin(appleLoginDto: AppleLoginDto): Promise<AuthResponse> {
     const { identityToken, role } = appleLoginDto;
 
+    // DEBUG(apple-name): remove after diagnosis — what actually arrived from
+    // the client, token redacted. Compare with the mobile [apple-debug] logs.
+    this.logger.log(
+      `[apple-debug] incoming /auth/apple body: ` +
+        `firstName=${JSON.stringify(appleLoginDto.firstName)} ` +
+        `lastName=${JSON.stringify(appleLoginDto.lastName)} ` +
+        `role=${appleLoginDto.role} ` +
+        `acceptedTerms=${appleLoginDto.acceptedTerms} ` +
+        `acceptedPromotions=${appleLoginDto.acceptedPromotions} ` +
+        `identityToken=${identityToken ? `present(${identityToken.length} chars)` : 'MISSING'}`,
+    );
+
     const identity = await this.appleAuthService.verifyIdentityToken(identityToken);
+
+    // DEBUG(apple-name): the verified token's contents. NOTE: Apple's token
+    // NEVER contains the name — only appleUserId + (sometimes) email. The
+    // name can only come from the request body above.
+    this.logger.log(
+      `[apple-debug] verified identity: appleUserId=${identity.appleUserId} ` +
+        `email=${identity.email ?? '(absent)'}`,
+    );
+
     const appleUserId = identity.appleUserId;
     // identity.email is real or a private-relay address (both deliverable);
     // it can be absent on repeat logins — synthetic fallback covers that.
@@ -746,11 +784,15 @@ export class AuthService {
 
       const roleRecord = await this.resolveSignupRole(role);
 
+      // Apple sends the user's name ONLY on the very first authorization for
+      // the app. If that first authorization didn't end in account creation
+      // (tried the sign-IN page first, abandoned the flow, ...), Apple never
+      // sends it again and the account would be created nameless. Prefer a
+      // name derived from a real mailbox over a "Apple" placeholder that
+      // ends up as the visible profile name.
       user = await this.usersService.create({
         email,
-        // Apple only sends the name on the FIRST authorization — clients
-        // forward it then; later logins fall back to a placeholder.
-        firstName: appleLoginDto.firstName || 'Apple',
+        firstName: appleLoginDto.firstName || AuthService.nameFromEmail(identity.email) || 'User',
         lastName: appleLoginDto.lastName || '',
         appleUserId,
         roleId: roleRecord.id,
@@ -759,9 +801,23 @@ export class AuthService {
         acceptedPromotions: appleLoginDto.acceptedPromotions || false,
       });
       user = await this.usersService.findOne(user.id);
-    } else if (!user.isEmailVerified) {
-      await this.usersService.update(user.id, { isEmailVerified: true });
-      user = await this.usersService.findOne(user.id);
+    } else {
+      // Self-heal: if this login DID carry the name (first authorization, or
+      // the user revoked and re-granted access in Settings, which makes Apple
+      // resend it) and the stored name is still a placeholder, adopt it.
+      const hasPlaceholderName =
+        !user.firstName || user.firstName === 'Apple' || user.firstName === 'User';
+      const updates: Record<string, unknown> = {};
+      if (appleLoginDto.firstName && hasPlaceholderName) {
+        updates.firstName = appleLoginDto.firstName;
+        if (appleLoginDto.lastName && !user.lastName) updates.lastName = appleLoginDto.lastName;
+      }
+      if (!user.isEmailVerified) updates.isEmailVerified = true;
+
+      if (Object.keys(updates).length > 0) {
+        await this.usersService.update(user.id, updates);
+        user = await this.usersService.findOne(user.id);
+      }
     }
 
     if (!user) {
