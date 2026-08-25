@@ -13,6 +13,7 @@ import { InstagramAuthService } from '../../../integration/social-apis/instagram
 import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
 import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
 import { AppleNameCache } from '../entities/apple-name-cache.entity';
+import { AuthProviderSetting } from '../entities/auth-provider-setting.entity';
 import {
   UnauthorizedException,
   ConflictException,
@@ -104,6 +105,13 @@ describe('AuthService', () => {
         { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
         { provide: FacebookAuthService, useValue: facebookAuthServiceMock },
         { provide: AppleAuthService, useValue: appleAuthServiceMock },
+        {
+          provide: getModelToken(AuthProviderSetting),
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            findAll: jest.fn().mockResolvedValue([]),
+          },
+        },
         {
           provide: getModelToken(AppleNameCache),
           useValue: {

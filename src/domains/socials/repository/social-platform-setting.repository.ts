@@ -25,4 +25,22 @@ export class SocialPlatformSettingRepository {
     }
     return result;
   }
+
+  /**
+   * Which platforms are currently offered for connect. Platforms without a
+   * DB row default to enabled (fail-open, consistent with getMinFollowers).
+   */
+  async getEnabled(): Promise<Record<SocialPlatform, boolean>> {
+    const rows = await this.model.findAll();
+    const result = Object.fromEntries(Object.keys(MIN_FOLLOWERS).map((p) => [p, true])) as Record<
+      SocialPlatform,
+      boolean
+    >;
+    for (const row of rows) {
+      if (row.platform in result) {
+        result[row.platform as SocialPlatform] = row.enabled;
+      }
+    }
+    return result;
+  }
 }

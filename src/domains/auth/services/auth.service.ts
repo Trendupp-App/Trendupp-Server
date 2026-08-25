@@ -33,6 +33,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { AppleNameCache } from '../entities/apple-name-cache.entity';
+import { AuthProviderSetting } from '../entities/auth-provider-setting.entity';
 
 export interface AuthResponse {
   accessToken: string;
@@ -111,6 +112,8 @@ export class AuthService {
     private readonly appleAuthService: AppleAuthService,
     @InjectModel(AppleNameCache)
     private readonly appleNameCacheModel: typeof AppleNameCache,
+    @InjectModel(AuthProviderSetting)
+    private readonly authProviderSettingModel: typeof AuthProviderSetting,
   ) {}
 
   /**
@@ -146,6 +149,59 @@ export class AuthService {
         `Could not cache Apple name for ${appleUserId}: ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Effective kill-switch state for an OAuth provider. Fail-open on a missing
+   * row or a DB hiccup: a broken settings lookup must never lock every user
+   * out of authentication.
+   */
+  private async getProviderPolicy(
+    provider: string,
+  ): Promise<{ signinEnabled: boolean; signupEnabled: boolean }> {
+    try {
+      const row = await this.authProviderSettingModel.findOne({ where: { provider } });
+      if (!row) return { signinEnabled: true, signupEnabled: true };
+      return { signinEnabled: row.signinEnabled, signupEnabled: row.signupEnabled };
+    } catch (error) {
+      this.logger.warn(
+        `Could not load auth provider policy for "${provider}" — allowing: ${(error as Error).message}`,
+      );
+      return { signinEnabled: true, signupEnabled: true };
+    }
+  }
+
+  private assertSigninEnabled(policy: { signinEnabled: boolean }, label: string): void {
+    if (!policy.signinEnabled) {
+      throw new ForbiddenException(
+        `Sign-in with ${label} is currently unavailable. Please try another sign-in method.`,
+      );
+    }
+  }
+
+  private assertSignupEnabled(policy: { signupEnabled: boolean }, label: string): void {
+    if (!policy.signupEnabled) {
+      throw new ForbiddenException(
+        `New signups with ${label} are currently unavailable. Please sign up another way.`,
+      );
+    }
+  }
+
+  /** Public list of provider availability — drives which buttons clients show. */
+  async getAuthProviders(): Promise<
+    Array<{ provider: string; signinEnabled: boolean; signupEnabled: boolean }>
+  > {
+    const providers = ['google', 'apple', 'facebook', 'tiktok', 'instagram'];
+    const rows = await this.authProviderSettingModel.findAll();
+    const byProvider = new Map(rows.map((r) => [r.provider, r]));
+    return providers.map((provider) => {
+      const row = byProvider.get(provider);
+      return {
+        provider,
+        signinEnabled: row?.signinEnabled ?? true,
+        signupEnabled: row?.signupEnabled ?? true,
+      };
+    });
   }
 
   /**
@@ -413,6 +469,9 @@ export class AuthService {
   async googleLogin(googleLoginDto: GoogleLoginDto): Promise<AuthResponse> {
     const { idToken, role } = googleLoginDto;
 
+    const policy = await this.getProviderPolicy('google');
+    let isNewUser = false;
+
     const payload = await this.googleAuthService.verifyIdToken(idToken);
     const googleId = payload.sub;
     const email = payload.email!;
@@ -432,6 +491,8 @@ export class AuthService {
         });
         user = await this.usersService.findOne(user.id);
       } else {
+        isNewUser = true;
+        this.assertSignupEnabled(policy, 'Google');
         if (googleLoginDto.acceptedTerms !== true) {
           throw new BadRequestException('No account found, please signup first to continue.');
         }
@@ -477,6 +538,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Google');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -519,6 +583,9 @@ export class AuthService {
   async tiktokLogin(tiktokLoginDto: TiktokLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role, codeVerifier } = tiktokLoginDto;
 
+    const policy = await this.getProviderPolicy('tiktok');
+    let isNewUser = false;
+
     const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(
       code,
       redirectUri,
@@ -536,6 +603,8 @@ export class AuthService {
     let user = await this.usersService.findByTiktokOpenId(tiktokOpenId);
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'TikTok');
       if (tiktokLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please sign up first to continue.');
       }
@@ -578,6 +647,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'TikTok');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -620,6 +692,9 @@ export class AuthService {
   async instagramLogin(instagramLoginDto: InstagramLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role } = instagramLoginDto;
 
+    const policy = await this.getProviderPolicy('instagram');
+    let isNewUser = false;
+
     const tokenResponse = await this.instagramAuthService.exchangeCodeForToken(code, redirectUri);
     const profile = await this.instagramAuthService.getUserProfile(tokenResponse.accessToken);
 
@@ -633,6 +708,8 @@ export class AuthService {
     let user = await this.usersService.findByInstagramOpenId(instagramOpenId);
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Instagram');
       if (instagramLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
@@ -683,6 +760,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Instagram');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -725,6 +805,9 @@ export class AuthService {
   async facebookLogin(facebookLoginDto: FacebookLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role } = facebookLoginDto;
 
+    const policy = await this.getProviderPolicy('facebook');
+    let isNewUser = false;
+
     const tokenResponse = await this.facebookAuthService.exchangeCodeForToken(code, redirectUri);
     const profile = await this.facebookAuthService.getUserProfile(tokenResponse.accessToken);
 
@@ -745,6 +828,8 @@ export class AuthService {
     }
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Facebook');
       if (facebookLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
@@ -771,12 +856,18 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Facebook');
+    }
     this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }
 
   async appleLogin(appleLoginDto: AppleLoginDto): Promise<AuthResponse> {
     const { identityToken, role } = appleLoginDto;
+
+    const policy = await this.getProviderPolicy('apple');
+    let isNewUser = false;
 
     // DEBUG(apple-name): remove after diagnosis — what actually arrived from
     // the client, token redacted. Compare with the mobile [apple-debug] logs.
@@ -826,6 +917,8 @@ export class AuthService {
     }
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Apple');
       if (appleLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
@@ -892,6 +985,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Apple');
+    }
     this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }

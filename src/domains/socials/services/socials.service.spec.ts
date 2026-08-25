@@ -56,6 +56,13 @@ describe('SocialsService', () => {
         twitter: 500,
         facebook: 1000,
       }),
+      getEnabled: jest.fn().mockResolvedValue({
+        instagram: true,
+        tiktok: true,
+        youtube: true,
+        twitter: true,
+        facebook: true,
+      }),
     } as unknown as jest.Mocked<SocialPlatformSettingRepository>;
 
     verification = {
