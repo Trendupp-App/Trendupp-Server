@@ -29,8 +29,10 @@ import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
 import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
+import { InjectModel } from '@nestjs/sequelize';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
+import { AppleNameCache } from '../entities/apple-name-cache.entity';
 
 export interface AuthResponse {
   accessToken: string;
@@ -107,7 +109,44 @@ export class AuthService {
     private readonly instagramAuthService: InstagramAuthService,
     private readonly facebookAuthService: FacebookAuthService,
     private readonly appleAuthService: AppleAuthService,
+    @InjectModel(AppleNameCache)
+    private readonly appleNameCacheModel: typeof AppleNameCache,
   ) {}
+
+  /**
+   * Stash the (first-authorization-only) Apple name server-side so a later
+   * signup from any device can recover it. Best-effort: a cache failure must
+   * never break the auth flow itself.
+   */
+  private async upsertAppleNameCache(
+    appleUserId: string,
+    email: string | undefined,
+    dto: AppleLoginDto,
+  ): Promise<void> {
+    try {
+      const existing = await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+      if (existing) {
+        await existing.update({
+          firstName: dto.firstName!,
+          lastName: dto.lastName ?? null,
+          email: email ?? existing.email,
+        });
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await (this.appleNameCacheModel as any).create({
+          appleUserId,
+          email: email ?? null,
+          firstName: dto.firstName!,
+          lastName: dto.lastName ?? null,
+        });
+      }
+      this.logger.log(`[apple-debug] name cached server-side for ${appleUserId}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not cache Apple name for ${appleUserId}: ${(error as Error).message}`,
+      );
+    }
+  }
 
   /**
    * Shared role resolution for social signups: accepts a role UUID or name,
@@ -766,6 +805,15 @@ export class AuthService {
     // it can be absent on repeat logins — synthetic fallback covers that.
     const email = identity.email || `apple_${appleUserId}@trendupp.apple`;
 
+    // Server-side name backup: Apple sends the name exactly once per Apple
+    // ID, and that one delivery often lands on a request that does NOT create
+    // the account (sign-in before signup, abandoned flow). Stash it keyed by
+    // the verified appleUserId whenever it shows up, so a later signup — from
+    // ANY device — can recover it. Deleted once consumed.
+    if (appleLoginDto.firstName) {
+      await this.upsertAppleNameCache(appleUserId, identity.email, appleLoginDto);
+    }
+
     let user = await this.usersService.findByAppleUserId(appleUserId);
 
     if (!user && identity.email) {
@@ -784,16 +832,22 @@ export class AuthService {
 
       const roleRecord = await this.resolveSignupRole(role);
 
-      // Apple sends the user's name ONLY on the very first authorization for
-      // the app. If that first authorization didn't end in account creation
-      // (tried the sign-IN page first, abandoned the flow, ...), Apple never
-      // sends it again and the account would be created nameless. Prefer a
-      // name derived from a real mailbox over a "Apple" placeholder that
-      // ends up as the visible profile name.
+      // Name resolution, best source first: the request body (Apple's
+      // first-authorization delivery), then the server-side cache stashed by
+      // an earlier attempt (e.g. the sign-in that got "please signup first"),
+      // then a name derived from a real mailbox, then a neutral placeholder.
+      const cachedName = appleLoginDto.firstName
+        ? null
+        : await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+
       user = await this.usersService.create({
         email,
-        firstName: appleLoginDto.firstName || AuthService.nameFromEmail(identity.email) || 'User',
-        lastName: appleLoginDto.lastName || '',
+        firstName:
+          appleLoginDto.firstName ||
+          cachedName?.firstName ||
+          AuthService.nameFromEmail(identity.email) ||
+          'User',
+        lastName: appleLoginDto.lastName || cachedName?.lastName || '',
         appleUserId,
         roleId: roleRecord.id,
         isEmailVerified: true,
@@ -801,22 +855,36 @@ export class AuthService {
         acceptedPromotions: appleLoginDto.acceptedPromotions || false,
       });
       user = await this.usersService.findOne(user.id);
+
+      // The cache did its job (or was never needed) — don't keep PII around.
+      await this.appleNameCacheModel.destroy({ where: { appleUserId }, force: true });
     } else {
-      // Self-heal: if this login DID carry the name (first authorization, or
-      // the user revoked and re-granted access in Settings, which makes Apple
-      // resend it) and the stored name is still a placeholder, adopt it.
+      // Self-heal: if this login carried the name (first authorization, or a
+      // Settings revoke + re-grant, which makes Apple resend it) — or an
+      // earlier attempt stashed it in the server-side cache — and the stored
+      // name is still a placeholder, adopt it.
       const hasPlaceholderName =
         !user.firstName || user.firstName === 'Apple' || user.firstName === 'User';
       const updates: Record<string, unknown> = {};
-      if (appleLoginDto.firstName && hasPlaceholderName) {
-        updates.firstName = appleLoginDto.firstName;
-        if (appleLoginDto.lastName && !user.lastName) updates.lastName = appleLoginDto.lastName;
+      if (hasPlaceholderName) {
+        const cachedName = appleLoginDto.firstName
+          ? null
+          : await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+        const healFirstName = appleLoginDto.firstName || cachedName?.firstName;
+        if (healFirstName) {
+          updates.firstName = healFirstName;
+          const healLastName = appleLoginDto.lastName || cachedName?.lastName;
+          if (healLastName && !user.lastName) updates.lastName = healLastName;
+        }
       }
       if (!user.isEmailVerified) updates.isEmailVerified = true;
 
       if (Object.keys(updates).length > 0) {
         await this.usersService.update(user.id, updates);
         user = await this.usersService.findOne(user.id);
+      }
+      if (updates.firstName) {
+        await this.appleNameCacheModel.destroy({ where: { appleUserId }, force: true });
       }
     }
 

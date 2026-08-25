@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
+import { getModelToken } from '@nestjs/sequelize';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { EmailService } from '../../../integration/email/email.service';
@@ -11,6 +12,7 @@ import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
 import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
+import { AppleNameCache } from '../entities/apple-name-cache.entity';
 import {
   UnauthorizedException,
   ConflictException,
@@ -102,6 +104,14 @@ describe('AuthService', () => {
         { provide: InstagramAuthService, useValue: instagramAuthServiceMock },
         { provide: FacebookAuthService, useValue: facebookAuthServiceMock },
         { provide: AppleAuthService, useValue: appleAuthServiceMock },
+        {
+          provide: getModelToken(AppleNameCache),
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            create: jest.fn().mockResolvedValue({}),
+            destroy: jest.fn().mockResolvedValue(0),
+          },
+        },
       ],
     }).compile();
 
