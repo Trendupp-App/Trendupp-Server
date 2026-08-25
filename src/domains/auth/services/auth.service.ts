@@ -143,7 +143,7 @@ export class AuthService {
           lastName: dto.lastName ?? null,
         });
       }
-      this.logger.log(`[apple-debug] name cached server-side for ${appleUserId}`);
+      this.logger.log(`Apple name cached server-side for ${appleUserId}`);
     } catch (error) {
       this.logger.warn(
         `Could not cache Apple name for ${appleUserId}: ${(error as Error).message}`,
@@ -869,27 +869,7 @@ export class AuthService {
     const policy = await this.getProviderPolicy('apple');
     let isNewUser = false;
 
-    // DEBUG(apple-name): remove after diagnosis — what actually arrived from
-    // the client, token redacted. Compare with the mobile [apple-debug] logs.
-    this.logger.log(
-      `[apple-debug] incoming /auth/apple body: ` +
-        `firstName=${JSON.stringify(appleLoginDto.firstName)} ` +
-        `lastName=${JSON.stringify(appleLoginDto.lastName)} ` +
-        `role=${appleLoginDto.role} ` +
-        `acceptedTerms=${appleLoginDto.acceptedTerms} ` +
-        `acceptedPromotions=${appleLoginDto.acceptedPromotions} ` +
-        `identityToken=${identityToken ? `present(${identityToken.length} chars)` : 'MISSING'}`,
-    );
-
     const identity = await this.appleAuthService.verifyIdentityToken(identityToken);
-
-    // DEBUG(apple-name): the verified token's contents. NOTE: Apple's token
-    // NEVER contains the name — only appleUserId + (sometimes) email. The
-    // name can only come from the request body above.
-    this.logger.log(
-      `[apple-debug] verified identity: appleUserId=${identity.appleUserId} ` +
-        `email=${identity.email ?? '(absent)'}`,
-    );
 
     const appleUserId = identity.appleUserId;
     // identity.email is real or a private-relay address (both deliverable);
