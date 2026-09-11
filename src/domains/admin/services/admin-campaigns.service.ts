@@ -12,7 +12,11 @@ import { CampaignRefund } from '../../campaigns/entities/campaign-refund.entity'
 import { Payment } from '../../campaigns/entities/payment.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { AuditLogService } from './audit-log.service';
-import { CancelAdminCampaignDto } from '../dtos/admin-cancel-campaign.dto';
+import {
+  CancelAdminCampaignDto,
+  PauseAdminCampaignDto,
+  ResumeAdminCampaignDto,
+} from '../dtos/admin-cancel-campaign.dto';
 import {
   QueryAdminCampaignsListDto,
   AdminCampaignSummaryResponseDto,
@@ -115,6 +119,8 @@ export class AdminCampaignsService {
       where.status = 'live';
     } else if (tab === 'active') {
       where.status = 'active';
+    } else if (tab === 'paused') {
+      where.status = 'paused';
     } else if (tab === 'completed') {
       where.status = 'completed';
     } else if (tab === 'cancelled') {
@@ -424,6 +430,183 @@ export class AdminCampaignsService {
         creatorsEvaluated: creatorBreakdown.length,
         creatorBreakdown,
       },
+    };
+  }
+
+  // ── 4. Campaign Pause ──────────────────────────────────────────────────────
+
+  async pauseCampaign(
+    adminId: string,
+    campaignId: string,
+    dto: PauseAdminCampaignDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; campaign: Campaign }> {
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
+    }
+
+    if (campaign.status === 'paused') {
+      throw new BadRequestException('Campaign is already paused.');
+    }
+
+    if (['cancelled', 'completed', 'draft'].includes(campaign.status)) {
+      throw new BadRequestException(
+        `Cannot pause a campaign with status "${campaign.status}". Only active or live campaigns can be paused.`,
+      );
+    }
+
+    campaign.status = 'paused';
+    await campaign.save();
+
+    // Notify brand
+    try {
+      await this.notificationsService.notify({
+        type: 'campaign.paused',
+        recipientId: campaign.brandId,
+        actorId: adminId,
+        data: {
+          campaignId,
+          campaignTitle: campaign.title,
+          reason: dto.reason || 'Campaign was paused by platform administration.',
+        },
+      });
+    } catch {
+      // ignore notification error
+    }
+
+    // Notify accepted creators
+    const acceptedApps = await this.applicationModel.findAll({
+      where: {
+        campaignId,
+        status: { [Op.in]: ['accepted', 'approved'] },
+      },
+    });
+
+    for (const app of acceptedApps) {
+      try {
+        await this.notificationsService.notify({
+          type: 'campaign.paused',
+          recipientId: app.creatorId,
+          actorId: adminId,
+          data: {
+            campaignId,
+            campaignTitle: campaign.title,
+            reason: dto.reason || 'Campaign was paused by platform administration.',
+          },
+        });
+      } catch {
+        // ignore notification error
+      }
+    }
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'CAMPAIGN_PAUSED',
+      targetUserId: campaign.brandId,
+      ipAddress,
+      userAgent,
+      details: {
+        campaignId,
+        reason: dto.reason || null,
+      },
+    });
+
+    return {
+      message: 'Campaign paused successfully.',
+      campaign,
+    };
+  }
+
+  // ── 5. Campaign Resume ─────────────────────────────────────────────────────
+
+  async resumeCampaign(
+    adminId: string,
+    campaignId: string,
+    dto: ResumeAdminCampaignDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; campaign: Campaign }> {
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found.`);
+    }
+
+    if (campaign.status !== 'paused') {
+      throw new BadRequestException(
+        `Only paused campaigns can be resumed. Current status is "${campaign.status}".`,
+      );
+    }
+
+    // Determine target status: if campaign has accepted applications, restore to 'active', otherwise 'live'
+    const acceptedCount = await this.applicationModel.count({
+      where: {
+        campaignId,
+        status: { [Op.in]: ['accepted', 'approved'] },
+      },
+    });
+
+    campaign.status = acceptedCount > 0 ? 'active' : 'live';
+    await campaign.save();
+
+    // Notify brand
+    try {
+      await this.notificationsService.notify({
+        type: 'campaign.resumed',
+        recipientId: campaign.brandId,
+        actorId: adminId,
+        data: {
+          campaignId,
+          campaignTitle: campaign.title,
+          reason: dto.reason || 'Campaign was resumed by platform administration.',
+        },
+      });
+    } catch {
+      // ignore notification error
+    }
+
+    // Notify accepted creators
+    const acceptedApps = await this.applicationModel.findAll({
+      where: {
+        campaignId,
+        status: { [Op.in]: ['accepted', 'approved'] },
+      },
+    });
+
+    for (const app of acceptedApps) {
+      try {
+        await this.notificationsService.notify({
+          type: 'campaign.resumed',
+          recipientId: app.creatorId,
+          actorId: adminId,
+          data: {
+            campaignId,
+            campaignTitle: campaign.title,
+            reason: dto.reason || 'Campaign was resumed by platform administration.',
+          },
+        });
+      } catch {
+        // ignore notification error
+      }
+    }
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'CAMPAIGN_RESUMED',
+      targetUserId: campaign.brandId,
+      ipAddress,
+      userAgent,
+      details: {
+        campaignId,
+        reason: dto.reason || null,
+        restoredStatus: campaign.status,
+      },
+    });
+
+    return {
+      message: 'Campaign resumed successfully.',
+      campaign,
     };
   }
 }

@@ -31,7 +31,11 @@ export type NotificationPriority = 'critical' | 'high' | 'medium' | 'low';
 
 /** Roles that can be targeted with a role fan-out (seeded staff role names). */
 export type NotificationRecipientRole =
-  'owner' | 'super_admin' | 'finance_admin' | 'moderator' | 'support_agent';
+  | 'owner'
+  | 'super_admin'
+  | 'finance_admin'
+  | 'moderator'
+  | 'support_agent';
 
 /** Payload contract per notification type. */
 export interface NotificationPayloads {
@@ -126,6 +130,7 @@ export interface NotificationPayloads {
   'campaign.resumed': {
     campaignId: string;
     campaignTitle: string;
+    reason?: string;
   };
 
   // ── Social connections ────────────────────────────────────────────────────

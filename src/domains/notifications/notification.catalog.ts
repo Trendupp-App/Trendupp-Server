@@ -195,7 +195,9 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     channels: ['inApp', 'email'],
     priority: 'high',
     title: (d) => `Campaign resumed: "${d.campaignTitle}"`,
-    body: (d) => `"${d.campaignTitle}" has been resumed and is active again.`,
+    body: (d) =>
+      `"${d.campaignTitle}" has been resumed and is active again.` +
+      (d.reason ? ` Reason: ${d.reason}` : ''),
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
 
