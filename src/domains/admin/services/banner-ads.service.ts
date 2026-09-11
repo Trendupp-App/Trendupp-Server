@@ -45,6 +45,14 @@ export class BannerAdsService {
     return updated;
   }
 
+  async archiveAd(id: string): Promise<BannerAd> {
+    return this.updateAdStatus(id, 'archived');
+  }
+
+  async unarchiveAd(id: string): Promise<BannerAd> {
+    return this.updateAdStatus(id, 'draft');
+  }
+
   async deleteAd(id: string): Promise<void> {
     await this.getAdById(id);
     await this.bannerAdRepository.delete(id);

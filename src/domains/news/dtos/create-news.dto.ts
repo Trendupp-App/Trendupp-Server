@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsUUID,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
@@ -35,13 +43,22 @@ export class CreateNewsDto {
   category: string;
 
   @ApiPropertyOptional({
-    enum: ['draft', 'published'],
+    enum: ['draft', 'published', 'scheduled'],
     default: 'draft',
     description: 'Status of the news',
   })
-  @IsEnum(['draft', 'published'])
+  @IsEnum(['draft', 'published', 'scheduled'])
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-09-15T10:00:00.000Z',
+    description:
+      'Scheduled publication timestamp (ISO 8601 string, required when status is scheduled)',
+  })
+  @IsDateString()
+  @IsOptional()
+  scheduledAt?: string;
 
   @ApiPropertyOptional({
     example: true,

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op, WhereOptions } from 'sequelize';
+import { Op, Sequelize, WhereOptions } from 'sequelize';
 import { News } from '../entities/news.entity';
 import { FilterNewsDto } from '../dtos/filter-news.dto';
 import { User } from '../../users/entities/user.entity';
@@ -76,10 +76,7 @@ export class NewsRepository {
       where,
       limit,
       offset,
-      order: [
-        ['publishedAt', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
+      order: [Sequelize.literal('published_at DESC NULLS LAST'), ['createdAt', 'DESC']],
       include: [
         {
           model: User,
@@ -95,6 +92,17 @@ export class NewsRepository {
     return this.newsModel.update(data, {
       where: { id },
       returning: true,
+    });
+  }
+
+  async findDueScheduled(now: Date = new Date()): Promise<News[]> {
+    return this.newsModel.findAll({
+      where: {
+        status: 'scheduled',
+        scheduledAt: {
+          [Op.lte]: now,
+        },
+      },
     });
   }
 

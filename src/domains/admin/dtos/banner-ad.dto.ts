@@ -21,6 +21,7 @@ export enum AdStatusEnum {
   ACTIVE = 'active',
   SCHEDULED = 'scheduled',
   PAUSED = 'paused',
+  ARCHIVED = 'archived',
 }
 
 export class CreateBannerAdDto {

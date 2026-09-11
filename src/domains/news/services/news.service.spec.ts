@@ -45,7 +45,9 @@ describe('NewsService', () => {
     it('should create a news article and set publishedAt if status is published', async () => {
       const dto = { title: 'Test', content: 'Content', category: 'Update', status: 'published' };
       const expectedDate = expect.any(Date);
-      newsRepoMock.create.mockResolvedValue({ id: 'n1', ...dto, publishedAt: new Date() } as any);
+      const createdAd = { id: 'n1', ...dto, publishedAt: new Date() } as any;
+      newsRepoMock.create.mockResolvedValue(createdAd);
+      newsRepoMock.findById.mockResolvedValue(createdAd);
 
       const result = await service.create('u1', dto);
 
@@ -53,19 +55,23 @@ describe('NewsService', () => {
         ...dto,
         authorId: 'u1',
         publishedAt: expectedDate,
+        scheduledAt: undefined,
       });
       expect(result).toBeDefined();
     });
 
     it('should create a news article as draft without setting publishedAt', async () => {
       const dto = { title: 'Test', content: 'Content', category: 'Update', status: 'draft' };
-      newsRepoMock.create.mockResolvedValue({ id: 'n1', ...dto } as any);
+      const createdAd = { id: 'n1', ...dto } as any;
+      newsRepoMock.create.mockResolvedValue(createdAd);
+      newsRepoMock.findById.mockResolvedValue(createdAd);
 
       const result = await service.create('u1', dto);
 
       expect(newsRepoMock.create).toHaveBeenCalledWith({
         ...dto,
         authorId: 'u1',
+        scheduledAt: undefined,
       });
       expect(result).toBeDefined();
     });
@@ -97,7 +103,9 @@ describe('NewsService', () => {
 
   describe('update', () => {
     it('should update and set publishedAt when changing to published', async () => {
-      newsRepoMock.findById.mockResolvedValue({ id: 'n1', status: 'draft' } as any);
+      newsRepoMock.findById
+        .mockResolvedValueOnce({ id: 'n1', status: 'draft' } as any)
+        .mockResolvedValueOnce({ id: 'n1', status: 'published' } as any);
       newsRepoMock.update.mockResolvedValue([1, [{ id: 'n1', status: 'published' } as any]]);
 
       const result = await service.update('n1', { status: 'published' });

@@ -10,6 +10,7 @@ import {
   Post,
   Delete,
   Body,
+  Query,
   Request,
   UseInterceptors,
   UploadedFile,
@@ -26,6 +27,7 @@ import { CreateFeeDto } from '../../campaigns/dtos/create-fee.dto';
 import { NewsService } from '../../news/services/news.service';
 import { CreateNewsDto } from '../../news/dtos/create-news.dto';
 import { UpdateNewsDto } from '../../news/dtos/update-news.dto';
+import { FilterNewsDto } from '../../news/dtos/filter-news.dto';
 
 @ApiTags('admin')
 @Controller('admin')
@@ -91,6 +93,15 @@ export class AdminController {
     return {
       message: 'Fee configuration deleted permanently.',
     };
+  }
+
+  @Get('news')
+  @Roles('owner', 'super_admin', 'moderator', 'finance_admin', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all news articles with filtering and pagination (admin only)' })
+  @ApiResponse({ status: 200, description: 'List of news articles retrieved successfully' })
+  async getAdminNewsList(@Query() filter: FilterNewsDto) {
+    return this.newsService.findAll(filter, true);
   }
 
   @Post('news')
