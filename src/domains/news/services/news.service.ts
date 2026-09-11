@@ -17,21 +17,28 @@ export class NewsService {
     let coverImage: string | undefined = dto.coverImage as string | undefined;
 
     if (coverImageFile) {
-      coverImage = await this.s3Service.uploadFile(coverImageFile, 'news-covers');
+      coverImage = await this.s3Service.uploadFile(coverImageFile, 'avatars');
     }
+
+    const scheduledAtDate = dto.scheduledAt ? new Date(dto.scheduledAt) : undefined;
 
     const payload: Partial<News> = {
       ...dto,
       authorId,
       coverImage: coverImage,
+      scheduledAt: scheduledAtDate,
     };
 
-    // Automatically set publishedAt if status is published
-    if (dto.status === 'published') {
+    // If status is scheduled but scheduledAt is past or now, publish immediately
+    if (dto.status === 'scheduled' && scheduledAtDate && scheduledAtDate <= new Date()) {
+      payload.status = 'published';
+      payload.publishedAt = new Date();
+    } else if (dto.status === 'published') {
       payload.publishedAt = new Date();
     }
 
-    return this.newsRepository.create(payload);
+    const created = await this.newsRepository.create(payload);
+    return this.findById(created.id, true);
   }
 
   async findAll(filter: FilterNewsDto, isAdmin: boolean = false) {
@@ -55,7 +62,7 @@ export class NewsService {
       throw new NotFoundException('News article not found');
     }
 
-    // Prevent non-admins from viewing draft news
+    // Prevent non-admins from viewing draft or scheduled news
     if (!isAdmin && news.status !== 'published') {
       throw new NotFoundException('News article not found');
     }
@@ -69,28 +76,47 @@ export class NewsService {
     let coverImage: string | undefined = dto.coverImage as string | undefined;
 
     if (coverImageFile) {
-      coverImage = await this.s3Service.uploadFile(coverImageFile, 'news-covers');
+      coverImage = await this.s3Service.uploadFile(coverImageFile, 'avatars');
     }
+
+    const scheduledAtDate = dto.scheduledAt ? new Date(dto.scheduledAt) : existing.scheduledAt;
 
     const payload: Partial<News> = {
       ...dto,
       coverImage: coverImage,
+      scheduledAt: scheduledAtDate,
     };
 
-    // Handle transition to published status
-    if (dto.status === 'published' && existing.status !== 'published') {
+    // Handle scheduled status transition
+    if (dto.status === 'scheduled' && scheduledAtDate && scheduledAtDate <= new Date()) {
+      payload.status = 'published';
+      payload.publishedAt = new Date();
+    } else if (dto.status === 'published' && existing.status !== 'published') {
       payload.publishedAt = new Date();
     } else if (dto.status === 'draft') {
       payload.publishedAt = null as unknown as Date; // Allow null to clear
     }
 
-    const [affectedCount, updatedRows] = await this.newsRepository.update(id, payload);
+    const [affectedCount] = await this.newsRepository.update(id, payload);
 
     if (affectedCount === 0) {
       throw new NotFoundException('News article not found');
     }
 
-    return updatedRows[0];
+    return this.findById(id, true);
+  }
+
+  async publishDueScheduledNews(): Promise<number> {
+    const dueNewsList = await this.newsRepository.findDueScheduled(new Date());
+    let count = 0;
+    for (const news of dueNewsList) {
+      await this.newsRepository.update(news.id, {
+        status: 'published',
+        publishedAt: new Date(),
+      });
+      count++;
+    }
+    return count;
   }
 
   async delete(id: string) {

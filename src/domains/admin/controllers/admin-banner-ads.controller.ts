@@ -87,10 +87,30 @@ export class AdminBannerAdsController {
   @Audit('BANNER_AD_STATUS_CHANGED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update Banner Ad status (active, paused, draft)' })
+  @ApiOperation({ summary: 'Update Banner Ad status (active, paused, draft, archived)' })
   @ApiResponse({ status: 200, description: 'Banner Ad status updated successfully' })
   async updateAdStatus(@Param('id') id: string, @Body() dto: UpdateBannerAdStatusDto) {
     return this.bannerAdsService.updateAdStatus(id, dto.status);
+  }
+
+  @Patch(':id/archive')
+  @Audit('BANNER_AD_ARCHIVED')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Archive a Banner Ad' })
+  @ApiResponse({ status: 200, description: 'Banner Ad archived successfully' })
+  async archiveAd(@Param('id') id: string) {
+    return this.bannerAdsService.archiveAd(id);
+  }
+
+  @Patch(':id/unarchive')
+  @Audit('BANNER_AD_UNARCHIVED')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unarchive / restore a Banner Ad to draft status' })
+  @ApiResponse({ status: 200, description: 'Banner Ad unarchived successfully' })
+  async unarchiveAd(@Param('id') id: string) {
+    return this.bannerAdsService.unarchiveAd(id);
   }
 
   @Delete(':id')

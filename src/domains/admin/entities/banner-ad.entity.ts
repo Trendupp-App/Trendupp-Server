@@ -47,7 +47,7 @@ export class BannerAd extends BaseEntity<BannerAd> {
     allowNull: false,
     defaultValue: 'draft',
   })
-  declare status: string; // 'draft' | 'active' | 'scheduled' | 'paused'
+  declare status: string; // 'draft' | 'active' | 'scheduled' | 'paused' | 'archived'
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare impressions: number;
