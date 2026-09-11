@@ -17,7 +17,7 @@ export class NewsService {
     let coverImage: string | undefined = dto.coverImage as string | undefined;
 
     if (coverImageFile) {
-      coverImage = await this.s3Service.uploadFile(coverImageFile, 'news-covers');
+      coverImage = await this.s3Service.uploadFile(coverImageFile, 'avatars');
     }
 
     const scheduledAtDate = dto.scheduledAt ? new Date(dto.scheduledAt) : undefined;
@@ -76,7 +76,7 @@ export class NewsService {
     let coverImage: string | undefined = dto.coverImage as string | undefined;
 
     if (coverImageFile) {
-      coverImage = await this.s3Service.uploadFile(coverImageFile, 'news-covers');
+      coverImage = await this.s3Service.uploadFile(coverImageFile, 'avatars');
     }
 
     const scheduledAtDate = dto.scheduledAt ? new Date(dto.scheduledAt) : existing.scheduledAt;
