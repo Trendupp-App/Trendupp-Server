@@ -552,6 +552,16 @@ export class SocialImpactCampaignDetailDto {
   @ApiProperty({ example: 'LIVE' })
   status: string;
 
+  @ApiProperty({ example: 1, description: 'Current step in creation wizard (1, 2, or 3)' })
+  currentStep: number;
+
+  @ApiProperty({
+    example: '2026-08-15T00:00:00.000Z',
+    nullable: true,
+    description: 'Campaign end date',
+  })
+  endDate: string | null;
+
   @ApiProperty({ example: 100 })
   tokenReward: number;
 
@@ -571,6 +581,14 @@ export class SocialImpactCampaignDetailDto {
     },
   })
   info: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    example: {
+      endDate: '2026-08-15T00:00:00.000Z',
+      tierRewards: { Nano: 50, Micro: 100 },
+    },
+  })
+  timeline?: Record<string, unknown>;
 
   @ApiProperty({ example: 'Zara Africa is launching...' })
   campaignBrief: string;

@@ -11,8 +11,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { BannerAdsService } from '../services/banner-ads.service';
 import {
   CreateBannerAdDto,
@@ -57,11 +60,16 @@ export class AdminBannerAdsController {
   @Post()
   @Audit('BANNER_AD_CREATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @UseInterceptors(FileInterceptor('adImage'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new Banner Ad (Save Draft or Publish)' })
   @ApiResponse({ status: 201, description: 'Banner Ad created successfully' })
-  async createAd(@Body() dto: CreateBannerAdDto) {
-    return this.bannerAdsService.createAd(dto);
+  async createAd(
+    @Body() dto: CreateBannerAdDto,
+    @UploadedFile() adImageFile?: Express.Multer.File,
+  ) {
+    return this.bannerAdsService.createAd(dto, adImageFile);
   }
 
   @Get(':id')
@@ -76,11 +84,17 @@ export class AdminBannerAdsController {
   @Patch(':id')
   @Audit('BANNER_AD_UPDATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @UseInterceptors(FileInterceptor('adImage'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update an existing Banner Ad' })
   @ApiResponse({ status: 200, description: 'Banner Ad updated successfully' })
-  async updateAd(@Param('id') id: string, @Body() dto: UpdateBannerAdDto) {
-    return this.bannerAdsService.updateAd(id, dto);
+  async updateAd(
+    @Param('id') id: string,
+    @Body() dto: UpdateBannerAdDto,
+    @UploadedFile() adImageFile?: Express.Multer.File,
+  ) {
+    return this.bannerAdsService.updateAd(id, dto, adImageFile);
   }
 
   @Patch(':id/status')

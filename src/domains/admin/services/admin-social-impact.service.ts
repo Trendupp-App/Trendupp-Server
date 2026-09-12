@@ -393,6 +393,24 @@ export class AdminSocialImpactService {
       };
     }
 
+    if (dto.endDate || dto.tierRewards) {
+      const existingTimeline = (campaign.timeline as Record<string, unknown>) || {};
+      const stage1 = (existingTimeline.stage1_application_window as Record<string, unknown>) || {};
+      const newTimeline: Record<string, unknown> = { ...existingTimeline };
+      if (dto.endDate) {
+        const endIso = new Date(dto.endDate).toISOString();
+        newTimeline.endDate = endIso;
+        newTimeline.stage1_application_window = {
+          ...stage1,
+          endedDate: endIso,
+        };
+      }
+      if (dto.tierRewards) {
+        newTimeline.tierRewards = dto.tierRewards;
+      }
+      updates.timeline = newTimeline;
+    }
+
     await campaign.update(updates);
 
     await this.auditLogService.log({
@@ -498,12 +516,26 @@ export class AdminSocialImpactService {
       : 'Trendupp';
 
     const guidelines = campaign.contentGuidelines || { dos: [], donts: [] };
+    const timelineObj = (campaign.timeline as Record<string, unknown>) || {};
+    const stage1 = timelineObj.stage1_application_window as Record<string, unknown> | undefined;
+    const endDateVal =
+      (timelineObj.endDate as string | undefined) || (stage1?.endedDate as string | undefined);
+    let endDate: string | null = null;
+    if (endDateVal) {
+      try {
+        endDate = new Date(endDateVal).toISOString();
+      } catch {
+        endDate = String(endDateVal);
+      }
+    }
 
     return {
       id: campaign.id,
       displayId: `TRD-${campaign.id.substring(0, 4).toUpperCase()}`,
       title: campaign.title,
       status: (campaign.status || 'LIVE').toUpperCase(),
+      currentStep: campaign.currentStep || 1,
+      endDate,
       tokenReward: Number(campaign.tokenReward || 100),
       brand: {
         id: campaign.brandId,
@@ -518,6 +550,7 @@ export class AdminSocialImpactService {
         preferredPlatforms: ['Instagram'],
         createdAt: campaign.createdAt,
       },
+      timeline: timelineObj,
       campaignBrief: campaign.campaignBrief || 'Social Impact Initiative created by Trendupp.',
       deliverables: (campaign.deliverables as unknown as string[]) || [
         '1x Instagram Reel (30-60 seconds)',
