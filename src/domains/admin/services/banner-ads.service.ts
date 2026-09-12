@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { BannerAdRepository } from '../repository/banner-ad.repository';
 import { BannerAd } from '../entities/banner-ad.entity';
+import { S3Service } from '../../../integration/s3/s3.service';
 import {
   CreateBannerAdDto,
   UpdateBannerAdDto,
@@ -13,9 +14,15 @@ export class BannerAdsService {
   // In-memory 5-minute impression deduplication cache: key -> timestamp
   private impressionCache = new Map<string, number>();
 
-  constructor(private readonly bannerAdRepository: BannerAdRepository) {}
+  constructor(
+    private readonly bannerAdRepository: BannerAdRepository,
+    private readonly s3Service: S3Service,
+  ) {}
 
-  async createAd(dto: CreateBannerAdDto): Promise<BannerAd> {
+  async createAd(dto: CreateBannerAdDto, adImageFile?: Express.Multer.File): Promise<BannerAd> {
+    if (adImageFile) {
+      dto.adImageUrl = await this.s3Service.uploadFile(adImageFile, 'avatars');
+    }
     return this.bannerAdRepository.create(dto);
   }
 
@@ -27,8 +34,15 @@ export class BannerAdsService {
     return ad;
   }
 
-  async updateAd(id: string, dto: UpdateBannerAdDto): Promise<BannerAd> {
+  async updateAd(
+    id: string,
+    dto: UpdateBannerAdDto,
+    adImageFile?: Express.Multer.File,
+  ): Promise<BannerAd> {
     await this.getAdById(id);
+    if (adImageFile) {
+      dto.adImageUrl = await this.s3Service.uploadFile(adImageFile, 'avatars');
+    }
     const updated = await this.bannerAdRepository.update(id, dto);
     if (!updated) {
       throw new BadRequestException('Failed to update Banner Ad.');

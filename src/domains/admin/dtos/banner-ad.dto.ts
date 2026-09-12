@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export enum AdTypeEnum {
   BANNER = 'Banner',
@@ -36,19 +36,65 @@ export class CreateBannerAdDto {
   adType: string;
 
   @ApiProperty({ example: ['All Creators'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] => {
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return [];
+  })
   @IsArray()
   @IsString({ each: true })
   targetAudience: string[];
 
   @ApiProperty({ example: ['Home Page'], type: [String] })
+  @Transform(({ value }: { value: unknown }): string[] => {
+    if (Array.isArray(value)) return value.map((v) => String(v).trim());
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim());
+      } catch {
+        // ignore
+      }
+      if (trimmed.includes(','))
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [trimmed];
+    }
+    return [];
+  })
   @IsArray()
   @IsString({ each: true })
   placement: string[];
 
-  @ApiProperty({ example: 'https://images.unsplash.com/photo-1781445074433' })
+  @ApiPropertyOptional({
+    description: 'Banner ad image file (upload binary file)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  adImage?: any;
+
+  @ApiPropertyOptional({ example: 'https://images.unsplash.com/photo-1781445074433' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  adImageUrl: string;
+  adImageUrl?: string;
 
   @ApiPropertyOptional({ example: 'https://trendupp.com/workshops' })
   @IsOptional()
