@@ -224,13 +224,73 @@ export interface NotificationPayloads {
   };
   'social_impact.admin_ended': { campaignId: string; campaignTitle: string };
   'social_impact.admin_completed': { campaignId: string; campaignTitle: string };
+
+  // ── Extended Stakeholder Notification Types ────────────────────────────────
+  'opportunity.new_campaign': {
+    campaignId: string;
+    campaignTitle: string;
+    advertiserName: string;
+    niche?: string;
+  };
+  'application.window_closing_soon': { campaignId: string; campaignTitle: string };
+  'submission.deadline_approaching': { campaignId: string; campaignTitle: string };
+  'submission.revision_deadline_approaching': { campaignId: string; campaignTitle: string };
+  'submission.revision_approved': { campaignId: string; campaignTitle: string };
+  'submission.live_link_needed': { campaignId: string; campaignTitle: string };
+  'submission.review_deadline_approaching': {
+    campaignId: string;
+    campaignTitle: string;
+    creatorName: string;
+  };
+  'submission.revision_review_deadline_approaching': {
+    campaignId: string;
+    campaignTitle: string;
+    creatorName: string;
+  };
+  'submission.live_post_review_needed': {
+    campaignId: string;
+    campaignTitle: string;
+    creatorName: string;
+  };
+  'refund.sent': { campaignId: string; campaignTitle: string; amount: number; currency?: string };
+  'refund.failed': {
+    campaignId: string;
+    campaignTitle: string;
+    amount: number;
+    currency?: string;
+    reason: string;
+  };
+  'account.suspended': { reason: string };
+  'campaign_access.suspended': { reason?: string };
+  'campaign.unfunded_reminder': { campaignId: string; campaignTitle: string };
+  'onboarding.nudge': { role?: string };
+  'tier.upgraded': { newTier: string };
+  'admin.dispute_pending_activation': {
+    disputeId: string;
+    campaignId: string;
+    campaignTitle: string;
+    userName: string;
+  };
+  'admin.dispute_open_too_long': {
+    disputeId: string;
+    campaignId: string;
+    campaignTitle: string;
+    daysOpen: number;
+  };
+  'admin.stage_overdue': {
+    campaignId: string;
+    campaignTitle: string;
+    userName: string;
+    stageName: string;
+    userType: 'creator' | 'advertiser';
+  };
 }
 
 export type NotificationType = keyof NotificationPayloads;
 
 /**
  * One catalog entry fully describes a notification type: where it's gated,
- * which channels it uses, and how it renders for the in-app feed and email.
+ * which channels it uses, and how it renders for the in-app feed, push, and email.
  */
 export interface CatalogEntry<T extends NotificationType = NotificationType> {
   category: NotificationCategory;
@@ -238,6 +298,17 @@ export interface CatalogEntry<T extends NotificationType = NotificationType> {
   priority: NotificationPriority;
   title: (data: NotificationPayloads[T]) => string;
   body: (data: NotificationPayloads[T]) => string;
+
+  /** Custom title for In-App Feed notifications (Tab 2). Falls back to title(data). */
+  inAppTitle?: (data: NotificationPayloads[T]) => string;
+  /** Custom body for In-App Feed notifications (Tab 2). Falls back to body(data). */
+  inAppBody?: (data: NotificationPayloads[T]) => string;
+
+  /** Custom title for Mobile Push notifications (Tab 3). Falls back to inAppTitle or title. */
+  pushTitle?: (data: NotificationPayloads[T]) => string;
+  /** Custom body for Mobile Push notifications (Tab 3). Falls back to inAppBody or body. */
+  pushBody?: (data: NotificationPayloads[T]) => string;
+
   /** Client deep-link path (web route; mobile maps the same path). */
   actionUrl?: (data: NotificationPayloads[T]) => string;
   /** Defaults to the rendered title. */
