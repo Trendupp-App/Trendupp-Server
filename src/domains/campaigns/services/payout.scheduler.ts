@@ -319,6 +319,21 @@ export class PayoutScheduler {
               errorDetails: null,
             });
             this.logger.log(`Successfully completed refund transfer for refund ID: ${refund.id}`);
+
+            const campaign = await this.campaignRepository
+              .findById(refund.campaignId)
+              .catch(() => null);
+            await this.notificationsService.notify({
+              type: 'refund.sent',
+              recipientId: refund.brandId,
+              data: {
+                campaignId: refund.campaignId,
+                campaignTitle: campaign?.title ?? 'your campaign',
+                amount: Number(refund.amount),
+                currency: refund.currency,
+              },
+              dedupeKey: `refund-sent:${refund.id}`,
+            });
           } else {
             throw new Error('Pandascrow bank transfer returned failure');
           }
@@ -328,6 +343,29 @@ export class PayoutScheduler {
           await refund.update({
             status: 'failed',
             errorDetails: errMsg,
+          });
+
+          const campaign = await this.campaignRepository
+            .findById(refund.campaignId)
+            .catch(() => null);
+          const failureData = {
+            campaignId: refund.campaignId,
+            campaignTitle: campaign?.title ?? 'your campaign',
+            amount: Number(refund.amount),
+            currency: refund.currency,
+            reason: errMsg,
+          };
+          await this.notificationsService.notify({
+            type: 'refund.failed',
+            recipientId: refund.brandId,
+            data: failureData,
+            dedupeKey: `refund-failed:${refund.id}`,
+          });
+          await this.notificationsService.notify({
+            type: 'refund.failed',
+            recipientRole: 'finance_admin',
+            data: failureData,
+            dedupeKey: `refund-failed-finance:${refund.id}`,
           });
         }
       }
