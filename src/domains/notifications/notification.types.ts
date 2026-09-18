@@ -35,7 +35,8 @@ export type NotificationRecipientRole =
   | 'super_admin'
   | 'finance_admin'
   | 'moderator'
-  | 'support_agent';
+  | 'support_agent'
+  | 'creator';
 
 /** Payload contract per notification type. */
 export interface NotificationPayloads {
