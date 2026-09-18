@@ -152,6 +152,26 @@ export class WebhooksController {
         },
         dedupeKey: `${campaign.id}:live`,
       });
+
+      // Fan out new campaign brief notification to creators
+      const brandObj = campaign.brand;
+      const advertiserName = brandObj
+        ? `${brandObj.firstName || ''} ${brandObj.lastName || ''}`.trim() ||
+          brandObj.username ||
+          'An advertiser'
+        : 'An advertiser';
+
+      await this.notificationsService.notify({
+        type: 'opportunity.new_campaign',
+        recipientRole: 'creator',
+        actorId: campaign.brandId,
+        data: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          advertiserName,
+        },
+        dedupeKey: `${campaign.id}:new_campaign`,
+      });
     }
   }
 

@@ -152,10 +152,17 @@ export class NotificationDispatcherService {
     entry: CatalogEntry,
     input: NotifyInput,
   ): Promise<void> {
-    // Role fan-outs are staff work items (disputes, escrow releases, team
+    // Role fan-outs for staff are staff work items (disputes, escrow releases, team
     // changes). Staff can never mute notifications — there is no admin
-    // notification-settings UI — so preference gating is bypassed entirely.
-    const channels = input.recipientRole
+    // notification-settings UI — so preference gating is bypassed entirely for staff roles.
+    // Creator role fan-outs (e.g. opportunity.new_campaign) respect creator notification preferences.
+    const isStaffRoleFanout =
+      input.recipientRole &&
+      (Array.isArray(input.recipientRole)
+        ? !input.recipientRole.includes('creator')
+        : input.recipientRole !== 'creator');
+
+    const channels = isStaffRoleFanout
       ? {
           inApp: entry.channels.includes('inApp'),
           email: entry.channels.includes('email'),
