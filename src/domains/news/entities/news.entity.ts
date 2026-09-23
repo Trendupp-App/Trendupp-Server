@@ -21,7 +21,10 @@ export class News extends BaseEntity<News> {
   declare category: string;
 
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'draft' })
-  declare status: string; // 'draft' | 'published'
+  declare status: string; // 'draft' | 'published' | 'scheduled'
+
+  @Column({ type: DataType.DATE, allowNull: true, field: 'scheduled_at' })
+  declare scheduledAt?: Date | null;
 
   @Column({
     type: DataType.BOOLEAN,

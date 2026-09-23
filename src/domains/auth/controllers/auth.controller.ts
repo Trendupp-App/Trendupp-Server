@@ -196,6 +196,22 @@ export class AuthController {
     return this.authService.resetPassword(resetPasswordDto);
   }
 
+  @Get('providers')
+  @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Which OAuth providers are currently available for sign-in and sign-up',
+    description:
+      'Runtime kill-switch state per provider (google, apple, facebook, tiktok, instagram). ' +
+      'Clients hide a provider button on the sign-in page when signinEnabled is false and ' +
+      'on the sign-up page when signupEnabled is false. The API also enforces these flags ' +
+      'server-side, so hiding the buttons is UX, not the security boundary.',
+  })
+  @ApiResponse({ status: 200, description: 'Per-provider availability flags' })
+  async getAuthProviders() {
+    return this.authService.getAuthProviders();
+  }
+
   @Get('username/check')
   @UseGuards(ApiKeyGuard)
   @ApiSecurity('onboarding-key')

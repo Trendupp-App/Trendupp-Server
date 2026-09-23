@@ -11,8 +11,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { BannerAdsService } from '../services/banner-ads.service';
 import {
   CreateBannerAdDto,
@@ -57,11 +60,16 @@ export class AdminBannerAdsController {
   @Post()
   @Audit('BANNER_AD_CREATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @UseInterceptors(FileInterceptor('adImage'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new Banner Ad (Save Draft or Publish)' })
   @ApiResponse({ status: 201, description: 'Banner Ad created successfully' })
-  async createAd(@Body() dto: CreateBannerAdDto) {
-    return this.bannerAdsService.createAd(dto);
+  async createAd(
+    @Body() dto: CreateBannerAdDto,
+    @UploadedFile() adImageFile?: Express.Multer.File,
+  ) {
+    return this.bannerAdsService.createAd(dto, adImageFile);
   }
 
   @Get(':id')
@@ -76,21 +84,47 @@ export class AdminBannerAdsController {
   @Patch(':id')
   @Audit('BANNER_AD_UPDATED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @UseInterceptors(FileInterceptor('adImage'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update an existing Banner Ad' })
   @ApiResponse({ status: 200, description: 'Banner Ad updated successfully' })
-  async updateAd(@Param('id') id: string, @Body() dto: UpdateBannerAdDto) {
-    return this.bannerAdsService.updateAd(id, dto);
+  async updateAd(
+    @Param('id') id: string,
+    @Body() dto: UpdateBannerAdDto,
+    @UploadedFile() adImageFile?: Express.Multer.File,
+  ) {
+    return this.bannerAdsService.updateAd(id, dto, adImageFile);
   }
 
   @Patch(':id/status')
   @Audit('BANNER_AD_STATUS_CHANGED')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update Banner Ad status (active, paused, draft)' })
+  @ApiOperation({ summary: 'Update Banner Ad status (active, paused, draft, archived)' })
   @ApiResponse({ status: 200, description: 'Banner Ad status updated successfully' })
   async updateAdStatus(@Param('id') id: string, @Body() dto: UpdateBannerAdStatusDto) {
     return this.bannerAdsService.updateAdStatus(id, dto.status);
+  }
+
+  @Patch(':id/archive')
+  @Audit('BANNER_AD_ARCHIVED')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Archive a Banner Ad' })
+  @ApiResponse({ status: 200, description: 'Banner Ad archived successfully' })
+  async archiveAd(@Param('id') id: string) {
+    return this.bannerAdsService.archiveAd(id);
+  }
+
+  @Patch(':id/unarchive')
+  @Audit('BANNER_AD_UNARCHIVED')
+  @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unarchive / restore a Banner Ad to draft status' })
+  @ApiResponse({ status: 200, description: 'Banner Ad unarchived successfully' })
+  async unarchiveAd(@Param('id') id: string) {
+    return this.bannerAdsService.unarchiveAd(id);
   }
 
   @Delete(':id')

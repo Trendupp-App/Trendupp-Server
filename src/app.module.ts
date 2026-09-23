@@ -60,7 +60,10 @@ import { AdsModule } from './domains/ads/ads.module';
         database: configService.get<string>('database.name'),
         autoLoadModels: true,
         synchronize: false,
-        logging: configService.get<string>('env') === 'development',
+        // SQL logging is OPT-IN (set DB_LOGGING=true), not tied to the env:
+        // in development it floods the console — every scheduler tick alone
+        // prints several full SELECTs a minute — and buries the app logs.
+        logging: process.env.DB_LOGGING === 'true' ? console.log : false,
         dialectOptions: {
           ssl: {
             require: true,

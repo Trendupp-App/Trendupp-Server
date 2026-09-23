@@ -31,6 +31,7 @@ import { CampaignTimelineScheduler } from './services/campaign-timeline.schedule
 import { UserTokenLedger } from '../users/entities/user-token-ledger.entity';
 import { User } from '../users/entities/user.entity';
 import { SocialImpactReminderScheduler } from './services/social-impact-reminder.scheduler';
+import { CampaignDeadlineReminderScheduler } from './services/campaign-deadline-reminder.scheduler';
 
 import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.entity';
 
@@ -70,6 +71,7 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
     TimelineService,
     CampaignTimelineScheduler,
     SocialImpactReminderScheduler,
+    CampaignDeadlineReminderScheduler,
   ],
   controllers: [CampaignsController, WebhooksController],
   exports: [CampaignsService, CampaignRepository, SequelizeModule, TimelineService],

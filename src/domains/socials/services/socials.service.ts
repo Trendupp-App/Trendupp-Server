@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -65,11 +66,14 @@ export class SocialsService {
 
   /** Full set of platform cards (connected or not) for the Connect Socials screen. */
   async list(userId: string): Promise<SocialConnectionView[]> {
-    const [connections, minFollowers] = await Promise.all([
+    const [connections, minFollowers, enabled] = await Promise.all([
       this.repo.findByUser(userId),
       this.settingsRepo.getMinFollowers(),
+      this.settingsRepo.getEnabled(),
     ]);
-    return SOCIAL_PLATFORMS.map((platform) =>
+    // Disabled platforms are hidden entirely — web and mobile both render
+    // this list verbatim, so the flag needs no client-side logic.
+    return SOCIAL_PLATFORMS.filter((platform) => enabled[platform]).map((platform) =>
       this.toView(
         platform,
         minFollowers[platform],
@@ -85,6 +89,14 @@ export class SocialsService {
     dto: ConnectSocialDto,
   ): Promise<SocialsMutationResult> {
     const platform = this.parsePlatform(platformRaw);
+
+    const enabled = await this.settingsRepo.getEnabled();
+    if (!enabled[platform]) {
+      throw new ForbiddenException(
+        `Connecting ${PLATFORM_LABELS[platform]} is currently unavailable.`,
+      );
+    }
+
     const verified = await this.verification.verify(platform, dto);
 
     // One social account backs exactly one Trendupp profile. Backstopped by

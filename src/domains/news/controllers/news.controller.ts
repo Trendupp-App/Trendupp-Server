@@ -20,7 +20,15 @@ export class NewsController {
         ? (roleRaw as { name: string }).name
         : ((roleRaw as string | undefined) ?? '');
 
-    return ['admin', 'superadmin', 'super_admin'].includes(userRole.toLowerCase());
+    return [
+      'owner',
+      'super_admin',
+      'superadmin',
+      'admin',
+      'finance_admin',
+      'moderator',
+      'support_agent',
+    ].includes(userRole.toLowerCase());
   }
 
   @Get()

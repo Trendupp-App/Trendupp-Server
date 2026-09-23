@@ -16,13 +16,13 @@ export class QueryAdminCampaignsListDto {
 
   @ApiPropertyOptional({
     example: 'all',
-    enum: ['all', 'draft', 'live', 'active', 'completed', 'cancelled'],
+    enum: ['all', 'draft', 'live', 'active', 'paused', 'completed', 'cancelled'],
     description: 'Filter by campaign status tab',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['all', 'draft', 'live', 'active', 'completed', 'cancelled'])
-  tab?: 'all' | 'draft' | 'live' | 'active' | 'completed' | 'cancelled' = 'all';
+  @IsIn(['all', 'draft', 'live', 'active', 'paused', 'completed', 'cancelled'])
+  tab?: 'all' | 'draft' | 'live' | 'active' | 'paused' | 'completed' | 'cancelled' = 'all';
 
   @ApiPropertyOptional({
     example: 'funded',

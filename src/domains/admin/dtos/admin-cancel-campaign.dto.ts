@@ -20,3 +20,13 @@ export class PauseAdminCampaignDto {
   @IsString()
   reason?: string;
 }
+
+export class ResumeAdminCampaignDto {
+  @ApiPropertyOptional({
+    example: 'Pause lifted after administrative review',
+    description: 'Reason for resuming campaign',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}

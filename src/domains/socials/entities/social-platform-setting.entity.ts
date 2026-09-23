@@ -13,4 +13,8 @@ export class SocialPlatformSetting extends BaseEntity<SocialPlatformSetting> {
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0, field: 'min_followers' })
   declare minFollowers: number;
+
+  /** Disabled platforms disappear from the connect list and refuse connects. */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: true })
+  declare enabled: boolean;
 }

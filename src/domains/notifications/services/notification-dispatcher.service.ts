@@ -152,10 +152,17 @@ export class NotificationDispatcherService {
     entry: CatalogEntry,
     input: NotifyInput,
   ): Promise<void> {
-    // Role fan-outs are staff work items (disputes, escrow releases, team
+    // Role fan-outs for staff are staff work items (disputes, escrow releases, team
     // changes). Staff can never mute notifications — there is no admin
-    // notification-settings UI — so preference gating is bypassed entirely.
-    const channels = input.recipientRole
+    // notification-settings UI — so preference gating is bypassed entirely for staff roles.
+    // Creator role fan-outs (e.g. opportunity.new_campaign) respect creator notification preferences.
+    const isStaffRoleFanout =
+      input.recipientRole &&
+      (Array.isArray(input.recipientRole)
+        ? !input.recipientRole.includes('creator')
+        : input.recipientRole !== 'creator');
+
+    const channels = isStaffRoleFanout
       ? {
           inApp: entry.channels.includes('inApp'),
           email: entry.channels.includes('email'),
@@ -170,8 +177,12 @@ export class NotificationDispatcherService {
     }
 
     const data = input.data;
-    const title = entry.title(data);
-    const body = entry.body(data);
+    const emailTitle = entry.title(data);
+    const emailBody = entry.body(data);
+    const inAppTitle = entry.inAppTitle ? entry.inAppTitle(data) : emailTitle;
+    const inAppBody = entry.inAppBody ? entry.inAppBody(data) : emailBody;
+    const pushTitle = entry.pushTitle ? entry.pushTitle(data) : inAppTitle;
+    const pushBody = entry.pushBody ? entry.pushBody(data) : inAppBody;
     const actionUrl = entry.actionUrl ? entry.actionUrl(data) : null;
 
     let notification;
@@ -182,8 +193,8 @@ export class NotificationDispatcherService {
         type: input.type,
         category: entry.category,
         priority: entry.priority,
-        title,
-        body,
+        title: inAppTitle,
+        body: inAppBody,
         actionUrl,
         data: data,
         dedupeKey: input.dedupeKey ? `${input.type}:${input.dedupeKey}:${user.id}` : null,
@@ -201,7 +212,7 @@ export class NotificationDispatcherService {
     }
 
     if (channels.push) {
-      await this.sendPush(user.id, input.type, title, body, actionUrl);
+      await this.sendPush(user.id, input.type, pushTitle, pushBody, actionUrl);
     }
 
     if (!channels.email) {
@@ -216,7 +227,7 @@ export class NotificationDispatcherService {
     try {
       const result = await this.emailService.send({
         to: user.email,
-        subject: entry.emailSubject ? entry.emailSubject(data) : title,
+        subject: entry.emailSubject ? entry.emailSubject(data) : emailTitle,
         template: entry.emailTemplate ?? 'generic-notification',
         data: {
           // Spread the full notification payload first so bespoke templates
@@ -225,8 +236,8 @@ export class NotificationDispatcherService {
           ...data,
           // Standard vars always available in every template:
           firstName: user.firstName,
-          title,
-          body,
+          title: emailTitle,
+          body: emailBody,
           actionUrl,
           appUrl: this.appUrl,
         },

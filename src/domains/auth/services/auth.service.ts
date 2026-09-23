@@ -29,8 +29,11 @@ import { TiktokAuthService } from '../../../integration/social-apis/tiktok-auth.
 import { InstagramAuthService } from '../../../integration/social-apis/instagram-auth.service';
 import { FacebookAuthService } from '../../../integration/social-apis/facebook-auth.service';
 import { AppleAuthService } from '../../../integration/social-apis/apple-auth.service';
+import { InjectModel } from '@nestjs/sequelize';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
+import { AppleNameCache } from '../entities/apple-name-cache.entity';
+import { AuthProviderSetting } from '../entities/auth-provider-setting.entity';
 
 export interface AuthResponse {
   accessToken: string;
@@ -107,7 +110,99 @@ export class AuthService {
     private readonly instagramAuthService: InstagramAuthService,
     private readonly facebookAuthService: FacebookAuthService,
     private readonly appleAuthService: AppleAuthService,
+    @InjectModel(AppleNameCache)
+    private readonly appleNameCacheModel: typeof AppleNameCache,
+    @InjectModel(AuthProviderSetting)
+    private readonly authProviderSettingModel: typeof AuthProviderSetting,
   ) {}
+
+  /**
+   * Stash the (first-authorization-only) Apple name server-side so a later
+   * signup from any device can recover it. Best-effort: a cache failure must
+   * never break the auth flow itself.
+   */
+  private async upsertAppleNameCache(
+    appleUserId: string,
+    email: string | undefined,
+    dto: AppleLoginDto,
+  ): Promise<void> {
+    try {
+      const existing = await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+      if (existing) {
+        await existing.update({
+          firstName: dto.firstName!,
+          lastName: dto.lastName ?? null,
+          email: email ?? existing.email,
+        });
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await (this.appleNameCacheModel as any).create({
+          appleUserId,
+          email: email ?? null,
+          firstName: dto.firstName!,
+          lastName: dto.lastName ?? null,
+        });
+      }
+      this.logger.log(`Apple name cached server-side for ${appleUserId}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not cache Apple name for ${appleUserId}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Effective kill-switch state for an OAuth provider. Fail-open on a missing
+   * row or a DB hiccup: a broken settings lookup must never lock every user
+   * out of authentication.
+   */
+  private async getProviderPolicy(
+    provider: string,
+  ): Promise<{ signinEnabled: boolean; signupEnabled: boolean }> {
+    try {
+      const row = await this.authProviderSettingModel.findOne({ where: { provider } });
+      if (!row) return { signinEnabled: true, signupEnabled: true };
+      return { signinEnabled: row.signinEnabled, signupEnabled: row.signupEnabled };
+    } catch (error) {
+      this.logger.warn(
+        `Could not load auth provider policy for "${provider}" — allowing: ${(error as Error).message}`,
+      );
+      return { signinEnabled: true, signupEnabled: true };
+    }
+  }
+
+  private assertSigninEnabled(policy: { signinEnabled: boolean }, label: string): void {
+    if (!policy.signinEnabled) {
+      throw new ForbiddenException(
+        `Sign-in with ${label} is currently unavailable. Please try another sign-in method.`,
+      );
+    }
+  }
+
+  private assertSignupEnabled(policy: { signupEnabled: boolean }, label: string): void {
+    if (!policy.signupEnabled) {
+      throw new ForbiddenException(
+        `New signups with ${label} are currently unavailable. Please sign up another way.`,
+      );
+    }
+  }
+
+  /** Public list of provider availability — drives which buttons clients show. */
+  async getAuthProviders(): Promise<
+    Array<{ provider: string; signinEnabled: boolean; signupEnabled: boolean }>
+  > {
+    const providers = ['google', 'apple', 'facebook', 'tiktok', 'instagram'];
+    const rows = await this.authProviderSettingModel.findAll();
+    const byProvider = new Map(rows.map((r) => [r.provider, r]));
+    return providers.map((provider) => {
+      const row = byProvider.get(provider);
+      return {
+        provider,
+        signinEnabled: row?.signinEnabled ?? true,
+        signupEnabled: row?.signupEnabled ?? true,
+      };
+    });
+  }
 
   /**
    * Shared role resolution for social signups: accepts a role UUID or name,
@@ -127,6 +222,23 @@ export class AuthService {
       throw new NotFoundException('Account type does not exist');
     }
     return roleRecord;
+  }
+
+  /**
+   * Derive a presentable first name from an email's local part —
+   * "ada.obi99@gmail.com" → "Ada". Returns null for addresses whose local
+   * part means nothing to a human: Apple private relay (random tokens like
+   * "x9f3k2q@privaterelay.appleid.com") and our own synthetic fallbacks.
+   */
+  private static nameFromEmail(email?: string | null): string | null {
+    if (!email) return null;
+    const [localPart, domain] = email.split('@');
+    if (!localPart || !domain) return null;
+    if (/privaterelay\.appleid\.com$/i.test(domain) || /^trendupp\./i.test(domain)) return null;
+
+    const word = localPart.split(/[._\-+]/)[0]?.replace(/\d+$/g, '') ?? '';
+    if (word.length < 2) return null;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   }
 
   async signup(signupDto: SignupDto): Promise<SignupResponse> {
@@ -357,6 +469,9 @@ export class AuthService {
   async googleLogin(googleLoginDto: GoogleLoginDto): Promise<AuthResponse> {
     const { idToken, role } = googleLoginDto;
 
+    const policy = await this.getProviderPolicy('google');
+    let isNewUser = false;
+
     const payload = await this.googleAuthService.verifyIdToken(idToken);
     const googleId = payload.sub;
     const email = payload.email!;
@@ -376,6 +491,8 @@ export class AuthService {
         });
         user = await this.usersService.findOne(user.id);
       } else {
+        isNewUser = true;
+        this.assertSignupEnabled(policy, 'Google');
         if (googleLoginDto.acceptedTerms !== true) {
           throw new BadRequestException('No account found, please signup first to continue.');
         }
@@ -421,6 +538,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Google');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -463,6 +583,9 @@ export class AuthService {
   async tiktokLogin(tiktokLoginDto: TiktokLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role, codeVerifier } = tiktokLoginDto;
 
+    const policy = await this.getProviderPolicy('tiktok');
+    let isNewUser = false;
+
     const tokenResponse = await this.tiktokAuthService.exchangeCodeForToken(
       code,
       redirectUri,
@@ -480,6 +603,8 @@ export class AuthService {
     let user = await this.usersService.findByTiktokOpenId(tiktokOpenId);
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'TikTok');
       if (tiktokLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please sign up first to continue.');
       }
@@ -522,6 +647,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'TikTok');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -564,6 +692,9 @@ export class AuthService {
   async instagramLogin(instagramLoginDto: InstagramLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role } = instagramLoginDto;
 
+    const policy = await this.getProviderPolicy('instagram');
+    let isNewUser = false;
+
     const tokenResponse = await this.instagramAuthService.exchangeCodeForToken(code, redirectUri);
     const profile = await this.instagramAuthService.getUserProfile(tokenResponse.accessToken);
 
@@ -577,6 +708,8 @@ export class AuthService {
     let user = await this.usersService.findByInstagramOpenId(instagramOpenId);
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Instagram');
       if (instagramLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
@@ -627,6 +760,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Instagram');
+    }
     this.checkAndReactivateUser(user);
 
     const userWithNiches = await this.usersService.findOneWithNiches(user.id);
@@ -669,6 +805,9 @@ export class AuthService {
   async facebookLogin(facebookLoginDto: FacebookLoginDto): Promise<AuthResponse> {
     const { code, redirectUri, role } = facebookLoginDto;
 
+    const policy = await this.getProviderPolicy('facebook');
+    let isNewUser = false;
+
     const tokenResponse = await this.facebookAuthService.exchangeCodeForToken(code, redirectUri);
     const profile = await this.facebookAuthService.getUserProfile(tokenResponse.accessToken);
 
@@ -689,6 +828,8 @@ export class AuthService {
     }
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Facebook');
       if (facebookLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
@@ -715,6 +856,9 @@ export class AuthService {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Facebook');
+    }
     this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }
@@ -722,11 +866,24 @@ export class AuthService {
   async appleLogin(appleLoginDto: AppleLoginDto): Promise<AuthResponse> {
     const { identityToken, role } = appleLoginDto;
 
+    const policy = await this.getProviderPolicy('apple');
+    let isNewUser = false;
+
     const identity = await this.appleAuthService.verifyIdentityToken(identityToken);
+
     const appleUserId = identity.appleUserId;
     // identity.email is real or a private-relay address (both deliverable);
     // it can be absent on repeat logins — synthetic fallback covers that.
     const email = identity.email || `apple_${appleUserId}@trendupp.apple`;
+
+    // Server-side name backup: Apple sends the name exactly once per Apple
+    // ID, and that one delivery often lands on a request that does NOT create
+    // the account (sign-in before signup, abandoned flow). Stash it keyed by
+    // the verified appleUserId whenever it shows up, so a later signup — from
+    // ANY device — can recover it. Deleted once consumed.
+    if (appleLoginDto.firstName) {
+      await this.upsertAppleNameCache(appleUserId, identity.email, appleLoginDto);
+    }
 
     let user = await this.usersService.findByAppleUserId(appleUserId);
 
@@ -740,18 +897,30 @@ export class AuthService {
     }
 
     if (!user) {
+      isNewUser = true;
+      this.assertSignupEnabled(policy, 'Apple');
       if (appleLoginDto.acceptedTerms !== true) {
         throw new BadRequestException('No account found, please signup first to continue.');
       }
 
       const roleRecord = await this.resolveSignupRole(role);
 
+      // Name resolution, best source first: the request body (Apple's
+      // first-authorization delivery), then the server-side cache stashed by
+      // an earlier attempt (e.g. the sign-in that got "please signup first"),
+      // then a name derived from a real mailbox, then a neutral placeholder.
+      const cachedName = appleLoginDto.firstName
+        ? null
+        : await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+
       user = await this.usersService.create({
         email,
-        // Apple only sends the name on the FIRST authorization — clients
-        // forward it then; later logins fall back to a placeholder.
-        firstName: appleLoginDto.firstName || 'Apple',
-        lastName: appleLoginDto.lastName || '',
+        firstName:
+          appleLoginDto.firstName ||
+          cachedName?.firstName ||
+          AuthService.nameFromEmail(identity.email) ||
+          'User',
+        lastName: appleLoginDto.lastName || cachedName?.lastName || '',
         appleUserId,
         roleId: roleRecord.id,
         isEmailVerified: true,
@@ -759,15 +928,46 @@ export class AuthService {
         acceptedPromotions: appleLoginDto.acceptedPromotions || false,
       });
       user = await this.usersService.findOne(user.id);
-    } else if (!user.isEmailVerified) {
-      await this.usersService.update(user.id, { isEmailVerified: true });
-      user = await this.usersService.findOne(user.id);
+
+      // The cache did its job (or was never needed) — don't keep PII around.
+      await this.appleNameCacheModel.destroy({ where: { appleUserId }, force: true });
+    } else {
+      // Self-heal: if this login carried the name (first authorization, or a
+      // Settings revoke + re-grant, which makes Apple resend it) — or an
+      // earlier attempt stashed it in the server-side cache — and the stored
+      // name is still a placeholder, adopt it.
+      const hasPlaceholderName =
+        !user.firstName || user.firstName === 'Apple' || user.firstName === 'User';
+      const updates: Record<string, unknown> = {};
+      if (hasPlaceholderName) {
+        const cachedName = appleLoginDto.firstName
+          ? null
+          : await this.appleNameCacheModel.findOne({ where: { appleUserId } });
+        const healFirstName = appleLoginDto.firstName || cachedName?.firstName;
+        if (healFirstName) {
+          updates.firstName = healFirstName;
+          const healLastName = appleLoginDto.lastName || cachedName?.lastName;
+          if (healLastName && !user.lastName) updates.lastName = healLastName;
+        }
+      }
+      if (!user.isEmailVerified) updates.isEmailVerified = true;
+
+      if (Object.keys(updates).length > 0) {
+        await this.usersService.update(user.id, updates);
+        user = await this.usersService.findOne(user.id);
+      }
+      if (updates.firstName) {
+        await this.appleNameCacheModel.destroy({ where: { appleUserId }, force: true });
+      }
     }
 
     if (!user) {
       throw new UnauthorizedException('Authentication failed');
     }
 
+    if (!isNewUser) {
+      this.assertSigninEnabled(policy, 'Apple');
+    }
     this.checkAndReactivateUser(user);
     return this.buildSocialAuthResponse(user);
   }

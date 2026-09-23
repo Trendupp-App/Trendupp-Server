@@ -14,11 +14,11 @@ export class FilterNewsDto {
   category?: string;
 
   @ApiPropertyOptional({
-    enum: ['draft', 'published'],
+    enum: ['draft', 'published', 'scheduled'],
     description: 'Filter by status (Admin only)',
   })
   @IsOptional()
-  @IsEnum(['draft', 'published'])
+  @IsEnum(['draft', 'published', 'scheduled'])
   status?: string;
 
   @ApiPropertyOptional({ description: 'Filter by industry ID' })
