@@ -35,11 +35,15 @@ export class FacebookAuthService {
   private readonly logger = new Logger(FacebookAuthService.name);
   private readonly appId: string | undefined;
   private readonly appSecret: string | undefined;
+  private readonly connectAppId: string | undefined;
+  private readonly connectAppSecret: string | undefined;
   private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.appId = this.configService.get<string>('facebook.appId');
     this.appSecret = this.configService.get<string>('facebook.appSecret');
+    this.connectAppId = this.configService.get<string>('facebook.connectAppId');
+    this.connectAppSecret = this.configService.get<string>('facebook.connectAppSecret');
 
     this.isConfigured = Boolean(this.appId && this.appSecret);
 
@@ -61,12 +65,33 @@ export class FacebookAuthService {
     }
   }
 
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<FacebookTokenResponse> {
+  /**
+   * Exchange an authorization code for a user access token.
+   *
+   * `variant` selects which Meta app's credentials to use. An authorization
+   * code is bound to the client_id that issued it, so a code from the social
+   * connect flow must be redeemed with the connect app's credentials or Meta
+   * rejects it. See configuration.ts for why the two apps are separate.
+   */
+  async exchangeCodeForToken(
+    code: string,
+    redirectUri: string,
+    variant: 'login' | 'connect' = 'login',
+  ): Promise<FacebookTokenResponse> {
     this.assertConfigured();
 
+    const clientId = variant === 'connect' ? this.connectAppId : this.appId;
+    const clientSecret = variant === 'connect' ? this.connectAppSecret : this.appSecret;
+
+    if (!clientId || !clientSecret) {
+      throw new ServiceUnavailableException(
+        `Facebook ${variant} credentials are not configured on this server`,
+      );
+    }
+
     const params = new URLSearchParams({
-      client_id: this.appId!,
-      client_secret: this.appSecret!,
+      client_id: clientId,
+      client_secret: clientSecret,
       redirect_uri: redirectUri,
       code,
     });

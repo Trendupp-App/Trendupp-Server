@@ -108,7 +108,11 @@ export class SocialVerificationService {
   }
 
   private async verifyFacebook(input: ConnectInput): Promise<VerifiedSocial> {
-    const token = await this.facebook.exchangeCodeForToken(input.code, input.redirectUri);
+    const token = await this.facebook.exchangeCodeForToken(
+      input.code,
+      input.redirectUri,
+      'connect',
+    );
     const stats = await this.facebook.getFollowerStats(token.accessToken);
     return {
       platformUserId: stats.id,

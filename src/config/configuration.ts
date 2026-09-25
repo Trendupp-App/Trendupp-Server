@@ -65,8 +65,15 @@ export default () => ({
     appSecret: process.env.INSTAGRAM_APP_SECRET,
   },
   facebook: {
+    // Login runs on the Meta app that has the classic "Facebook Login" use
+    // case (public_profile + email, already approved).
     appId: process.env.FACEBOOK_APP_ID,
     appSecret: process.env.FACEBOOK_APP_SECRET,
+    // Social connect runs on a *different* Meta app — the one carrying the
+    // Pages permissions needed for followers_count/fan_count. Falls back to
+    // the login app so single-app setups keep working unchanged.
+    connectAppId: process.env.FACEBOOK_CONNECT_APP_ID ?? process.env.FACEBOOK_APP_ID,
+    connectAppSecret: process.env.FACEBOOK_CONNECT_APP_SECRET ?? process.env.FACEBOOK_APP_SECRET,
   },
   apple: {
     // Comma-separated audience whitelist for Sign in with Apple identity
@@ -78,6 +85,7 @@ export default () => ({
     // → Service accounts → Generate new private key, then `base64 -i key.json`).
     serviceAccountBase64: process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
   },
+  // YouTube auth configuration.
   youtube: {
     clientId: process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
