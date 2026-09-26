@@ -29,7 +29,9 @@ export class SocialConnection extends BaseEntity<SocialConnection> {
   @Column({ type: DataType.STRING, allowNull: true })
   declare username?: string | null;
 
-  @Column({ type: DataType.STRING, allowNull: true, field: 'avatar_url' })
+  // TEXT, not STRING: platform avatar URLs are signed CDN links and TikTok's
+  // exceed VARCHAR(255), which surfaced as a 500 on /socials/:platform/connect.
+  @Column({ type: DataType.TEXT, allowNull: true, field: 'avatar_url' })
   declare avatarUrl?: string | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0, field: 'follower_count' })
