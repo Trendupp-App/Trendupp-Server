@@ -101,7 +101,7 @@ export class InstagramAuthService {
 
       if (!accessToken || !userId) {
         this.logger.error(
-          `Instagram token response missing fields: ${JSON.stringify(responseBody)}`,
+          `Instagram token response missing fields; keys present: ${Object.keys(responseBody).join(", ")}`,
         );
         throw new UnauthorizedException('Invalid token response from Instagram');
       }
@@ -145,7 +145,7 @@ export class InstagramAuthService {
 
       if (!id || !username) {
         this.logger.error(
-          `Instagram profile payload missing fields: ${JSON.stringify(responseBody)}`,
+          `Instagram profile payload missing fields; keys present: ${Object.keys(responseBody).join(", ")}`,
         );
         throw new UnauthorizedException('Invalid profile payload from Instagram');
       }
@@ -190,7 +190,7 @@ export class InstagramAuthService {
 
       if (!id || !username) {
         this.logger.error(
-          `Instagram stats payload missing fields: ${JSON.stringify(responseBody)}`,
+          `Instagram stats payload missing fields; keys present: ${Object.keys(responseBody).join(", ")}`,
         );
         throw new UnauthorizedException('Invalid stats payload from Instagram');
       }
