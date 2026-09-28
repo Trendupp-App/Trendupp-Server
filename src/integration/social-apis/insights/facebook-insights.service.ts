@@ -102,19 +102,32 @@ export class FacebookInsightsService implements PostInsightsProvider {
     );
     insights.shares = toCount((postBody.shares as Record<string, unknown> | undefined)?.count);
 
-    // post_impressions_unique is Facebook's unique-reach metric for a post.
-    const metrics = ['post_impressions_unique', 'post_impressions', 'post_video_views'];
+    // Graph v23.0 retired the whole post_impressions family — post_impressions,
+    // post_impressions_unique and post_impressions_organic all answer
+    // "(#100) The value must be a valid insights metric", as do post_reach and
+    // post_engaged_users. Only the video metrics survive on the post insights
+    // edge. Requesting a retired metric fails the ENTIRE call with a 400 rather
+    // than omitting that one metric, so a stale name here costs every other
+    // metric too.
+    const metrics = ['post_video_views'];
     const insightsBody = await this.get(
       `${GRAPH_BASE}/${platformMediaId}/insights?metric=${metrics.join(',')}&access_token=${token}`,
       'post insights',
     );
 
     const values = parseInsightsEdge(insightsBody);
-    insights.reach = values.post_impressions_unique ?? null;
-    insights.views = values.post_video_views ?? values.post_impressions ?? null;
+    // Video-only: a photo or text post reports nothing here, which is why this
+    // is left null rather than coerced to 0.
+    insights.views = values.post_video_views ?? null;
 
-    // Facebook has no save/bookmark metric for Page posts on any API surface.
+    // Facebook has no save/bookmark metric for Page posts on any API surface,
+    // and as of v23.0 no reach metric either.
     markUnsupported(insights, ['saves'], 'Facebook exposes no saves metric for Page posts');
+    markUnsupported(
+      insights,
+      ['reach'],
+      'Facebook retired the post_impressions metrics in Graph v23.0; Page posts expose no reach',
+    );
 
     insights.raw = { post: postBody, insights: insightsBody };
     return insights;

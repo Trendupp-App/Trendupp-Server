@@ -78,7 +78,9 @@ export const PLATFORM_METRIC_SUPPORT: Record<SocialPlatform, Record<MetricKey, b
     comments: true,
     shares: true,
     saves: false,
-    reach: true, // post_impressions_unique
+    // Graph v23.0 retired the post_impressions family (and post_reach); the
+    // post insights edge now exposes only video metrics.
+    reach: false,
     followerCount: true,
   },
   [SocialPlatform.TWITTER]: {
