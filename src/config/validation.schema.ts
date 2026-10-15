@@ -65,6 +65,9 @@ export const validationSchema = Joi.object({
   // Sign in with Apple (comma-separated: iOS bundle id, web Services ID)
   APPLE_CLIENT_IDS: Joi.string().allow('').optional(),
 
+  // Zoho Desk ASAP (in-app support)
+  ZOHO_ASAP_SECRET: Joi.string().allow('').optional(),
+
   // Firebase Cloud Messaging (push notifications)
   FIREBASE_SERVICE_ACCOUNT_BASE64: Joi.string().allow('').optional(),
 
