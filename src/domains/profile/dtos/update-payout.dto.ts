@@ -28,7 +28,8 @@ export class UpdateProfilePayoutDto {
   bankAccountNumber: string;
 
   @ApiPropertyOptional({
-    description: 'Verified bank account holder name — auto-populated from Startbutton verification response. Not required from the frontend.',
+    description:
+      'Verified bank account holder name — auto-populated from Startbutton verification response. Not required from the frontend.',
     example: 'ALEX OKAFOR',
   })
   @IsOptional()

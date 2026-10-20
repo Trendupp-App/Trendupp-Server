@@ -278,34 +278,38 @@ export class ProfileService {
         const verification = await this.startbuttonService.verifyBankAccount(
           dto.bankCode,
           dto.bankAccountNumber,
-          countryCode
+          countryCode,
         );
         verifiedName = verification.accountName.toLowerCase();
         verifiedAccountName = verification.accountName;
-      } catch (err) {
-        throw new ConflictException('Account details cannot be verified. Please check the account number and bank.');
+      } catch {
+        throw new ConflictException(
+          'Account details cannot be verified. Please check the account number and bank.',
+        );
       }
 
       const firstNameLower = (user.firstName || '').toLowerCase();
       const lastNameLower = (user.lastName || '').toLowerCase();
 
-      const isSandboxMock =
-        verifiedName === 'john doe' && process.env.NODE_ENV !== 'production';
+      const isSandboxMock = verifiedName === 'john doe' && process.env.NODE_ENV !== 'production';
 
       if (
         !isSandboxMock &&
         !verifiedName.includes(firstNameLower) &&
         !verifiedName.includes(lastNameLower)
       ) {
-        throw new ConflictException(`The provided account name does not match your Trendupp profile name.`);
+        throw new ConflictException(
+          `The provided account name does not match your Trendupp profile name.`,
+        );
       }
 
       updates.bankCode = dto.bankCode;
       if (dto.bankName) updates.bankName = dto.bankName;
       updates.bankAccountNumber = dto.bankAccountNumber;
-      updates.bankAccountName = isSandboxMock && dto.bankAccountName
-        ? dto.bankAccountName
-        : verifiedAccountName.toUpperCase();
+      updates.bankAccountName =
+        isSandboxMock && dto.bankAccountName
+          ? dto.bankAccountName
+          : verifiedAccountName.toUpperCase();
     } else {
       if (dto.bankCode !== undefined) updates.bankCode = dto.bankCode;
       if (dto.bankName !== undefined) updates.bankName = dto.bankName;

@@ -235,13 +235,11 @@ describe('OnboardingService', () => {
     });
 
     it('should resolve country name and currency when countryCode GH is provided', async () => {
-      const mockBanks = [
-        { id: 76, name: 'Absa Bank Ghana Ltd', code: '030100' },
-      ];
+      const mockBanks = [{ id: 76, name: 'Absa Bank Ghana Ltd', code: '030100' }];
       startbuttonServiceMock.getBanks.mockResolvedValue(mockBanks);
       nationalityRepositoryMock.findAll.mockResolvedValue([
         { id: 'nat-gh', name: 'Ghana', code: 'GH', currency: 'GHS' },
-      ] as any);
+      ] as unknown as Nationality[]);
 
       const result = await service.getBanks({ countryCode: 'GH' });
 

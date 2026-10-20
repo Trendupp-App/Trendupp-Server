@@ -897,7 +897,11 @@ describe('CampaignsService', () => {
     });
 
     it('should successfully select a pending application without sending notifications', async () => {
-      const liveCampaign = { ...mockCampaign, brandId: 'brand1', currency: 'USD' } as unknown as Campaign;
+      const liveCampaign = {
+        ...mockCampaign,
+        brandId: 'brand1',
+        currency: 'USD',
+      } as unknown as Campaign;
       const mockApp = {
         id: 'app1',
         campaignId: 'c1',
@@ -1997,4 +2001,3 @@ describe('CampaignsService', () => {
     });
   });
 });
-

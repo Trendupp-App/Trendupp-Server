@@ -13,7 +13,11 @@ import { IssueCategoryRepository } from './repository/issue-category.repository'
 import { StartbuttonModule } from '../../integration/payment-gateway/startbutton.module';
 
 @Module({
-  imports: [UsersModule, StartbuttonModule, SequelizeModule.forFeature([SupportTicket, IssueCategory])],
+  imports: [
+    UsersModule,
+    StartbuttonModule,
+    SequelizeModule.forFeature([SupportTicket, IssueCategory]),
+  ],
   controllers: [OnboardingController, ProfileController],
   providers: [
     OnboardingService,

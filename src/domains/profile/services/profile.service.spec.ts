@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ConflictException } from '@nestjs/common';
-import { Bank } from '../../users/entities/bank.entity';
 import { ProfileService } from './profile.service';
 import { UsersService } from '../../users/services/users.service';
 import { S3Service } from '../../../integration/s3/s3.service';
@@ -402,7 +401,11 @@ describe('ProfileService', () => {
 
       const result = await service.updatePayout('u1', dto);
 
-      expect(startbuttonServiceMock.verifyBankAccount).toHaveBeenCalledWith('044', '0123456789', 'NG');
+      expect(startbuttonServiceMock.verifyBankAccount).toHaveBeenCalledWith(
+        '044',
+        '0123456789',
+        'NG',
+      );
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
         bankCode: '044',
         bankName: 'Access Bank',

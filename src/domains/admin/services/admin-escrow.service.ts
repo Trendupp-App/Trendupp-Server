@@ -355,7 +355,7 @@ export class AdminEscrowService {
             commissionRate: bd.commissionRate,
             vat: bd.vat,
             vatRate: bd.vatRate,
-            gatewayFee: p.gatewayFee ?? (bd.startbuttonFee ?? bd.pandascrowFee),
+            gatewayFee: p.gatewayFee ?? bd.startbuttonFee ?? bd.pandascrowFee,
             gatewayRate: bd.gatewayRate,
             netAmount: bd.campaignBudget,
           };

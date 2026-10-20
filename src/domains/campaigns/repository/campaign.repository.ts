@@ -716,11 +716,7 @@ export class CampaignRepository {
   async findPaymentByEscrowId(escrowId: string): Promise<Payment | null> {
     return this.paymentModel.findOne({
       where: {
-        [Op.or]: [
-          { escrowId },
-          { paymentReference: escrowId },
-          { transactionRef: escrowId },
-        ],
+        [Op.or]: [{ escrowId }, { paymentReference: escrowId }, { transactionRef: escrowId }],
       },
     });
   }

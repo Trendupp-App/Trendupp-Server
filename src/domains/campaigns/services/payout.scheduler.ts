@@ -96,7 +96,9 @@ export class PayoutScheduler {
           // to prevent concurrent cron executions / race conditions.
           await release.update({ status: 'processing' });
 
-          const country = (typeof creator.country === 'string' ? creator.country : (creator.country as any)?.name) || 'Nigeria';
+          const countryName =
+            typeof creator.country === 'string' ? creator.country : creator.country?.name;
+          const country: string = countryName || 'Nigeria';
 
           // Trigger payout request from Trendupp's wallet to creator's bank account
           const success = await this.startbuttonService.requestPayout({
@@ -111,7 +113,9 @@ export class PayoutScheduler {
 
           if (success) {
             // Keep it in processing state, webhook will mark it as released
-            this.logger.log(`Payout requested successfully for release ID: ${release.id}. Waiting for webhook.`);
+            this.logger.log(
+              `Payout requested successfully for release ID: ${release.id}. Waiting for webhook.`,
+            );
           } else {
             throw new Error('Startbutton payout failed without explicit error');
           }
@@ -285,7 +289,8 @@ export class PayoutScheduler {
           this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
 
           const success = await this.startbuttonService.initiateRefund({
-            transactionReference: campaignPayment?.transactionRef || campaignPayment?.paymentReference || '',
+            transactionReference:
+              campaignPayment?.transactionRef || campaignPayment?.paymentReference || '',
             amount: refund.amount,
             reason: `Refund for campaign ${refund.campaignId}`,
           });
@@ -352,5 +357,4 @@ export class PayoutScheduler {
       this.logger.error(`Error processing pending refunds: ${message}`);
     }
   }
-
 }

@@ -575,7 +575,8 @@ export class CampaignsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:'[deprecated]...Validate selected creators total fees against available campaign pool budget',
+    summary:
+      '[deprecated]...Validate selected creators total fees against available campaign pool budget',
   })
   @ApiResponse({ status: 200, description: 'Creator selection budget validation check completed' })
   validateSelection(@Param('id') campaignId: string, @Body() dto: ValidateSelectionDto) {
@@ -607,7 +608,8 @@ export class CampaignsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: '[deprecated]...Batch review (accept/reject) creator campaign applications (brand owner only)',
+    summary:
+      '[deprecated]...Batch review (accept/reject) creator campaign applications (brand owner only)',
   })
   @ApiResponse({ status: 200, description: 'Applications reviewed successfully' })
   async reviewApplicationsBatch(

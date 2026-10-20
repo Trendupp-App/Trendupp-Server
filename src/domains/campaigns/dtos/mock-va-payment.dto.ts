@@ -37,4 +37,3 @@ export class MockVaPaymentDto {
   @IsNotEmpty()
   reference: string;
 }
-

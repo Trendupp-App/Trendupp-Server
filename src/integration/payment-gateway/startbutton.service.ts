@@ -214,9 +214,7 @@ export class StartbuttonService {
       const rawStatus = tx?.status;
       const parsedStatus = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : 'pending';
       const amount = tx?.amount !== undefined ? Number(tx.amount) / 100 : undefined;
-      const gatewayRef =
-        (tx as any)?.transactionReference ||
-        (dataObj as any)?.transactionReference;
+      const gatewayRef = tx?.transactionReference || dataObj?.transactionReference;
 
       return {
         transaction_ref: reference,

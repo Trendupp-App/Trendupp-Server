@@ -23,9 +23,14 @@ interface StartbuttonWebhookPayload {
     reference?: string;
     transactionReference?: string;
     userTransactionReference?: string;
+    transaction_reference?: string;
+    user_transaction_reference?: string;
+    refundReference?: string;
     transaction?: {
       transactionReference?: string;
       userTransactionReference?: string;
+      transaction_reference?: string;
+      user_transaction_reference?: string;
       reference?: string;
       status?: string;
       [key: string]: unknown;
@@ -135,9 +140,7 @@ export class WebhooksController {
       data.transaction?.reference ||
       data.userTransactionReference ||
       data.reference;
-    const gatewayReference =
-      data.transaction?.transactionReference ||
-      data.transactionReference;
+    const gatewayReference = data.transaction?.transactionReference || data.transactionReference;
 
     const reference = userReference || gatewayReference;
     this.logger.log(
@@ -223,28 +226,37 @@ export class WebhooksController {
     }
   }
 
-  private async handleTransferSuccess(data: StartbuttonWebhookPayload['data']) {
-    const reference =
+  private extractReference(data: StartbuttonWebhookPayload['data']): string | undefined {
+    const rawRef =
       data.transaction?.userTransactionReference ||
       data.transaction?.reference ||
-      (data as any)?.user_transaction_reference ||
-      (data as any)?.transaction_reference ||
-      (data as any)?.transaction?.user_transaction_reference ||
-      (data as any)?.transaction?.transaction_reference ||
+      data.transaction?.user_transaction_reference ||
+      data.transaction?.transaction_reference ||
       data.userTransactionReference ||
       data.reference ||
+      data.user_transaction_reference ||
+      data.transaction_reference ||
       data.transaction?.transactionReference ||
       data.transactionReference;
+    return typeof rawRef === 'string' ? rawRef : undefined;
+  }
+
+  private async handleTransferSuccess(data: StartbuttonWebhookPayload['data']) {
+    const reference = this.extractReference(data);
     this.logger.log(`Transfer success hook received for reference: ${reference}`);
     if (!reference) return;
 
     // Extract the standard 36-character UUID (8-4-4-4-12) from the reference
-    const uuidMatch = reference.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    const releaseId = uuidMatch ? uuidMatch[0] : reference;
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    const releaseId: string = uuidMatch ? uuidMatch[0] : reference;
 
     const release = await this.campaignRepository.findReleaseById(releaseId);
     if (!release) {
-      this.logger.warn(`No payment release found for reference: ${reference} (extracted ID: ${releaseId})`);
+      this.logger.warn(
+        `No payment release found for reference: ${reference} (extracted ID: ${releaseId})`,
+      );
       return;
     }
 
@@ -280,28 +292,23 @@ export class WebhooksController {
   }
 
   private async handleTransferFailed(data: StartbuttonWebhookPayload['data']) {
-    const reference =
-      data.transaction?.userTransactionReference ||
-      data.transaction?.reference ||
-      (data as any)?.user_transaction_reference ||
-      (data as any)?.transaction_reference ||
-      (data as any)?.transaction?.user_transaction_reference ||
-      (data as any)?.transaction?.transaction_reference ||
-      data.userTransactionReference ||
-      data.reference ||
-      data.transaction?.transactionReference ||
-      data.transactionReference;
-    const reason = (data.reason as string) || 'Startbutton transfer failed';
+    const reference = this.extractReference(data);
+    const reason =
+      (typeof data.reason === 'string' && data.reason) || 'Startbutton transfer failed';
     this.logger.log(`Transfer failed hook received for reference: ${reference}, reason: ${reason}`);
     if (!reference) return;
 
     // Extract the standard 36-character UUID (8-4-4-4-12) from the reference
-    const uuidMatch = reference.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    const releaseId = uuidMatch ? uuidMatch[0] : reference;
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    const releaseId: string = uuidMatch ? uuidMatch[0] : reference;
 
     const release = await this.campaignRepository.findReleaseById(releaseId);
     if (!release) {
-      this.logger.warn(`No payment release found for reference: ${reference} (extracted ID: ${releaseId})`);
+      this.logger.warn(
+        `No payment release found for reference: ${reference} (extracted ID: ${releaseId})`,
+      );
       return;
     }
 
@@ -369,25 +376,17 @@ export class WebhooksController {
   }
 
   private async handleRefundSuccess(data: StartbuttonWebhookPayload['data']) {
-    const reference =
-      data.transaction?.userTransactionReference ||
-      data.transaction?.reference ||
-      (data as any)?.user_transaction_reference ||
-      (data as any)?.transaction_reference ||
-      (data as any)?.transaction?.user_transaction_reference ||
-      (data as any)?.transaction?.transaction_reference ||
-      data.userTransactionReference ||
-      data.reference ||
-      data.transaction?.transactionReference ||
-      data.transactionReference;
+    const reference = this.extractReference(data);
     this.logger.log(`Refund success hook received for reference: ${reference}`);
     if (!reference) return;
 
     let refund: CampaignRefund | null = null;
 
     // 1. Check if reference contains a UUID that matches a refund ID directly
-    const uuidMatch = reference.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (uuidMatch) {
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    if (uuidMatch && uuidMatch[0]) {
       refund = await this.campaignRepository.findRefundById(uuidMatch[0]);
     }
 
@@ -409,9 +408,12 @@ export class WebhooksController {
       return;
     }
 
+    const refundReference =
+      (typeof data.refundReference === 'string' && data.refundReference) || reference;
+
     await refund.update({
       status: 'completed',
-      refundReference: (data as any)?.refundReference || reference,
+      refundReference,
       errorDetails: null,
     });
     this.logger.log(`Successfully processed refund success webhook for refund ID: ${refund.id}`);
@@ -431,24 +433,16 @@ export class WebhooksController {
   }
 
   private async handleRefundFailed(data: StartbuttonWebhookPayload['data']) {
-    const reference =
-      data.transaction?.userTransactionReference ||
-      data.transaction?.reference ||
-      (data as any)?.user_transaction_reference ||
-      (data as any)?.transaction_reference ||
-      (data as any)?.transaction?.user_transaction_reference ||
-      (data as any)?.transaction?.transaction_reference ||
-      data.userTransactionReference ||
-      data.reference ||
-      data.transaction?.transactionReference ||
-      data.transactionReference;
-    const reason = (data.reason as string) || 'Startbutton refund failed';
+    const reference = this.extractReference(data);
+    const reason = (typeof data.reason === 'string' && data.reason) || 'Startbutton refund failed';
     this.logger.log(`Refund failed hook received for reference: ${reference}, reason: ${reason}`);
     if (!reference) return;
 
     let refund: CampaignRefund | null = null;
-    const uuidMatch = reference.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (uuidMatch) {
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    if (uuidMatch && uuidMatch[0]) {
       refund = await this.campaignRepository.findRefundById(uuidMatch[0]);
     }
     if (!refund) {
