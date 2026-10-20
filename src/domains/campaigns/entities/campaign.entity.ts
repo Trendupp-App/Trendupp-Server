@@ -240,6 +240,7 @@ export class Campaign extends BaseEntity<Campaign> {
     campaignBudget: number;
     trenduppFee: number;
     vat: number;
+    startbuttonFee?: number;
     pandascrowFee?: number;
     totalToPay: number;
     breakdownItems?: { name: string; type: string; value: number; amount: number }[];
@@ -258,6 +259,7 @@ export class Campaign extends BaseEntity<Campaign> {
     campaignBudget: number;
     trenduppFee: number;
     vat: number;
+    startbuttonFee?: number;
     pandascrowFee?: number;
     totalToPay: number;
     breakdownItems?: { name: string; type: string; value: number; amount: number }[];

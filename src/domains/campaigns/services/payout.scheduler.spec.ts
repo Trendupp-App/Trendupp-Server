@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PayoutScheduler } from './payout.scheduler';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { UsersService } from '../../users/services/users.service';
-import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
@@ -12,7 +12,7 @@ describe('PayoutScheduler', () => {
   let scheduler: PayoutScheduler;
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let usersServiceMock: jest.Mocked<UsersService>;
-  let pandascrowServiceMock: jest.Mocked<PandascrowService>;
+  let startbuttonServiceMock: jest.Mocked<StartbuttonService>;
   let configServiceMock: jest.Mocked<ConfigService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
   let emailServiceMock: jest.Mocked<EmailService>;
@@ -37,8 +37,9 @@ describe('PayoutScheduler', () => {
       findOne: jest.fn(),
     } as any;
 
-    pandascrowServiceMock = {
+    startbuttonServiceMock = {
       requestPayout: jest.fn(),
+      initiateRefund: jest.fn(),
     } as any;
 
     configServiceMock = {
@@ -59,7 +60,7 @@ describe('PayoutScheduler', () => {
         PayoutScheduler,
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: UsersService, useValue: usersServiceMock },
-        { provide: PandascrowService, useValue: pandascrowServiceMock },
+        { provide: StartbuttonService, useValue: startbuttonServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
         { provide: EmailService, useValue: emailServiceMock },
@@ -165,6 +166,7 @@ describe('PayoutScheduler', () => {
         firstName: 'Brand',
         lastName: 'User',
         bankAccountNumber: '1234567890',
+        bankCode: '058',
         bank: { code: '058' },
       };
 
@@ -180,23 +182,21 @@ describe('PayoutScheduler', () => {
       const mockPayment = {
         campaignId: 'c1',
         escrowStatus: 'completed',
+        transactionRef: 'tx_ref_123',
       };
 
       campaignRepoMock.findPendingRefunds.mockResolvedValue([mockRefund as any]);
       usersServiceMock.findOne.mockResolvedValue(mockBrand as any);
       campaignRepoMock.findPaymentByCampaignId.mockResolvedValue(mockPayment as any);
-      pandascrowServiceMock.requestPayout.mockResolvedValue(true);
+      campaignRepoMock.findById.mockResolvedValue({ id: 'c1', title: 'Test Campaign' } as any);
+      startbuttonServiceMock.initiateRefund.mockResolvedValue(true);
 
       await scheduler.processPendingRefunds();
 
-      expect(pandascrowServiceMock.requestPayout).toHaveBeenCalledWith({
-        payoutRef: expect.stringContaining('ref_'),
-        walletId: 1,
+      expect(startbuttonServiceMock.initiateRefund).toHaveBeenCalledWith({
+        transactionReference: 'tx_ref_123',
         amount: 100000,
-        currency: 'NGN',
-        bankCode: '058',
-        accountNumber: '1234567890',
-        accountName: 'Brand User',
+        reason: 'Refund for campaign c1',
       });
       expect(mockRefund.update).toHaveBeenCalledWith({
         status: 'completed',

@@ -17,6 +17,7 @@ import { IssueCategory } from '../entities/issue-category.entity';
 import { IssueCategoryRepository } from '../repository/issue-category.repository';
 import * as bcrypt from 'bcryptjs';
 import { computeTier } from '../../socials/constants/social-platforms';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 
 @Injectable()
 export class ProfileService {
@@ -26,6 +27,7 @@ export class ProfileService {
     private readonly bankRepository: BankRepository,
     private readonly supportTicketRepository: SupportTicketRepository,
     private readonly issueCategoryRepository: IssueCategoryRepository,
+    private readonly startbuttonService: StartbuttonService,
   ) {}
 
   async updatePersonalInfo(
@@ -264,18 +266,59 @@ export class ProfileService {
     }
 
     const updates: Partial<User> = {};
-    if (dto.bankId !== undefined) {
-      const bank = await this.bankRepository.findById(dto.bankId);
-      if (!bank) {
-        throw new NotFoundException('Bank not found');
+
+    // If both bankCode and account number are being updated, we verify them
+    if (dto.bankCode && dto.bankAccountNumber && dto.bankAccountNumber.trim() !== '') {
+      // Default to user's country code if available, otherwise 'NG'
+      const countryCode = user.country?.code || user.nationality?.code || 'NG';
+
+      let verifiedName = '';
+      let verifiedAccountName = '';
+      try {
+        const verification = await this.startbuttonService.verifyBankAccount(
+          dto.bankCode,
+          dto.bankAccountNumber,
+          countryCode,
+        );
+        verifiedName = verification.accountName.toLowerCase();
+        verifiedAccountName = verification.accountName;
+      } catch {
+        throw new ConflictException(
+          'Account details cannot be verified. Please check the account number and bank.',
+        );
       }
-      updates.bankId = dto.bankId;
-    }
-    if (dto.bankAccountNumber !== undefined && dto.bankAccountNumber.trim() !== '') {
+
+      const firstNameLower = (user.firstName || '').toLowerCase();
+      const lastNameLower = (user.lastName || '').toLowerCase();
+
+      const isSandboxMock = verifiedName === 'john doe' && process.env.NODE_ENV !== 'production';
+
+      if (
+        !isSandboxMock &&
+        !verifiedName.includes(firstNameLower) &&
+        !verifiedName.includes(lastNameLower)
+      ) {
+        throw new ConflictException(
+          `The provided account name does not match your Trendupp profile name.`,
+        );
+      }
+
+      updates.bankCode = dto.bankCode;
+      if (dto.bankName) updates.bankName = dto.bankName;
       updates.bankAccountNumber = dto.bankAccountNumber;
-    }
-    if (dto.bankAccountName !== undefined && dto.bankAccountName.trim() !== '') {
-      updates.bankAccountName = dto.bankAccountName;
+      updates.bankAccountName =
+        isSandboxMock && dto.bankAccountName
+          ? dto.bankAccountName
+          : verifiedAccountName.toUpperCase();
+    } else {
+      if (dto.bankCode !== undefined) updates.bankCode = dto.bankCode;
+      if (dto.bankName !== undefined) updates.bankName = dto.bankName;
+      if (dto.bankAccountNumber !== undefined && dto.bankAccountNumber.trim() !== '') {
+        updates.bankAccountNumber = dto.bankAccountNumber;
+      }
+      if (dto.bankAccountName !== undefined && dto.bankAccountName.trim() !== '') {
+        updates.bankAccountName = dto.bankAccountName;
+      }
     }
 
     if (Object.keys(updates).length > 0) {

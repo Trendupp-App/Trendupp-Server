@@ -13,9 +13,9 @@ export class ReviewApplicationsBatchDto {
 
   @ApiProperty({
     description: 'The review status to apply to all selected applications',
-    example: 'accepted',
-    enum: ['accepted', 'rejected'],
+    example: 'selected',
+    enum: ['selected', 'accepted', 'rejected', 'pending'],
   })
-  @IsIn(['accepted', 'rejected'])
+  @IsIn(['selected', 'accepted', 'rejected', 'pending'])
   status: string;
 }

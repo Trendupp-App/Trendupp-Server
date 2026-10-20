@@ -643,6 +643,10 @@ export class CampaignRepository {
     return (this.paymentReleaseModel as any).create(data) as Promise<PaymentRelease>;
   }
 
+  async findReleaseById(id: string): Promise<PaymentRelease | null> {
+    return this.paymentReleaseModel.findByPk(id);
+  }
+
   async findDuePendingReleases(now: Date): Promise<PaymentRelease[]> {
     return this.paymentReleaseModel.findAll({
       where: {
@@ -688,15 +692,32 @@ export class CampaignRepository {
   }
 
   async findPaymentByCampaignId(campaignId: string): Promise<Payment | null> {
+    const paidPayment = await this.paymentModel.findOne({
+      where: { campaignId, paymentStatus: 'paid' },
+      order: [['createdAt', 'DESC']],
+    });
+    if (paidPayment) {
+      return paidPayment;
+    }
+
     return this.paymentModel.findOne({
       where: { campaignId },
       order: [['createdAt', 'DESC']],
     });
   }
 
+  async findPaidPaymentByCampaignId(campaignId: string): Promise<Payment | null> {
+    return this.paymentModel.findOne({
+      where: { campaignId, paymentStatus: 'paid' },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
   async findPaymentByEscrowId(escrowId: string): Promise<Payment | null> {
     return this.paymentModel.findOne({
-      where: { escrowId },
+      where: {
+        [Op.or]: [{ escrowId }, { paymentReference: escrowId }, { transactionRef: escrowId }],
+      },
     });
   }
 
@@ -707,7 +728,11 @@ export class CampaignRepository {
     return this.paymentModel.findOne({
       where: {
         campaignId,
-        [Op.or]: [{ escrowId: escrowIdOrRef }, { transactionRef: escrowIdOrRef }],
+        [Op.or]: [
+          { escrowId: escrowIdOrRef },
+          { transactionRef: escrowIdOrRef },
+          { paymentReference: escrowIdOrRef },
+        ],
       },
     });
   }
@@ -736,9 +761,14 @@ export class CampaignRepository {
     return this.campaignRefundModel.create(data as any);
   }
 
+  async findRefundById(id: string): Promise<CampaignRefund | null> {
+    return this.campaignRefundModel.findByPk(id);
+  }
+
   async findRefundByCampaignId(campaignId: string): Promise<CampaignRefund | null> {
     return this.campaignRefundModel.findOne({
       where: { campaignId },
+      order: [['createdAt', 'DESC']],
     });
   }
 

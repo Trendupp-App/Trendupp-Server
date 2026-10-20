@@ -21,7 +21,10 @@ export type MetricKey = (typeof METRIC_KEYS)[number];
  * `needs_reconnect` is fixable by the creator re-granting scopes.
  */
 export type MetricUnavailableReason =
-  'not_supported' | 'not_supported_for_media_type' | 'needs_reconnect' | 'fetch_failed';
+  | 'not_supported'
+  | 'not_supported_for_media_type'
+  | 'needs_reconnect'
+  | 'fetch_failed';
 
 export interface MetricUnavailable {
   metric: MetricKey;
@@ -150,4 +153,9 @@ export const REQUIRED_INSIGHTS_SCOPES: Record<SocialPlatform, string[]> = {
 };
 
 export type ResolutionStatus =
-  'pending' | 'resolved' | 'unowned' | 'unsupported' | 'unauthorized' | 'error';
+  | 'pending'
+  | 'resolved'
+  | 'unowned'
+  | 'unsupported'
+  | 'unauthorized'
+  | 'error';

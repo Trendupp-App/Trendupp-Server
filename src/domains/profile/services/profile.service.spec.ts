@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ConflictException } from '@nestjs/common';
-import { Bank } from '../../users/entities/bank.entity';
 import { ProfileService } from './profile.service';
 import { UsersService } from '../../users/services/users.service';
 import { S3Service } from '../../../integration/s3/s3.service';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { User } from '../../users/entities/user.entity';
 import { UpdatePersonalInfoDto } from '../dtos/update-personal-info.dto';
 import { UpdateProfileSocialsDto } from '../dtos/update-socials.dto';
@@ -30,6 +30,7 @@ describe('ProfileService', () => {
   let bankRepositoryMock: jest.Mocked<BankRepository>;
   let supportTicketRepositoryMock: jest.Mocked<SupportTicketRepository>;
   let issueCategoryRepositoryMock: jest.Mocked<IssueCategoryRepository>;
+  let startbuttonServiceMock: jest.Mocked<StartbuttonService>;
 
   beforeEach(async () => {
     usersServiceMock = {
@@ -61,6 +62,15 @@ describe('ProfileService', () => {
       findById: jest.fn(),
     } as unknown as jest.Mocked<IssueCategoryRepository>;
 
+    startbuttonServiceMock = {
+      verifyBankAccount: jest.fn(),
+      getBanks: jest.fn(),
+      initializePayment: jest.fn(),
+      verifyTransaction: jest.fn(),
+      requestPayout: jest.fn(),
+      initiateRefund: jest.fn(),
+    } as unknown as jest.Mocked<StartbuttonService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProfileService,
@@ -69,6 +79,7 @@ describe('ProfileService', () => {
         { provide: BankRepository, useValue: bankRepositoryMock },
         { provide: SupportTicketRepository, useValue: supportTicketRepositoryMock },
         { provide: IssueCategoryRepository, useValue: issueCategoryRepositoryMock },
+        { provide: StartbuttonService, useValue: startbuttonServiceMock },
       ],
     }).compile();
 
@@ -372,42 +383,67 @@ describe('ProfileService', () => {
   });
 
   describe('updatePayout', () => {
-    it('should update payout bank details if bankId exists', async () => {
-      const mockUser = { id: 'u1' } as unknown as User;
+    it('should verify and update payout bank details if bankCode and account number provided', async () => {
+      const mockUser = { id: 'u1', firstName: 'Alex', lastName: 'Okafor' } as unknown as User;
       usersServiceMock.findOne.mockResolvedValue(mockUser);
       usersServiceMock.update.mockResolvedValue(mockUser);
       usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
-      bankRepositoryMock.findById.mockResolvedValue({ id: 'bank-uuid-123' } as unknown as Bank);
+      startbuttonServiceMock.verifyBankAccount.mockResolvedValue({
+        accountName: 'ALEX OKAFOR',
+        accountNumber: '0123456789',
+      });
 
       const dto: UpdateProfilePayoutDto = {
-        bankId: 'bank-uuid-123',
+        bankCode: '044',
+        bankName: 'Access Bank',
         bankAccountNumber: '0123456789',
-        bankAccountName: 'Test Account Name',
       };
 
       const result = await service.updatePayout('u1', dto);
 
-      expect(bankRepositoryMock.findById).toHaveBeenCalledWith('bank-uuid-123');
+      expect(startbuttonServiceMock.verifyBankAccount).toHaveBeenCalledWith(
+        '044',
+        '0123456789',
+        'NG',
+      );
       expect(usersServiceMock.update).toHaveBeenCalledWith('u1', {
-        bankId: 'bank-uuid-123',
+        bankCode: '044',
+        bankName: 'Access Bank',
         bankAccountNumber: '0123456789',
-        bankAccountName: 'Test Account Name',
+        bankAccountName: 'ALEX OKAFOR',
       });
       expect(result).toBeDefined();
     });
 
-    it('should throw NotFoundException if bankId is not found', async () => {
-      const mockUser = { id: 'u1' } as unknown as User;
+    it('should throw ConflictException if bank account cannot be verified', async () => {
+      const mockUser = { id: 'u1', firstName: 'Alex', lastName: 'Okafor' } as unknown as User;
       usersServiceMock.findOne.mockResolvedValue(mockUser);
-      bankRepositoryMock.findById.mockResolvedValue(null);
+      startbuttonServiceMock.verifyBankAccount.mockRejectedValue(new Error('Invalid account'));
 
       const dto: UpdateProfilePayoutDto = {
-        bankId: 'invalid-bank-uuid',
+        bankCode: '044',
+        bankName: 'Access Bank',
         bankAccountNumber: '0123456789',
-        bankAccountName: 'Test Account Name',
       };
 
-      await expect(service.updatePayout('u1', dto)).rejects.toThrow(NotFoundException);
+      await expect(service.updatePayout('u1', dto)).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw ConflictException if account name does not match user name', async () => {
+      const mockUser = { id: 'u1', firstName: 'John', lastName: 'Doe' } as unknown as User;
+      usersServiceMock.findOne.mockResolvedValue(mockUser);
+      startbuttonServiceMock.verifyBankAccount.mockResolvedValue({
+        accountName: 'ALEX OKAFOR',
+        accountNumber: '0123456789',
+      });
+
+      const dto: UpdateProfilePayoutDto = {
+        bankCode: '044',
+        bankName: 'Access Bank',
+        bankAccountNumber: '0123456789',
+      };
+
+      await expect(service.updatePayout('u1', dto)).rejects.toThrow(ConflictException);
     });
   });
 

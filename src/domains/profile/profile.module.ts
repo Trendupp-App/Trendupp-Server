@@ -10,9 +10,14 @@ import { SupportTicket } from './entities/support-ticket.entity';
 import { SupportTicketRepository } from './repository/support-ticket.repository';
 import { IssueCategory } from './entities/issue-category.entity';
 import { IssueCategoryRepository } from './repository/issue-category.repository';
+import { StartbuttonModule } from '../../integration/payment-gateway/startbutton.module';
 
 @Module({
-  imports: [UsersModule, SequelizeModule.forFeature([SupportTicket, IssueCategory])],
+  imports: [
+    UsersModule,
+    StartbuttonModule,
+    SequelizeModule.forFeature([SupportTicket, IssueCategory]),
+  ],
   controllers: [OnboardingController, ProfileController],
   providers: [
     OnboardingService,

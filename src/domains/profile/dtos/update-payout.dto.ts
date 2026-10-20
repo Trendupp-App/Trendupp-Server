@@ -1,14 +1,22 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Length, IsUUID } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 
 export class UpdateProfilePayoutDto {
   @ApiProperty({
-    description: 'ID of the bank (UUID)',
-    example: 'a63b0a70-761e-42c2-8b5e-ca92c687e1a3',
+    description: 'Bank code from Startbutton',
+    example: '044',
   })
-  @IsUUID('4')
+  @IsString()
   @IsNotEmpty()
-  bankId: string;
+  bankCode: string;
+
+  @ApiProperty({
+    description: 'Name of the bank from Startbutton',
+    example: 'Access Bank',
+  })
+  @IsString()
+  @IsNotEmpty()
+  bankName: string;
 
   @ApiProperty({
     description: 'Bank account number',
@@ -19,11 +27,12 @@ export class UpdateProfilePayoutDto {
   @Length(10, 10, { message: 'Account number must be exactly 10 digits' })
   bankAccountNumber: string;
 
-  @ApiProperty({
-    description: 'Verified bank account holder name',
-    example: 'Alex Okafor',
+  @ApiPropertyOptional({
+    description:
+      'Verified bank account holder name — auto-populated from Startbutton verification response. Not required from the frontend.',
+    example: 'ALEX OKAFOR',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankAccountName: string;
+  bankAccountName?: string;
 }

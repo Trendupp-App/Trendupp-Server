@@ -9,8 +9,8 @@ module.exports = {
     // NGN → Pandascrow routes via Paystack (3%)
     // USD → Pandascrow routes via Stripe (5%)
     const fees = [
-      { name: 'Pandascrow Gateway Fee (NGN)', type: 'percentage', value: 0.03 },
-      { name: 'Pandascrow Gateway Fee (USD)', type: 'percentage', value: 0.05 },
+      { name: 'Startbutton Gateway Fee (NGN)', type: 'percentage', value: 0.03 },
+      { name: 'Startbutton Gateway Fee (USD)', type: 'percentage', value: 0.05 },
     ].map((fee) => ({
       id: crypto.randomUUID(),
       name: fee.name,
@@ -28,7 +28,7 @@ module.exports = {
     await queryInterface.bulkDelete(
       'fees',
       {
-        name: ['Pandascrow Gateway Fee (NGN)', 'Pandascrow Gateway Fee (USD)'],
+        name: ['Startbutton Gateway Fee (NGN)', 'Startbutton Gateway Fee (USD)'],
       },
       {},
     );

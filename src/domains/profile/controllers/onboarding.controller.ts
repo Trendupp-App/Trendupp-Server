@@ -147,28 +147,58 @@ export class OnboardingController {
   @Get('banks')
   @Throttle({ default: THROTTLE_LIMITS.LOOKUP })
   @ApiOperation({
-    summary: 'Get all banks, optionally filtered by region, country, or search term',
+    summary: 'Get all banks, optionally filtered by countryCode, currency, type, or search term',
   })
   @ApiQuery({
-    name: 'region',
+    name: 'currency',
     required: false,
     type: String,
-    description: 'Filter banks by continent/region (e.g. Africa)',
+    description: 'Filter banks by payout currency (e.g. NGN, GHS, KES, ZAR, USD). Default: NGN',
+    example: 'NGN',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: false,
+    type: String,
+    description: 'Filter banks by 2-letter ISO country code (e.g. NG, GH, KE, ZA)',
+    example: 'NG',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['bank', 'mobile_money'],
+    description: 'Channel type: bank or mobile_money. Default: bank',
   })
   @ApiQuery({
     name: 'country',
     required: false,
     type: String,
-    description: 'Filter banks by country name (e.g. Nigeria)',
+    description: '[Deprecated] Legacy filter by country name or code (e.g. Nigeria or NG)',
+  })
+  @ApiQuery({
+    name: 'region',
+    required: false,
+    type: String,
+    description: '[Deprecated] Legacy filter by continent/region (e.g. Africa)',
   })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search banks by name' })
   @ApiResponse({ status: 200, description: 'List of banks retrieved' })
   async getBanks(
+    @Query('currency') currency?: string,
+    @Query('countryCode') countryCode?: string,
+    @Query('type') type?: string,
     @Query('region') region?: string,
     @Query('country') country?: string,
     @Query('search') search?: string,
   ) {
-    return this.onboardingService.getBanks({ region, country, search });
+    return this.onboardingService.getBanks({
+      currency,
+      countryCode,
+      type,
+      region,
+      country,
+      search,
+    });
   }
 
   @Get('marketing-budgets')

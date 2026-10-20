@@ -13,16 +13,32 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { TimelineService } from '../services/timeline.service';
-import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { CampaignRefund } from '../entities/campaign-refund.entity';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 
-interface PandascrowWebhookPayload {
+interface StartbuttonWebhookPayload {
   event: string;
   data: {
-    escrow_id?: string | number;
-    [key: string]: any;
+    reference?: string;
+    transactionReference?: string;
+    userTransactionReference?: string;
+    transaction_reference?: string;
+    user_transaction_reference?: string;
+    refundReference?: string;
+    transaction?: {
+      transactionReference?: string;
+      userTransactionReference?: string;
+      transaction_reference?: string;
+      user_transaction_reference?: string;
+      reference?: string;
+      status?: string;
+      [key: string]: unknown;
+    };
+    reason?: string;
+    [key: string]: unknown;
   };
-  timestamp: number;
+  timestamp?: number;
 }
 
 @ApiTags('webhooks')
@@ -33,17 +49,17 @@ export class WebhooksController {
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly timelineService: TimelineService,
-    private readonly pandascrowService: PandascrowService,
+    private readonly startbuttonService: StartbuttonService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Post('pandascrow')
+  @Post('startbutton')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Handle Pandascrow webhook events' })
+  @ApiOperation({ summary: 'Handle Startbutton webhook events' })
   @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
-  async handlePandascrowWebhook(
+  async handleStartbuttonWebhook(
     @Req() req: Request & { rawBody?: Buffer },
-    @Headers('x-pandascrow-signature') signature: string,
+    @Headers('x-startbutton-signature') signature: string,
   ) {
     if (!req.rawBody) {
       this.logger.error('Raw request body is missing. Verify rawBody options in main.ts.');
@@ -51,27 +67,21 @@ export class WebhooksController {
     }
 
     const rawBodyString = req.rawBody.toString('utf8');
-    let payload: PandascrowWebhookPayload;
+    let payload: StartbuttonWebhookPayload;
     try {
-      payload = JSON.parse(rawBodyString) as PandascrowWebhookPayload;
+      payload = JSON.parse(rawBodyString) as StartbuttonWebhookPayload;
     } catch {
       throw new BadRequestException('Invalid JSON payload');
     }
 
-    const { event, data, timestamp } = payload;
+    const { event, data } = payload;
 
     if (!event || !data) {
       throw new BadRequestException('Invalid webhook payload structure');
     }
 
     // Verify signature
-    const isValid = this.pandascrowService.verifyWebhookSignature(
-      req.rawBody,
-      signature,
-      event,
-      data,
-      timestamp,
-    );
+    const isValid = this.startbuttonService.verifyWebhookSignature(req.rawBody, signature);
 
     if (!isValid) {
       this.logger.warn(`Invalid signature detected for event: ${event}`);
@@ -82,12 +92,35 @@ export class WebhooksController {
 
     // Process events
     switch (event) {
-      case 'escrow.paid':
-        await this.handleEscrowPaid(data);
+      case 'collection.completed':
+      case 'collection.verified':
+      case 'charge.success':
+      case 'payment.successful': // Handle possible event names
+        await this.handlePaymentSuccess(data);
         break;
 
-      case 'escrow.completed':
-        await this.handleEscrowCompleted(data);
+      case 'transfer.completed':
+      case 'transfer.success':
+      case 'transfer.successful':
+        await this.handleTransferSuccess(data);
+        break;
+
+      case 'transfer.failed':
+      case 'transfer.reversed':
+      case 'transfer.rejected':
+        await this.handleTransferFailed(data);
+        break;
+
+      case 'refund.completed':
+      case 'refund.success':
+      case 'refund.successful':
+        await this.handleRefundSuccess(data);
+        break;
+
+      case 'refund.failed':
+      case 'refund.reversed':
+      case 'refund.rejected':
+        await this.handleRefundFailed(data);
         break;
 
       default:
@@ -101,21 +134,39 @@ export class WebhooksController {
     };
   }
 
-  private async handleEscrowPaid(data: { escrow_id?: string | number }) {
-    const escrowId = String(data.escrow_id);
-    this.logger.log(`Escrow paid hook received for escrowId: ${escrowId}`);
+  private async handlePaymentSuccess(data: StartbuttonWebhookPayload['data']) {
+    const userReference =
+      data.transaction?.userTransactionReference ||
+      data.transaction?.reference ||
+      data.userTransactionReference ||
+      data.reference;
+    const gatewayReference = data.transaction?.transactionReference || data.transactionReference;
 
-    const payment = await this.campaignRepository.findPaymentByEscrowId(escrowId);
+    const reference = userReference || gatewayReference;
+    this.logger.log(
+      `Payment success hook received for reference: ${reference} (userRef: ${userReference}, gatewayRef: ${gatewayReference})`,
+    );
+
+    if (!reference) {
+      this.logger.warn(`Payment success hook received without reference: ${JSON.stringify(data)}`);
+      return;
+    }
+
+    const payment = await this.campaignRepository.findPaymentByEscrowId(reference); // Using escrowId to store the Startbutton reference
     if (!payment) {
-      this.logger.warn(`No payment record found for escrow ID: ${escrowId}`);
+      this.logger.warn(`No payment record found for reference: ${reference}`);
       return;
     }
 
     // Update payment
-    await payment.update({
+    const paymentUpdates: Record<string, unknown> = {
       paymentStatus: 'paid',
       escrowStatus: 'funded',
-    });
+    };
+    if (gatewayReference) {
+      paymentUpdates.transactionRef = gatewayReference;
+    }
+    await payment.update(paymentUpdates);
 
     // Transition campaign: pending_payment → live
     const campaign = await this.campaignRepository.findById(payment.campaignId);
@@ -175,32 +226,256 @@ export class WebhooksController {
     }
   }
 
-  private async handleEscrowCompleted(data: { escrow_id?: string | number }) {
-    const escrowId = String(data.escrow_id);
-    this.logger.log(`Escrow completed hook received for escrowId: ${escrowId}`);
+  private extractReference(data: StartbuttonWebhookPayload['data']): string | undefined {
+    const rawRef =
+      data.transaction?.userTransactionReference ||
+      data.transaction?.reference ||
+      data.transaction?.user_transaction_reference ||
+      data.transaction?.transaction_reference ||
+      data.userTransactionReference ||
+      data.reference ||
+      data.user_transaction_reference ||
+      data.transaction_reference ||
+      data.transaction?.transactionReference ||
+      data.transactionReference;
+    return typeof rawRef === 'string' ? rawRef : undefined;
+  }
 
-    const payment = await this.campaignRepository.findPaymentByEscrowId(escrowId);
-    if (!payment) {
-      this.logger.warn(`No payment record found for escrow ID: ${escrowId}`);
+  private async handleTransferSuccess(data: StartbuttonWebhookPayload['data']) {
+    const reference = this.extractReference(data);
+    this.logger.log(`Transfer success hook received for reference: ${reference}`);
+    if (!reference) return;
+
+    // Extract the standard 36-character UUID (8-4-4-4-12) from the reference
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    const releaseId: string = uuidMatch ? uuidMatch[0] : reference;
+
+    const release = await this.campaignRepository.findReleaseById(releaseId);
+    if (!release) {
+      this.logger.warn(
+        `No payment release found for reference: ${reference} (extracted ID: ${releaseId})`,
+      );
       return;
     }
 
-    // Mark the payment's escrow status as completed
-    await payment.update({
-      escrowStatus: 'completed',
-    });
-    this.logger.log(`Escrow ${escrowId} status updated to completed.`);
-
-    // Unblock any payment_release rows that were parked awaiting escrow release.
-    // This transitions them from 'escrow_pending' → 'pending' so the payout cron
-    // picks them up on the next run.
-    const unblocked = await this.campaignRepository.unblockEscrowPendingReleases(
-      payment.campaignId,
-    );
-    if (unblocked > 0) {
-      this.logger.log(
-        `Unblocked ${unblocked} payment release(s) for campaign ${payment.campaignId} — now queued for payout.`,
-      );
+    if (release.status === 'released') {
+      this.logger.log(`Release ${release.id} is already marked as released.`);
+      return;
     }
+
+    await release.update({
+      status: 'released',
+      errorDetails: null,
+    });
+    this.logger.log(
+      `Successfully processed transfer success webhook for release ID: ${release.id}`,
+    );
+
+    const campaign = await this.campaignRepository.findById(release.campaignId);
+    await this.notificationsService.notify({
+      type: 'payout.released',
+      recipientId: release.creatorId,
+      data: {
+        campaignId: release.campaignId,
+        campaignTitle: campaign?.title ?? 'your campaign',
+        releaseId: release.id,
+        amount: Number(release.amount),
+        currency: release.currency,
+      },
+      dedupeKey: release.id,
+    });
+
+    // Check if the campaign can be completed
+    await this.checkAndCompleteCampaign(release.campaignId);
+  }
+
+  private async handleTransferFailed(data: StartbuttonWebhookPayload['data']) {
+    const reference = this.extractReference(data);
+    const reason =
+      (typeof data.reason === 'string' && data.reason) || 'Startbutton transfer failed';
+    this.logger.log(`Transfer failed hook received for reference: ${reference}, reason: ${reason}`);
+    if (!reference) return;
+
+    // Extract the standard 36-character UUID (8-4-4-4-12) from the reference
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    const releaseId: string = uuidMatch ? uuidMatch[0] : reference;
+
+    const release = await this.campaignRepository.findReleaseById(releaseId);
+    if (!release) {
+      this.logger.warn(
+        `No payment release found for reference: ${reference} (extracted ID: ${releaseId})`,
+      );
+      return;
+    }
+
+    if (release.status === 'failed') {
+      return;
+    }
+
+    await release.update({
+      status: 'failed',
+      errorDetails: reason,
+    });
+
+    const campaign = await this.campaignRepository.findById(release.campaignId).catch(() => null);
+    const failureData = {
+      campaignId: release.campaignId,
+      campaignTitle: campaign?.title ?? 'your campaign',
+      releaseId: release.id,
+      amount: Number(release.amount),
+      currency: release.currency,
+      reason,
+    };
+
+    await this.notificationsService.notify({
+      type: 'payout.failed',
+      recipientId: release.creatorId,
+      data: failureData,
+      dedupeKey: `${release.id}:failed`,
+    });
+    await this.notificationsService.notify({
+      type: 'payout.failed',
+      recipientRole: 'finance_admin',
+      data: failureData,
+      dedupeKey: `${release.id}:failed:finance`,
+    });
+  }
+
+  /**
+   * Checks if all payment releases and submissions for this campaign are done.
+   * If yes, updates campaign status to 'completed'.
+   */
+  private async checkAndCompleteCampaign(campaignId: string): Promise<void> {
+    try {
+      const pendingCount = await this.campaignRepository.countPendingReleases(campaignId);
+      if (pendingCount > 0) return;
+
+      const activeSubmissions = await this.campaignRepository.countActiveSubmissions(campaignId);
+      if (activeSubmissions > 0) return;
+
+      const campaign = await this.campaignRepository.findById(campaignId);
+      if (campaign && campaign.status !== 'completed') {
+        await campaign.update({ status: 'completed' });
+        this.logger.log(`Campaign ID: ${campaignId} has been successfully completed.`);
+
+        await this.notificationsService.notify({
+          type: 'campaign.completed',
+          recipientId: campaign.brandId,
+          data: { campaignId, campaignTitle: campaign.title },
+          dedupeKey: `${campaignId}:completed`,
+        });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error checking completion status for campaign ${campaignId}: ${message}`);
+    }
+  }
+
+  private async handleRefundSuccess(data: StartbuttonWebhookPayload['data']) {
+    const reference = this.extractReference(data);
+    this.logger.log(`Refund success hook received for reference: ${reference}`);
+    if (!reference) return;
+
+    let refund: CampaignRefund | null = null;
+
+    // 1. Check if reference contains a UUID that matches a refund ID directly
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    if (uuidMatch && uuidMatch[0]) {
+      refund = await this.campaignRepository.findRefundById(uuidMatch[0]);
+    }
+
+    // 2. If not found by refund ID, look up the payment using the reference to get the campaignId
+    if (!refund) {
+      const payment = await this.campaignRepository.findPaymentByEscrowId(reference);
+      if (payment?.campaignId) {
+        refund = await this.campaignRepository.findRefundByCampaignId(payment.campaignId);
+      }
+    }
+
+    if (!refund) {
+      this.logger.warn(`No campaign refund found for reference: ${reference}`);
+      return;
+    }
+
+    if (refund.status === 'completed') {
+      this.logger.log(`Refund ${refund.id} is already marked as completed.`);
+      return;
+    }
+
+    const refundReference =
+      (typeof data.refundReference === 'string' && data.refundReference) || reference;
+
+    await refund.update({
+      status: 'completed',
+      refundReference,
+      errorDetails: null,
+    });
+    this.logger.log(`Successfully processed refund success webhook for refund ID: ${refund.id}`);
+
+    const campaign = await this.campaignRepository.findById(refund.campaignId);
+    await this.notificationsService.notify({
+      type: 'refund.sent',
+      recipientId: refund.brandId,
+      data: {
+        campaignId: refund.campaignId,
+        campaignTitle: campaign?.title ?? 'your campaign',
+        amount: Number(refund.amount),
+        currency: refund.currency,
+      },
+      dedupeKey: `refund-sent:${refund.id}`,
+    });
+  }
+
+  private async handleRefundFailed(data: StartbuttonWebhookPayload['data']) {
+    const reference = this.extractReference(data);
+    const reason = (typeof data.reason === 'string' && data.reason) || 'Startbutton refund failed';
+    this.logger.log(`Refund failed hook received for reference: ${reference}, reason: ${reason}`);
+    if (!reference) return;
+
+    let refund: CampaignRefund | null = null;
+    const uuidMatch = reference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    if (uuidMatch && uuidMatch[0]) {
+      refund = await this.campaignRepository.findRefundById(uuidMatch[0]);
+    }
+    if (!refund) {
+      const payment = await this.campaignRepository.findPaymentByEscrowId(reference);
+      if (payment?.campaignId) {
+        refund = await this.campaignRepository.findRefundByCampaignId(payment.campaignId);
+      }
+    }
+
+    if (!refund) {
+      this.logger.warn(`No campaign refund found for reference: ${reference}`);
+      return;
+    }
+
+    if (refund.status === 'failed') return;
+
+    await refund.update({
+      status: 'failed',
+      errorDetails: reason,
+    });
+
+    const campaign = await this.campaignRepository.findById(refund.campaignId);
+    await this.notificationsService.notify({
+      type: 'refund.failed',
+      recipientId: refund.brandId,
+      data: {
+        campaignId: refund.campaignId,
+        campaignTitle: campaign?.title ?? 'your campaign',
+        amount: Number(refund.amount),
+        currency: refund.currency,
+        reason,
+      },
+      dedupeKey: `refund-failed:${refund.id}`,
+    });
   }
 }

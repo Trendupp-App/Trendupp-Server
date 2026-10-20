@@ -4,13 +4,13 @@ import { IsNotEmpty, IsIn, IsString } from 'class-validator';
 export class ReviewApplicationDto {
   @ApiProperty({
     description: 'The review decision status for the campaign application',
-    example: 'accepted',
-    enum: ['accepted', 'rejected'],
+    example: 'selected',
+    enum: ['selected', 'accepted', 'rejected', 'pending'],
   })
   @IsString()
   @IsNotEmpty()
-  @IsIn(['accepted', 'rejected'], {
-    message: 'status must be either accepted or rejected',
+  @IsIn(['selected', 'accepted', 'rejected', 'pending'], {
+    message: 'status must be selected, accepted, rejected, or pending',
   })
   status: string;
 }
