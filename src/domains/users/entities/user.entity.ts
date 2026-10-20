@@ -245,6 +245,12 @@ export class User extends BaseEntity<User> {
   @BelongsTo(() => Bank)
   declare bank?: Bank;
 
+  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_code' })
+  declare bankCode?: string;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'bank_name' })
+  declare bankName?: string;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'bank_account_number' })
   declare bankAccountNumber?: string;
 
@@ -426,7 +432,7 @@ export class User extends BaseEntity<User> {
       }
 
       // 5. Payout Details: 20%
-      if (this.bankAccountNumber && (this.bankAccountName || this.bankId || this.bank)) {
+      if (this.bankAccountNumber && (this.bankAccountName || this.bankCode)) {
         percentage += 20;
       }
 
@@ -487,7 +493,7 @@ export class User extends BaseEntity<User> {
       // Step 3: socials
       socials: Object.values(this.socialsConnected).some((connected) => connected),
       // Step 4: payout
-      payout: !!(this.bankId && this.bankAccountNumber && this.bankAccountName),
+      payout: !!(this.bankCode && this.bankAccountNumber && this.bankAccountName),
     };
   }
 
@@ -521,9 +527,12 @@ export class User extends BaseEntity<User> {
           country: this.bank.country,
           region: this.bank.region,
         }
-      : null;
+      : {
+          code: this.bankCode || null,
+          name: this.bankName || null,
+        };
 
-    values['bankName'] = this.bank ? this.bank.name : null;
+    values['bankName'] = this.bankName || (this.bank ? this.bank.name : null);
 
     values['onboardingPercentage'] = this.onboardingPercentage;
     values['onboardingStepsCompleted'] = this.onboardingStepsCompleted;

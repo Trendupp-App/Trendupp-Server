@@ -43,6 +43,7 @@ import { CreateReviewDto } from '../dtos/create-review.dto';
 import { RespondToCommentDto } from '../dtos/respond-to-comment.dto';
 import { SubmitSocialImpactLiveLinkDto } from '../dtos/submit-social-impact-livelink.dto';
 import { QuerySocialImpactCampaignsDto } from '../dtos/social-impact-query.dto';
+import { MockVaPaymentDto } from '../dtos/mock-va-payment.dto';
 import { Campaign } from '../entities/campaign.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -239,7 +240,7 @@ export class CampaignsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Submit campaign draft and initialize Pandascrow payment escrow (brand owner only)',
+    summary: 'Submit campaign draft and initialize Startbutton payment escrow (brand owner only)',
   })
   @ApiResponse({ status: 200, description: 'Campaign submitted and escrow initiated successfully' })
   async submit(@Param('id') id: string, @CurrentUser() user: User) {
@@ -257,12 +258,33 @@ export class CampaignsController {
   @Throttle({ default: THROTTLE_LIMITS.CAMPAIGN_CREATE })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Verify campaign payment via Pandascrow status lookup (brand owner only)',
+    summary: 'Verify campaign payment via Startbutton status lookup (brand owner only)',
   })
   @ApiQuery({
     name: 'escrowId',
     required: false,
-    description: 'Optional Pandascrow escrow ID (can also be passed as escrow_id or in POST body)',
+    description:
+      'Optional Startbutton reference / escrow ID (can also be passed as reference or in POST body)',
+  })
+  @ApiQuery({
+    name: 'escrow_id',
+    required: false,
+    description: 'Optional alias for escrowId',
+  })
+  @ApiQuery({
+    name: 'transaction_ref',
+    required: false,
+    description: 'Optional Startbutton transaction reference',
+  })
+  @ApiQuery({
+    name: 'trxref',
+    required: false,
+    description: 'Optional transaction reference alias',
+  })
+  @ApiQuery({
+    name: 'reference',
+    required: false,
+    description: 'Optional transaction reference',
   })
   @ApiResponse({ status: 200, description: 'Campaign payment verified successfully' })
   async verifyPayment(
@@ -292,6 +314,21 @@ export class CampaignsController {
       bodyRef;
     const result = await this.campaignsService.verifyPayment(id, user.id, targetEscrowId);
     return result;
+  }
+
+  @Post('mock-va-collection')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '🧪 Sandbox Simulation: Simulate bank transfer to virtual account',
+    description:
+      'Calls Startbutton Sandbox mock-va-collection API using the configured STARTBUTTON_PUBLIC_KEY to simulate customer bank payment. Startbutton will update the checkout screen to Successful and fire the webhook.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mock bank transfer processed successfully by Startbutton',
+  })
+  async mockVirtualAccountPayment(@Body() dto: MockVaPaymentDto) {
+    return this.campaignsService.mockVirtualAccountPayment(dto);
   }
 
   @Get(':id/activity-timeline')
@@ -538,11 +575,29 @@ export class CampaignsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Validate selected creators total fees against available campaign pool budget',
+    summary:'[deprecated]...Validate selected creators total fees against available campaign pool budget',
   })
   @ApiResponse({ status: 200, description: 'Creator selection budget validation check completed' })
   validateSelection(@Param('id') campaignId: string, @Body() dto: ValidateSelectionDto) {
     return this.campaignsService.validateCreatorSelection(campaignId, dto.applicationIds);
+  }
+
+  @Post(':id/activate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner', 'brand', 'super_admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Activate campaign and lock in selected creators (brand owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaign activated and timelines started' })
+  async activateCampaign(@Param('id') campaignId: string, @CurrentUser() user: User) {
+    const callerId = user.id;
+    const campaign = await this.campaignsService.activateCampaign(campaignId, callerId);
+    return {
+      message: 'Campaign has been activated successfully! SLA timelines have started.',
+      campaign,
+    };
   }
 
   @Patch(':id/applications')
@@ -552,7 +607,7 @@ export class CampaignsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Batch review (accept/reject) creator campaign applications (brand owner only)',
+    summary: '[deprecated]...Batch review (accept/reject) creator campaign applications (brand owner only)',
   })
   @ApiResponse({ status: 200, description: 'Applications reviewed successfully' })
   async reviewApplicationsBatch(
@@ -598,8 +653,12 @@ export class CampaignsController {
       dto.status,
       callerRole,
     );
+    const action =
+      application.status === 'pending' && dto.status === 'selected'
+        ? 'unselected'
+        : application.status;
     return {
-      message: `Application has been ${dto.status} successfully.`,
+      message: `Application has been ${action} successfully.`,
       application,
     };
   }

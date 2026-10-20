@@ -22,7 +22,7 @@ import { CampaignReview } from '../entities/campaign-review.entity';
 import { CampaignComment } from '../entities/campaign-comment.entity';
 import { User } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/services/users.service';
-import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { TimelineService } from './timeline.service';
@@ -33,6 +33,7 @@ import { BrandCommissionTier } from '../../admin/entities/brand-commission-tier.
 
 import { UserTokenLedger } from '../../users/entities/user-token-ledger.entity';
 import { QuerySocialImpactCampaignsDto } from '../dtos/social-impact-query.dto';
+import { MockVaPaymentDto } from '../dtos/mock-va-payment.dto';
 
 @Injectable()
 export class CampaignsService {
@@ -41,7 +42,7 @@ export class CampaignsService {
     private readonly campaignRepository: CampaignRepository,
     private readonly s3Service: S3Service,
     private readonly usersService: UsersService,
-    private readonly pandascrowService: PandascrowService,
+    private readonly startbuttonService: StartbuttonService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
     private readonly timelineService: TimelineService,
@@ -69,6 +70,7 @@ export class CampaignsService {
     campaignBudget: number;
     trenduppFee: number;
     vat: number;
+    startbuttonFee: number;
     pandascrowFee: number;
     totalToPay: number;
     commissionRate: number;
@@ -118,10 +120,10 @@ export class CampaignsService {
     //    The gateway processes totalToPay through the checkout, so fee is calculated on totalToPay.
     //    Trendupp absorbs this fee out of its commission (it is NOT added to brand's totalToPay).
     const feeKey =
-      currency === 'NGN' ? 'Pandascrow Gateway Fee (NGN)' : 'Pandascrow Gateway Fee (USD)';
+      currency === 'NGN' ? 'Startbutton Gateway Fee (NGN)' : 'Startbutton Gateway Fee (USD)';
     const feeRecord = await this.feeModel.findOne({ where: { name: feeKey } });
-    const pandascrowRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
-    const pandascrowFee = Math.round(totalToPay * pandascrowRate);
+    const startbuttonRate = feeRecord?.value ?? (currency === 'NGN' ? 0.03 : 0.05); // safe fallback
+    const startbuttonFee = Math.round(totalToPay * startbuttonRate);
 
     const breakdownItems: { name: string; type: string; value: number; amount: number }[] = [
       {
@@ -137,10 +139,10 @@ export class CampaignsService {
         amount: vat,
       },
       {
-        name: `Pandascrow Gateway Fee (${currency})`,
+        name: `Startbutton Gateway Fee (${currency})`,
         type: 'percentage',
-        value: pandascrowRate,
-        amount: pandascrowFee,
+        value: startbuttonRate,
+        amount: startbuttonFee,
       },
     ];
 
@@ -148,11 +150,12 @@ export class CampaignsService {
       campaignBudget,
       trenduppFee,
       vat,
-      pandascrowFee,
+      startbuttonFee,
+      pandascrowFee: startbuttonFee,
       totalToPay,
       commissionRate: trenduppRate,
       vatRate,
-      gatewayRate: pandascrowRate,
+      gatewayRate: startbuttonRate,
       breakdownItems,
     };
   }
@@ -437,7 +440,7 @@ export class CampaignsService {
       throw new NotFoundException('Brand user profile not found');
     }
 
-    const hasBankDetails = brand.bankId && brand.bankAccountNumber && brand.bankAccountName;
+    const hasBankDetails = brand.bankCode && brand.bankAccountNumber && brand.bankAccountName;
     if (!hasBankDetails) {
       throw new ForbiddenException('kindly add your refund details in the profile section');
     }
@@ -503,29 +506,16 @@ export class CampaignsService {
 
     const breakdown = await this.calculateBreakdown(campaign.totalBudget, campaign.currency);
 
-    // Initialize escrow on Pandascrow
-    const timelineObj = campaign.timeline as
-      Record<string, { endedDate?: string }> | null | undefined;
-    const endedDateStr = timelineObj?.stage1_application_window?.endedDate;
-    const rawDeliveryDate = endedDateStr
-      ? new Date(endedDateStr)
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const deliveryDateStr = rawDeliveryDate.toISOString().split('T')[0];
-    const escrow = await this.pandascrowService.initializeEscrow({
+    // Initialize payment on Startbutton
+    const paymentInit = await this.startbuttonService.initializePayment({
       title: campaign.title,
       description: campaign.campaignBrief!,
       amount: breakdown.totalToPay,
       currency: campaign.currency, // Nigeria -> NGN, other countries -> USD
-      deliveryDate: deliveryDateStr,
-      buyerDetails: {
-        name: `${brand.firstName} ${brand.lastName}`,
-        email: 'trenduppfinance@gmail.com', //brand.email,
-        phone: '', //brand.phoneNumber || '',
-      },
-      sellerDetails: {
-        name: 'Trendupp Platform',
-        email: 'app@trendupp.com', //if the email is app@trendup it would default to the default email which is "app@trnedp" but if you change it that email would recieve the email
-        phone: '',
+      email: brand.email || 'trenduppfinance@gmail.com',
+      reference: `TRX-${campaign.id}-${Date.now()}`,
+      metadata: {
+        campaignId: campaign.id,
       },
     });
 
@@ -546,18 +536,18 @@ export class CampaignsService {
       totalAmount: breakdown.totalToPay,
       commissionFee: breakdown.trenduppFee,
       vatFee: breakdown.vat,
-      gatewayFee: breakdown.pandascrowFee,
+      gatewayFee: breakdown.startbuttonFee,
       commissionRate: breakdown.commissionRate,
       vatRate: breakdown.vatRate,
       gatewayRate: breakdown.gatewayRate,
       paymentStatus: 'pending',
       currency: campaign.currency,
-      paymentReference: escrow.transaction_ref,
-      escrowId: String(escrow.escrow_id),
-      paymentUrl: escrow.payment_url,
-      transactionRef: escrow.transaction_ref,
-      provider: escrow.provider,
-      escrowStatus: escrow.status,
+      paymentReference: paymentInit.payment_reference || paymentInit.transaction_ref,
+      escrowId: paymentInit.payment_reference || paymentInit.transaction_ref,
+      paymentUrl: paymentInit.payment_url,
+      transactionRef: paymentInit.gateway_ref || paymentInit.transaction_ref,
+      provider: paymentInit.provider,
+      escrowStatus: paymentInit.status,
     });
 
     const populated = await this.campaignRepository.findById(campaign.id);
@@ -620,14 +610,21 @@ export class CampaignsService {
 
     // ── 2. Pandascrow Status Check ──────────────────────────────────────────
     let isFunded = false;
+    let gatewayRef: string | undefined;
     const pandascrowLookupId = payment.escrowId || payment.transactionRef || escrowId;
 
     if (pandascrowLookupId) {
       try {
-        const escrowDetails = await this.pandascrowService.getEscrowDetails(pandascrowLookupId);
+        const txDetails = await this.startbuttonService.verifyTransaction(pandascrowLookupId);
+        gatewayRef = txDetails.gateway_ref;
 
-        const st = (escrowDetails.status || '').toLowerCase();
-        isFunded = st === 'funded' || st === 'paid' || st === 'completed';
+        const st = (txDetails.status || '').toLowerCase();
+        isFunded =
+          st === 'funded' ||
+          st === 'paid' ||
+          st === 'completed' ||
+          st === 'successful' ||
+          st === 'success';
       } catch (err) {
         this.logger.error(
           `[verifyPayment] Error fetching escrow details for lookupId ${pandascrowLookupId}: ${err}`,
@@ -642,10 +639,14 @@ export class CampaignsService {
     }
 
     // ── 3. Perform Updates & Send Notifications ─────────────────────────────
-    await payment.update({
+    const paymentUpdates: Record<string, unknown> = {
       paymentStatus: 'paid',
       escrowStatus: 'funded',
-    });
+    };
+    if (gatewayRef) {
+      paymentUpdates.transactionRef = gatewayRef;
+    }
+    await payment.update(paymentUpdates);
 
     const approvedAt = new Date();
     const initialTimeline = this.timelineService.initCampaignTimeline(approvedAt);
@@ -927,7 +928,7 @@ export class CampaignsService {
       );
     }
 
-    const hasBankDetails = creator.bankId && creator.bankAccountNumber && creator.bankAccountName;
+    const hasBankDetails = creator.bankCode && creator.bankAccountNumber && creator.bankAccountName;
     if (!hasBankDetails) {
       throw new ForbiddenException('kindly add your payout details in the profile section');
     }
@@ -1068,20 +1069,44 @@ export class CampaignsService {
       throw new NotFoundException('Application not found');
     }
 
-    // Attempting to undo an already-accepted application
-    if (application.status === 'accepted' && status === 'rejected') {
-      if (!isAdmin) {
-        throw new ForbiddenException(
-          `You do not have sufficient access to undo an accepted application. Please contact support.`,
-        );
+    if (status === 'selected') {
+      // Toggle behavior: if already selected, unselect and revert back to 'pending'
+      if (application.status === 'selected') {
+        await application.update({ status: 'pending' });
+        const updated = await this.campaignRepository.findApplicationById(appId);
+        if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+        return updated!;
       }
-      // Admin undo: revert application + campaign back to live
-      await application.update({ status: 'rejected' });
-      await campaign.update({ status: 'live' });
+
+      const validation = await this.validateCreatorSelection(campaignId, [appId]);
+      if (!validation.isValid) {
+        throw new BadRequestException(validation.message);
+      }
+      await application.update({ status: 'selected' });
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+      return updated!;
+    }
+
+    if (status === 'pending') {
+      await application.update({ status: 'pending' });
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+      return updated!;
+    }
+
+    if (status === 'accepted') {
+      const validation = await this.validateCreatorSelection(campaignId, [appId]);
+      if (!validation.isValid) {
+        throw new BadRequestException(validation.message);
+      }
+      const appUpdates: Record<string, any> = { status: 'accepted' };
+      appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
+      await application.update(appUpdates);
 
       await this.notificationsService.notify({
-        type: 'application.acceptance_undone',
-        recipientId: [application.creatorId, campaign.brandId],
+        type: 'application.accepted',
+        recipientId: application.creatorId,
         actorId: callerId,
         data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
       });
@@ -1091,35 +1116,44 @@ export class CampaignsService {
       return updated!;
     }
 
-    // Normal path: update application status
-    const appUpdates: Record<string, any> = { status };
-    if (status === 'accepted') {
-      appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
-    }
-    await application.update(appUpdates);
+    if (status === 'rejected') {
+      // Attempting to undo an already-accepted application
+      if (application.status === 'accepted') {
+        if (!isAdmin) {
+          throw new ForbiddenException(
+            `You do not have sufficient access to undo an accepted application. Please contact support.`,
+          );
+        }
+        // Admin undo: revert application + campaign back to live
+        await application.update({ status: 'rejected' });
+        await campaign.update({ status: 'live' });
 
-    // When a brand accepts an application, promote the campaign to active and update stage2 timeline
-    if (status === 'accepted') {
-      const updatedCampaignTimeline = this.timelineService.completeApplicationReview(
-        campaign.timeline,
-      );
-      await campaign.update({ status: 'active', timeline: updatedCampaignTimeline });
-    }
+        await this.notificationsService.notify({
+          type: 'application.acceptance_undone',
+          recipientId: [application.creatorId, campaign.brandId],
+          actorId: callerId,
+          data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
+        });
 
-    if (status === 'accepted' || status === 'rejected') {
+        const updated = await this.campaignRepository.findApplicationById(appId);
+        if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+        return updated!;
+      }
+
+      await application.update({ status: 'rejected' });
       await this.notificationsService.notify({
-        type: status === 'accepted' ? 'application.accepted' : 'application.rejected',
+        type: 'application.rejected',
         recipientId: application.creatorId,
         actorId: callerId,
         data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
       });
+
+      const updated = await this.campaignRepository.findApplicationById(appId);
+      if (updated?.campaign) await this.populateBreakdown(updated.campaign);
+      return updated!;
     }
 
-    const updated = await this.campaignRepository.findApplicationById(appId);
-    if (updated?.campaign) {
-      await this.populateBreakdown(updated.campaign);
-    }
-    return updated!;
+    return application;
   }
 
   async reviewCampaignApplicationsBatch(
@@ -1141,7 +1175,7 @@ export class CampaignsService {
       throw new ForbiddenException(`You do not own this campaign`);
     }
 
-    if (status === 'accepted') {
+    if (status === 'accepted' || status === 'selected') {
       const validation = await this.validateCreatorSelection(campaignId, applicationIds);
       if (!validation.isValid) {
         throw new BadRequestException(validation.message);
@@ -1254,6 +1288,20 @@ export class CampaignsService {
     }
 
     let selectedTotal = 0;
+
+    // Add already selected/accepted creators (excluding the ones currently being validated to avoid double-counting)
+    const allCampaignApps = await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    if (allCampaignApps) {
+      for (const app of allCampaignApps) {
+        if (app.status === 'selected' || app.status === 'accepted') {
+          if (!applicationIds.includes(app.id)) {
+            selectedTotal += app.feeRequest || 0;
+          }
+        }
+      }
+    }
+
+    // Add the new creators being validated
     for (const appId of applicationIds) {
       const app = await this.campaignRepository.findApplicationById(appId);
       if (app && app.campaignId === campaignId) {
@@ -1279,6 +1327,72 @@ export class CampaignsService {
       currency: campaign.currency,
       message,
     };
+  }
+
+  async activateCampaign(campaignId: string, callerId: string): Promise<Campaign> {
+    const campaign = await this.campaignRepository.findById(campaignId);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    if (campaign.brandId !== callerId) {
+      throw new ForbiddenException(`You do not own this campaign`);
+    }
+
+    if (campaign.status === 'active' || campaign.status === 'completed') {
+      throw new BadRequestException('Campaign is already active or completed');
+    }
+
+    const applications = await this.campaignRepository.findApplicationsByCampaignId(campaignId);
+    if (!applications || applications.length === 0) {
+      throw new BadRequestException('No applications found for this campaign');
+    }
+
+    const selectedApps = applications.filter(
+      (app) => app.status === 'selected' || app.status === 'accepted',
+    );
+    if (selectedApps.length === 0) {
+      throw new BadRequestException(
+        'You must select at least one creator before activating the campaign',
+      );
+    }
+
+    const selectedIds = selectedApps.map((a) => a.id);
+    const validation = await this.validateCreatorSelection(campaignId, selectedIds);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.message);
+    }
+
+    for (const app of selectedApps) {
+      const appUpdates: Record<string, any> = { status: 'accepted' };
+      appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
+      await app.update(appUpdates);
+
+      await this.notificationsService.notify({
+        type: 'application.accepted',
+        recipientId: app.creatorId,
+        actorId: callerId,
+        data: { campaignId, campaignTitle: campaign.title, applicationId: app.id },
+      });
+    }
+
+    const pendingApps = applications.filter((app) => app.status === 'pending');
+    for (const app of pendingApps) {
+      await app.update({ status: 'rejected' });
+      await this.notificationsService.notify({
+        type: 'application.rejected',
+        recipientId: app.creatorId,
+        actorId: callerId,
+        data: { campaignId, campaignTitle: campaign.title, applicationId: app.id },
+      });
+    }
+
+    const updatedCampaignTimeline = this.timelineService.completeApplicationReview(
+      campaign.timeline,
+    );
+    await campaign.update({ status: 'active', timeline: updatedCampaignTimeline });
+
+    return campaign;
   }
 
   async getMyApplications(creatorId: string): Promise<CampaignApplication[]> {
@@ -2469,6 +2583,10 @@ export class CampaignsService {
     }
 
     return socialApps;
+  }
+
+  async mockVirtualAccountPayment(dto: MockVaPaymentDto) {
+    return this.startbuttonService.mockVirtualAccountPayment(dto);
   }
 }
 

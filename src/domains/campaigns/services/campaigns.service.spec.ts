@@ -11,7 +11,7 @@ import { CampaignApplication } from '../entities/campaign-application.entity';
 import { CampaignReview } from '../entities/campaign-review.entity';
 import { FindAllCampaignsQueryDto } from '../dtos/find-all-campaigns-query.dto';
 import { UsersService } from '../../users/services/users.service';
-import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
 import { getModelToken } from '@nestjs/sequelize';
@@ -28,7 +28,7 @@ describe('CampaignsService', () => {
   let campaignRepoMock: jest.Mocked<CampaignRepository>;
   let s3ServiceMock: jest.Mocked<S3Service>;
   let usersServiceMock: jest.Mocked<UsersService>;
-  let pandascrowServiceMock: jest.Mocked<PandascrowService>;
+  let startbuttonServiceMock: jest.Mocked<StartbuttonService>;
   let notificationsServiceMock: jest.Mocked<NotificationsService>;
   let emailServiceMock: jest.Mocked<EmailService>;
   let nicheModelMock: { findAll: jest.Mock };
@@ -129,10 +129,10 @@ describe('CampaignsService', () => {
       findOneWithNiches: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
-    pandascrowServiceMock = {
-      initializeEscrow: jest.fn(),
+    startbuttonServiceMock = {
+      initializePayment: jest.fn(),
       requestPayout: jest.fn(),
-    } as unknown as jest.Mocked<PandascrowService>;
+    } as unknown as jest.Mocked<StartbuttonService>;
 
     notificationsServiceMock = {
       notify: jest.fn().mockResolvedValue(undefined),
@@ -170,8 +170,8 @@ describe('CampaignsService', () => {
         const feeMap: Record<string, number> = {
           VAT: 0.075,
           'Trendupp Fee': 0.15,
-          'Pandascrow Gateway Fee (NGN)': 0.03,
-          'Pandascrow Gateway Fee (USD)': 0.05,
+          'Startbutton Gateway Fee (NGN)': 0.03,
+          'Startbutton Gateway Fee (USD)': 0.05,
         };
         const val = feeMap[where?.name];
         return Promise.resolve(val !== undefined ? { value: val } : null);
@@ -199,7 +199,7 @@ describe('CampaignsService', () => {
         { provide: CampaignRepository, useValue: campaignRepoMock },
         { provide: S3Service, useValue: s3ServiceMock },
         { provide: UsersService, useValue: usersServiceMock },
-        { provide: PandascrowService, useValue: pandascrowServiceMock },
+        { provide: StartbuttonService, useValue: startbuttonServiceMock },
         { provide: NotificationsService, useValue: notificationsServiceMock },
         { provide: EmailService, useValue: emailServiceMock },
         { provide: getModelToken(Niche), useValue: nicheModelMock },
@@ -391,15 +391,15 @@ describe('CampaignsService', () => {
         email: 'brand@owner.com',
         phoneNumber: '+2348000000000',
         bankId: 'b1',
+        bankCode: '058',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Brand Account',
       } as any);
 
-      pandascrowServiceMock.initializeEscrow.mockResolvedValue({
-        escrow_id: 12345,
-        payment_url: 'https://sandbox.pandascrow.io/checkout/12345',
+      startbuttonServiceMock.initializePayment.mockResolvedValue({
+        payment_url: 'https://sandbox.startbutton.tech/checkout/12345',
         transaction_ref: 'tx_ref_123',
-        provider: 'paystack',
+        provider: 'startbutton',
         status: 'pending',
       });
 
@@ -496,15 +496,15 @@ describe('CampaignsService', () => {
         email: 'brand@owner.com',
         phoneNumber: '+2348000000000',
         bankId: 'b1',
+        bankCode: '058',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Brand Account',
       } as any);
 
-      pandascrowServiceMock.initializeEscrow.mockResolvedValue({
-        escrow_id: 99999,
-        payment_url: 'https://sandbox.pandascrow.io/checkout/99999',
+      startbuttonServiceMock.initializePayment.mockResolvedValue({
+        payment_url: 'https://sandbox.startbutton.tech/checkout/99999',
         transaction_ref: 'tx_ref_retry',
-        provider: 'paystack',
+        provider: 'startbutton',
         status: 'pending',
       });
 
@@ -756,6 +756,7 @@ describe('CampaignsService', () => {
         id: 'creator1',
         socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
         bankId: 'b1',
+        bankCode: '058',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Creator Account',
       };
@@ -893,6 +894,54 @@ describe('CampaignsService', () => {
         status: 'accepted',
         timeline: expect.any(Object),
       });
+    });
+
+    it('should successfully select a pending application without sending notifications', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1', currency: 'USD' } as unknown as Campaign;
+      const mockApp = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+        feeRequest: 500,
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      jest.spyOn(service, 'validateCreatorSelection').mockResolvedValue({
+        isValid: true,
+        amountAvailable: 1000,
+        selectedTotal: 500,
+        shortfall: 0,
+        currency: 'USD',
+        message: 'Valid',
+      });
+
+      await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'selected');
+
+      expect(mockApp.update).toHaveBeenCalledWith({ status: 'selected' });
+      expect(notificationsServiceMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('should toggle status back to pending (unselect) if already selected', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+      const mockApp = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'selected',
+        feeRequest: 500,
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+      const validateSpy = jest.spyOn(service, 'validateCreatorSelection');
+
+      await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'selected');
+
+      expect(mockApp.update).toHaveBeenCalledWith({ status: 'pending' });
+      expect(validateSpy).not.toHaveBeenCalled();
+      expect(notificationsServiceMock.notify).not.toHaveBeenCalled();
     });
   });
 
@@ -1724,6 +1773,7 @@ describe('CampaignsService', () => {
         id: 'creator1',
         socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
         bankId: 'b1',
+        bankCode: '058',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Creator Account',
       };
@@ -1762,6 +1812,7 @@ describe('CampaignsService', () => {
         id: 'creator1',
         socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
         bankId: 'b1',
+        bankCode: '058',
         bankAccountNumber: '0123456789',
         bankAccountName: 'Creator Account',
       };
@@ -1824,4 +1875,126 @@ describe('CampaignsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('activateCampaign', () => {
+    it('should successfully activate campaign, initialize timeline for selected creators, and reject pending applicants', async () => {
+      const liveCampaign = {
+        ...mockCampaign,
+        id: 'c1',
+        brandId: 'b1',
+        status: 'live',
+        goal: 'Create Content',
+        totalBudget: 1000,
+        currency: 'USD',
+        timeline: { stage1_application_window: { status: 'completed' } },
+        update: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      const app1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        creatorId: 'cr1',
+        status: 'selected',
+        feeRequest: 300,
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const app2 = {
+        id: 'app2',
+        campaignId: 'c1',
+        creatorId: 'cr2',
+        status: 'pending',
+        feeRequest: 400,
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue([app1, app2] as any);
+      campaignRepoMock.findApplicationById.mockImplementation((id: string) => {
+        if (id === 'app1') return Promise.resolve(app1 as any);
+        if (id === 'app2') return Promise.resolve(app2 as any);
+        return Promise.resolve(null);
+      });
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue({
+        paymentStatus: 'paid',
+        amount: 800,
+      } as any);
+
+      const result = await service.activateCampaign('c1', 'b1');
+
+      // Creator 1 accepted with timeline
+      expect(app1.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'accepted',
+          timeline: expect.any(Object),
+        }),
+      );
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'application.accepted',
+          recipientId: 'cr1',
+        }),
+      );
+
+      // Creator 2 rejected
+      expect(app2.update).toHaveBeenCalledWith({ status: 'rejected' });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'application.rejected',
+          recipientId: 'cr2',
+        }),
+      );
+
+      // Campaign activated
+      expect(liveCampaign.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'active',
+        }),
+      );
+      expect(result).toEqual(liveCampaign);
+    });
+
+    it('should throw ForbiddenException if caller does not own the campaign', async () => {
+      campaignRepoMock.findById.mockResolvedValue({
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'live',
+      } as any);
+
+      await expect(service.activateCampaign('c1', 'another-brand')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw BadRequestException if campaign is already active', async () => {
+      campaignRepoMock.findById.mockResolvedValue({
+        ...mockCampaign,
+        brandId: 'b1',
+        status: 'active',
+      } as any);
+
+      await expect(service.activateCampaign('c1', 'b1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if no creators have been selected', async () => {
+      const liveCampaign = {
+        ...mockCampaign,
+        id: 'c1',
+        brandId: 'b1',
+        status: 'live',
+      } as any;
+      const app1 = {
+        id: 'app1',
+        campaignId: 'c1',
+        status: 'pending',
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      campaignRepoMock.findApplicationsByCampaignId.mockResolvedValue([app1] as any);
+
+      await expect(service.activateCampaign('c1', 'b1')).rejects.toThrow(
+        'You must select at least one creator before activating the campaign',
+      );
+    });
+  });
 });
+

@@ -224,7 +224,7 @@ export class AdminEscrowService {
           breakdown: {
             agencyCommission: breakdown.trenduppFee,
             vat: breakdown.vat,
-            gatewayCharges: breakdown.pandascrowFee,
+            gatewayCharges: breakdown.startbuttonFee ?? breakdown.pandascrowFee,
             creatorNetBudget: breakdown.campaignBudget,
           },
           fundingStatus,
@@ -355,7 +355,7 @@ export class AdminEscrowService {
             commissionRate: bd.commissionRate,
             vat: bd.vat,
             vatRate: bd.vatRate,
-            gatewayFee: p.gatewayFee ?? bd.pandascrowFee,
+            gatewayFee: p.gatewayFee ?? (bd.startbuttonFee ?? bd.pandascrowFee),
             gatewayRate: bd.gatewayRate,
             netAmount: bd.campaignBudget,
           };

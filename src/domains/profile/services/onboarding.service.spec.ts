@@ -15,6 +15,8 @@ import { Industry } from '../../users/entities/industry.entity';
 import { MarketingBudgetRepository } from '../../users/repository/marketing-budget.repository';
 import { MarketingBudget } from '../../users/entities/marketing-budget.entity';
 
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
+
 describe('OnboardingService', () => {
   let service: OnboardingService;
   let nicheRepositoryMock: jest.Mocked<NicheRepository>;
@@ -24,6 +26,7 @@ describe('OnboardingService', () => {
   let industryRepositoryMock: jest.Mocked<IndustryRepository>;
   let userRepositoryMock: jest.Mocked<UserRepository>;
   let marketingBudgetRepositoryMock: jest.Mocked<MarketingBudgetRepository>;
+  let startbuttonServiceMock: jest.Mocked<StartbuttonService>;
 
   beforeEach(async () => {
     nicheRepositoryMock = {
@@ -31,7 +34,7 @@ describe('OnboardingService', () => {
     } as unknown as jest.Mocked<NicheRepository>;
 
     nationalityRepositoryMock = {
-      findAll: jest.fn(),
+      findAll: jest.fn().mockResolvedValue([]),
       findById: jest.fn(),
     } as unknown as jest.Mocked<NationalityRepository>;
 
@@ -57,6 +60,10 @@ describe('OnboardingService', () => {
       findAll: jest.fn(),
     } as unknown as jest.Mocked<MarketingBudgetRepository>;
 
+    startbuttonServiceMock = {
+      getBanks: jest.fn(),
+    } as unknown as jest.Mocked<StartbuttonService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OnboardingService,
@@ -67,6 +74,7 @@ describe('OnboardingService', () => {
         { provide: IndustryRepository, useValue: industryRepositoryMock },
         { provide: UserRepository, useValue: userRepositoryMock },
         { provide: MarketingBudgetRepository, useValue: marketingBudgetRepositoryMock },
+        { provide: StartbuttonService, useValue: startbuttonServiceMock },
       ],
     }).compile();
 
@@ -204,6 +212,61 @@ describe('OnboardingService', () => {
       const result = await service.getMarketingBudgets({ currency: 'USD' });
       expect(result).toEqual(mockBudgets);
       expect(marketingBudgetRepositoryMock.findAll).toHaveBeenCalledWith({ currency: 'USD' });
+    });
+  });
+
+  describe('getBanks', () => {
+    it('should fetch banks from StartbuttonService with resolved currency and countryCode', async () => {
+      const mockBanks = [
+        { id: 1, name: 'Access Bank', code: '044' },
+        { id: 2, name: 'Zenith Bank', code: '057' },
+      ];
+      startbuttonServiceMock.getBanks.mockResolvedValue(mockBanks);
+
+      const result = await service.getBanks({ countryCode: 'NG', currency: 'NGN' });
+
+      expect(startbuttonServiceMock.getBanks).toHaveBeenCalledWith('NGN', {
+        countryCode: 'NG',
+        type: undefined,
+      });
+      expect(result.length).toBe(2);
+      expect(result[0].name).toBe('Access Bank');
+      expect(result[0].countryCode).toBe('NG');
+    });
+
+    it('should resolve country name and currency when countryCode GH is provided', async () => {
+      const mockBanks = [
+        { id: 76, name: 'Absa Bank Ghana Ltd', code: '030100' },
+      ];
+      startbuttonServiceMock.getBanks.mockResolvedValue(mockBanks);
+      nationalityRepositoryMock.findAll.mockResolvedValue([
+        { id: 'nat-gh', name: 'Ghana', code: 'GH', currency: 'GHS' },
+      ] as any);
+
+      const result = await service.getBanks({ countryCode: 'GH' });
+
+      expect(startbuttonServiceMock.getBanks).toHaveBeenCalledWith('GHS', {
+        countryCode: 'GH',
+        type: undefined,
+      });
+      expect(result.length).toBe(1);
+      expect(result[0].name).toBe('Absa Bank Ghana Ltd');
+      expect(result[0].country).toBe('Ghana');
+      expect(result[0].countryCode).toBe('GH');
+      expect(result[0].currency).toBe('GHS');
+    });
+
+    it('should filter banks locally by search term', async () => {
+      const mockBanks = [
+        { id: 1, name: 'Access Bank', code: '044' },
+        { id: 2, name: 'Zenith Bank', code: '057' },
+      ];
+      startbuttonServiceMock.getBanks.mockResolvedValue(mockBanks);
+
+      const result = await service.getBanks({ search: 'zenith' });
+
+      expect(result.length).toBe(1);
+      expect(result[0].name).toBe('Zenith Bank');
     });
   });
 });

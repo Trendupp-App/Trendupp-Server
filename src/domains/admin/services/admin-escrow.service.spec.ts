@@ -108,8 +108,8 @@ describe('AdminEscrowService', () => {
         const feeMap: Record<string, number> = {
           'Trendupp Fee': 0.15,
           VAT: 0.075,
-          'Pandascrow Gateway Fee (NGN)': 0.03,
-          'Pandascrow Gateway Fee (USD)': 0.05,
+          'Startbutton Gateway Fee (NGN)': 0.03,
+          'Startbutton Gateway Fee (USD)': 0.05,
         };
         const val = feeMap[where.name];
         return Promise.resolve(val !== undefined ? { value: val } : null);

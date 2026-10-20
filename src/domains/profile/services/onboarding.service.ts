@@ -8,13 +8,26 @@ import { UserRepository } from '../../users/repository/user.repository';
 import { Niche } from '../../users/entities/niche.entity';
 import { Nationality } from '../../users/entities/nationality.entity';
 import { State } from '../../users/entities/state.entity';
-import { Bank } from '../../users/entities/bank.entity';
 import { Industry } from '../../users/entities/industry.entity';
 import { User } from '../../users/entities/user.entity';
 import { UpdateBrandRepresentativeDto } from '../../users/dtos/update-brand-representative.dto';
 import { MarketingBudgetRepository } from '../../users/repository/marketing-budget.repository';
 import { MarketingBudget } from '../../users/entities/marketing-budget.entity';
-import { Op, WhereOptions } from 'sequelize';
+import {
+  StartbuttonService,
+  StartbuttonBank,
+} from '../../../integration/payment-gateway/startbutton.service';
+
+export interface OnboardingBank {
+  id?: number | string;
+  name: string;
+  code: string;
+  country?: string;
+  region?: string;
+  countryCode?: string;
+  currency?: string;
+  [key: string]: unknown;
+}
 
 @Injectable()
 export class OnboardingService {
@@ -26,6 +39,7 @@ export class OnboardingService {
     private readonly industryRepository: IndustryRepository,
     private readonly userRepository: UserRepository,
     private readonly marketingBudgetRepository: MarketingBudgetRepository,
+    private readonly startbuttonService: StartbuttonService,
   ) {}
 
   async getAllNiches(): Promise<Niche[]> {
@@ -47,23 +61,97 @@ export class OnboardingService {
   async getBanks(filters?: {
     region?: string;
     country?: string;
+    countryCode?: string;
+    currency?: string;
+    type?: string;
     search?: string;
-  }): Promise<Bank[]> {
-    const where: Record<string, unknown> = {};
+  }): Promise<OnboardingBank[]> {
+    let resolvedCountryCode = filters?.countryCode
+      ? filters.countryCode.trim().toUpperCase()
+      : undefined;
+    let resolvedCountryName = filters?.country?.trim();
+    let resolvedCurrency = filters?.currency ? filters.currency.trim().toUpperCase() : undefined;
 
-    if (filters?.region) {
-      where['region'] = { [Op.iLike]: `%${filters.region}%` };
+    // Handle legacy country parameter (e.g. "Nigeria" or "NG")
+    if (!resolvedCountryCode && resolvedCountryName) {
+      if (resolvedCountryName.length === 2) {
+        resolvedCountryCode = resolvedCountryName.toUpperCase();
+        resolvedCountryName = undefined;
+      } else {
+        const nationalities = (await this.nationalityRepository.findAll()) || [];
+        const matched = nationalities.find(
+          (n) => n.name.toLowerCase() === resolvedCountryName!.toLowerCase(),
+        );
+        if (matched) {
+          resolvedCountryCode = matched.code;
+          resolvedCountryName = matched.name;
+          if (!resolvedCurrency && matched.currency) {
+            resolvedCurrency = matched.currency;
+          }
+        }
+      }
     }
 
-    if (filters?.country) {
-      where['country'] = { [Op.iLike]: `%${filters.country}%` };
+    // Resolve country name and currency from resolvedCountryCode if not already set
+    if (resolvedCountryCode) {
+      const nationalities = (await this.nationalityRepository.findAll()) || [];
+      const matched = nationalities.find(
+        (n) => n.code.toUpperCase() === resolvedCountryCode.toUpperCase(),
+      );
+      if (matched) {
+        if (!resolvedCountryName) resolvedCountryName = matched.name;
+        if (!resolvedCurrency && matched.currency) resolvedCurrency = matched.currency;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { Country: CscCountry } = require('country-state-city') as {
+          Country: typeof import('country-state-city').Country;
+        };
+        const cscCountry = CscCountry.getCountryByCode(resolvedCountryCode);
+        if (cscCountry) {
+          if (!resolvedCountryName) resolvedCountryName = cscCountry.name;
+          if (!resolvedCurrency && cscCountry.currency) resolvedCurrency = cscCountry.currency;
+        }
+      }
     }
 
+    // Determine default currency: map from countryCode or fallback to 'NGN'
+    if (!resolvedCurrency) {
+      if (resolvedCountryCode === 'NG') resolvedCurrency = 'NGN';
+      else if (resolvedCountryCode === 'GH') resolvedCurrency = 'GHS';
+      else if (resolvedCountryCode === 'KE') resolvedCurrency = 'KES';
+      else if (resolvedCountryCode === 'ZA') resolvedCurrency = 'ZAR';
+      else if (resolvedCountryCode === 'UG') resolvedCurrency = 'UGX';
+      else if (resolvedCountryCode === 'RW') resolvedCurrency = 'RWF';
+      else if (resolvedCountryCode === 'TZ') resolvedCurrency = 'TZS';
+      else resolvedCurrency = 'NGN';
+    }
+
+    // Fetch banks directly from Startbutton API
+    const banks = await this.startbuttonService.getBanks(resolvedCurrency, {
+      countryCode: resolvedCountryCode,
+      type: filters?.type,
+    });
+
+    let result: OnboardingBank[] = banks.map((bank: StartbuttonBank) => ({
+      ...bank,
+      // Retain country and region for backward compatibility with existing clients
+      country: resolvedCountryName,
+      region: filters?.region,
+      countryCode: resolvedCountryCode,
+      currency: resolvedCurrency,
+    }));
+
+    // Apply local search filter if requested
     if (filters?.search) {
-      where['name'] = { [Op.iLike]: `%${filters.search}%` };
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter(
+        (bank) =>
+          bank.name?.toLowerCase().includes(searchLower) ||
+          bank.code?.toLowerCase().includes(searchLower),
+      );
     }
 
-    return this.bankRepository.findAll({ where: where as WhereOptions<Bank> });
+    return result;
   }
 
   async getAllIndustries(): Promise<Industry[]> {

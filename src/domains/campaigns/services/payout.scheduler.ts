@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CampaignRepository } from '../repository/campaign.repository';
 import { UsersService } from '../../users/services/users.service';
-import { PandascrowService } from '../../../integration/payment-gateway/pandascrow.service';
+import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../../integration/email/email.service';
@@ -15,7 +15,7 @@ export class PayoutScheduler {
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly usersService: UsersService,
-    private readonly pandascrowService: PandascrowService,
+    private readonly startbuttonService: StartbuttonService,
     private readonly configService: ConfigService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
@@ -47,20 +47,20 @@ export class PayoutScheduler {
             throw new Error('Creator profile not found');
           }
 
-          if (!creator.bankAccountNumber || !creator.bank?.code) {
+          if (!creator.bankAccountNumber || !creator.bankCode) {
             throw new Error('Creator payout bank details are missing or incomplete');
           }
 
-          // Generate unique reference (idempotency key) for this release payout.
-          // Must be <= 25 characters (limit enforced by Pandascrow /bank/transfers).
-          const payoutRef = `pay_${release.id.replace(/-/g, '').substring(0, 14)}_${Date.now().toString().slice(-5)}`;
+          // Generate unique reference for this release payout.
+          // By including the full release.id, we can extract it in the webhook.
+          const payoutRef = `${release.id}-${Date.now()}`;
 
           this.logger.log(
             `Processing payout for release ID: ${release.id}, Creator: ${creator.email}`,
           );
 
-          // Guard: only proceed with bank transfer if the Pandascrow escrow has been released.
-          // The finance admin releases the escrow via the Pandascrow dashboard, which triggers
+          // Guard: only proceed with bank transfer if the startbutton escrow has been released.
+          // The finance admin releases the escrow via the starbutton dashboard, which triggers
           // the escrow.completed webhook → updates Payment.escrowStatus → unblocks this release.
           const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
             release.campaignId,
@@ -75,7 +75,7 @@ export class PayoutScheduler {
             );
             await release.update({ status: 'escrow_pending', errorDetails: null });
 
-            // Work item for finance admins: release the escrow in Pandascrow.
+            // Work item for finance admins: release the escrow in startbutton.
             // dedupeKey: the cron fires daily on every PM2 instance — one alert
             // per release, not one per instance per day.
             await this.notificationsService.notify({
@@ -96,42 +96,24 @@ export class PayoutScheduler {
           // to prevent concurrent cron executions / race conditions.
           await release.update({ status: 'processing' });
 
-          // Trigger payout request from Trendupp's Pandascrow wallet to creator's bank account
-          const success = await this.pandascrowService.requestPayout({
+          const country = (typeof creator.country === 'string' ? creator.country : (creator.country as any)?.name) || 'Nigeria';
+
+          // Trigger payout request from Trendupp's wallet to creator's bank account
+          const success = await this.startbuttonService.requestPayout({
             payoutRef,
-            walletId: this.walletId,
             amount: release.amount,
             currency: release.currency,
-            bankCode: creator.bank.code,
+            country,
+            bankCode: creator.bankCode,
             accountNumber: creator.bankAccountNumber,
             accountName: creator.bankAccountName || `${creator.firstName} ${creator.lastName}`,
           });
 
           if (success) {
-            await release.update({
-              status: 'released',
-              errorDetails: null,
-            });
-            this.logger.log(`Successfully completed payout for release ID: ${release.id}`);
-
-            const campaign = await this.campaignRepository.findById(release.campaignId);
-            await this.notificationsService.notify({
-              type: 'payout.released',
-              recipientId: release.creatorId,
-              data: {
-                campaignId: release.campaignId,
-                campaignTitle: campaign?.title ?? 'your campaign',
-                releaseId: release.id,
-                amount: Number(release.amount),
-                currency: release.currency,
-              },
-              dedupeKey: release.id,
-            });
-
-            // Check if the campaign can be completed
-            await this.checkAndCompleteCampaign(release.campaignId);
+            // Keep it in processing state, webhook will mark it as released
+            this.logger.log(`Payout requested successfully for release ID: ${release.id}. Waiting for webhook.`);
           } else {
-            throw new Error('Pandascrow payout failed without explicit error');
+            throw new Error('Startbutton payout failed without explicit error');
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : String(error);
@@ -276,7 +258,7 @@ export class PayoutScheduler {
             throw new Error('Brand user profile not found');
           }
 
-          if (!brand.bankAccountNumber || !brand.bank?.code) {
+          if (!brand.bankAccountNumber || !brand.bankCode) {
             this.logger.warn(
               `Brand payout bank details are missing for refund ID ${refund.id}. ` +
                 `Parking as pending_bank_details.`,
@@ -302,14 +284,10 @@ export class PayoutScheduler {
 
           this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
 
-          const success = await this.pandascrowService.requestPayout({
-            payoutRef: refundRef,
-            walletId: this.walletId,
+          const success = await this.startbuttonService.initiateRefund({
+            transactionReference: campaignPayment?.transactionRef || campaignPayment?.paymentReference || '',
             amount: refund.amount,
-            currency: refund.currency,
-            bankCode: brand.bank.code,
-            accountNumber: brand.bankAccountNumber,
-            accountName: brand.bankAccountName || `${brand.firstName} ${brand.lastName}`,
+            reason: `Refund for campaign ${refund.campaignId}`,
           });
 
           if (success) {
@@ -335,7 +313,7 @@ export class PayoutScheduler {
               dedupeKey: `refund-sent:${refund.id}`,
             });
           } else {
-            throw new Error('Pandascrow bank transfer returned failure');
+            throw new Error('Startbutton refund returned failure');
           }
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -375,37 +353,4 @@ export class PayoutScheduler {
     }
   }
 
-  /**
-   * Checks if all payment releases and submissions for this campaign are done.
-   * If yes, updates campaign status to 'completed'.
-   */
-  private async checkAndCompleteCampaign(campaignId: string): Promise<void> {
-    try {
-      const pendingCount = await this.campaignRepository.countPendingReleases(campaignId);
-      if (pendingCount > 0) {
-        return;
-      }
-
-      const activeSubmissions = await this.campaignRepository.countActiveSubmissions(campaignId);
-      if (activeSubmissions > 0) {
-        return;
-      }
-
-      const campaign = await this.campaignRepository.findById(campaignId);
-      if (campaign && campaign.status !== 'completed') {
-        await campaign.update({ status: 'completed' });
-        this.logger.log(`Campaign ID: ${campaignId} has been successfully completed.`);
-
-        await this.notificationsService.notify({
-          type: 'campaign.completed',
-          recipientId: campaign.brandId,
-          data: { campaignId, campaignTitle: campaign.title },
-          dedupeKey: `${campaignId}:completed`,
-        });
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error checking completion status for campaign ${campaignId}: ${message}`);
-    }
-  }
 }

@@ -19,7 +19,7 @@ import { PaymentRelease } from './entities/payment-release.entity';
 import { CampaignRefund } from './entities/campaign-refund.entity';
 import { Dispute } from '../disputes/entities/dispute.entity';
 import { Niche } from '../users/entities/niche.entity';
-import { PandascrowModule } from '../../integration/payment-gateway/pandascrow.module';
+import { StartbuttonModule } from '../../integration/payment-gateway/startbutton.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../../integration/email/email.module';
 
@@ -58,7 +58,7 @@ import { BrandCommissionTier } from '../admin/entities/brand-commission-tier.ent
     ]),
     UsersModule,
 
-    PandascrowModule,
+    StartbuttonModule,
     NotificationsModule,
     EmailModule,
   ],
