@@ -120,6 +120,11 @@ export class QueryAdminBrandsListDto {
   @IsString()
   countryId?: string;
 
+  @ApiPropertyOptional({ example: 'female', description: 'Filter by gender' })
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
   @ApiPropertyOptional({ example: '2026-06-01', description: 'Start date filter (YYYY-MM-DD)' })
   @IsOptional()
   @IsString()
@@ -259,6 +264,9 @@ export class AdminAdvertiserListItemDto {
   @ApiProperty({ example: { city: 'Lagos', country: 'Nigeria' } })
   location: { city: string | null; country: string | null };
 
+  @ApiProperty({ example: 'Female', nullable: true })
+  gender: string | null;
+
   @ApiProperty({ example: 100 })
   profileCompletion: number;
 
@@ -334,6 +342,9 @@ export class BrandRepresentativeInfoDto {
 
   @ApiProperty({ example: '+2348077238262', nullable: true })
   phoneNumber: string | null;
+
+  @ApiPropertyOptional({ example: 'Female', nullable: true })
+  gender?: string | null;
 
   @ApiProperty({ example: 100 })
   profileCompletion: number;

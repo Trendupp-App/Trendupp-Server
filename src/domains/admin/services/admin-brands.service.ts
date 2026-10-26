@@ -336,6 +336,7 @@ export class AdminBrandsService {
       industryId,
       status,
       countryId,
+      gender,
       startDate,
       endDate,
       page = 1,
@@ -372,6 +373,10 @@ export class AdminBrandsService {
 
     if (countryId) {
       where.countryId = countryId;
+    }
+
+    if (gender) {
+      where.gender = { [Op.iLike]: gender };
     }
 
     if (startDate && endDate) {
@@ -449,6 +454,7 @@ export class AdminBrandsService {
           city: b.city || null,
           country: b.country?.name || null,
         },
+        gender: b.gender || null,
         profileCompletion: b.onboardingPercentage,
         status: brandStatus,
         totalSpend,
@@ -553,6 +559,7 @@ export class AdminBrandsService {
         fullName: repFullName,
         email: repEmail,
         phoneNumber: repPhone,
+        gender: advertiser.gender || null,
         profileCompletion: advertiser.onboardingPercentage,
         dateJoined: formattedDateJoined,
         accountStatus,
