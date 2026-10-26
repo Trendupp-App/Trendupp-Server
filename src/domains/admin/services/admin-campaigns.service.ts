@@ -53,6 +53,9 @@ export class AdminCampaignsService {
 
   async getCampaignsSummary(): Promise<AdminCampaignSummaryResponseDto> {
     const campaigns = await this.campaignModel.findAll({
+      where: {
+        type: { [Op.ne]: 'social_impact' },
+      },
       attributes: ['id', 'status', 'paymentStatus'],
     });
 
@@ -110,7 +113,9 @@ export class AdminCampaignsService {
       limit = 20,
     } = query;
 
-    const where: Record<string | symbol, unknown> = {};
+    const where: Record<string | symbol, unknown> = {
+      type: { [Op.ne]: 'social_impact' },
+    };
 
     // Tab Filter
     if (tab === 'draft') {
