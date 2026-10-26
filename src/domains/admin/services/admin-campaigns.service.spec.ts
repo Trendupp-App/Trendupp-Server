@@ -6,6 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/sequelize';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { Op } from 'sequelize';
 import { AdminCampaignsService } from './admin-campaigns.service';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { User } from '../../users/entities/user.entity';
@@ -64,6 +65,45 @@ describe('AdminCampaignsService - Pause and Resume', () => {
     }).compile();
 
     service = module.get<AdminCampaignsService>(AdminCampaignsService);
+  });
+
+  describe('getCampaignsSummary', () => {
+    it('should query campaigns excluding social_impact type and calculate KPI counts', async () => {
+      campaignModelMock.findAll.mockResolvedValue([
+        { id: 'c-1', status: 'live', paymentStatus: 'paid' },
+        { id: 'c-2', status: 'draft', paymentStatus: 'unpaid' },
+        { id: 'c-3', status: 'completed', paymentStatus: 'paid' },
+      ]);
+
+      const result = await service.getCampaignsSummary();
+
+      expect(campaignModelMock.findAll).toHaveBeenCalledWith({
+        where: {
+          type: { [Op.ne]: 'social_impact' },
+        },
+        attributes: ['id', 'status', 'paymentStatus'],
+      });
+      expect(result.totalCampaigns).toBe(3);
+      expect(result.live).toBe(1);
+      expect(result.draft).toBe(1);
+      expect(result.completed).toBe(1);
+    });
+  });
+
+  describe('getCampaignsList', () => {
+    it('should query campaigns excluding social_impact type', async () => {
+      campaignModelMock.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+
+      await service.getCampaignsList({ page: 1, limit: 10 } as any);
+
+      expect(campaignModelMock.findAndCountAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            type: { [Op.ne]: 'social_impact' },
+          }),
+        }),
+      );
+    });
   });
 
   describe('pauseCampaign', () => {
