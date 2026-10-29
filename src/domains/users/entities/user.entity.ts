@@ -37,6 +37,36 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.BOOLEAN, defaultValue: true, field: 'is_active' })
   declare isActive: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: true,
+    allowNull: false,
+    field: 'can_apply_to_campaigns',
+  })
+  declare canApplyToCampaigns: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    field: 'is_banned',
+  })
+  declare isBanned: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'banned_at',
+  })
+  declare bannedAt?: Date | null;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'ban_reason',
+  })
+  declare banReason?: string | null;
+
   @ForeignKey(() => Role)
   @Column({ type: DataType.UUID, allowNull: true, field: 'role_id' })
   declare roleId?: string;
@@ -160,7 +190,7 @@ export class User extends BaseEntity<User> {
   @BelongsTo(() => Nationality)
   declare nationality?: Nationality;
 
-  // Separate from nationality — represents the country the user currently lives/operates in.
+  // Separate from nationality â€” represents the country the user currently lives/operates in.
   // Both nationality_id and country_id reference the same nationalities table data.
   @ForeignKey(() => Nationality)
   @Column({ type: DataType.UUID, allowNull: true, field: 'country_id' })
@@ -237,7 +267,7 @@ export class User extends BaseEntity<User> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'assigned_tier' })
   declare assignedTier?: string;
 
-  // Step 4: Payout Details — stored after mobile-side bank account verification
+  // Step 4: Payout Details â€” stored after mobile-side bank account verification
   @ForeignKey(() => Bank)
   @Column({ type: DataType.UUID, allowNull: true, field: 'bank_id' })
   declare bankId?: string;
@@ -550,6 +580,10 @@ export class User extends BaseEntity<User> {
     values['totalReviews'] = this.totalReviews || 0;
     values['totalTokens'] = this.totalTokens || 0;
     values['badge'] = this.badge || null;
+    values['canApplyToCampaigns'] = this.canApplyToCampaigns !== false;
+    values['isBanned'] = !!this.isBanned;
+    values['bannedAt'] = this.bannedAt || null;
+    values['banReason'] = this.banReason || null;
 
     return values;
   }

@@ -8,13 +8,21 @@ import {
   Param,
   Body,
   Query,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminCreatorsService } from '../services/admin-creators.service';
 import { AdminNotesService } from '../services/admin-notes.service';
+import {
+  UpdateCampaignAccessDto,
+  SuspendUserDto,
+  BanUserDto,
+  AdminModerationResponseDto,
+} from '../dtos/admin-moderation.dto';
 import {
   QueryWidgetTimeFilterDto,
   QueryTopCreatorsWidgetDto,
@@ -184,7 +192,7 @@ export class AdminCreatorsController {
     return this.adminCreatorsService.getCreatorsList(query);
   }
 
-  // ── Creator Detailed Profile Modal Endpoints ────────────────────────────────
+  // â”€â”€ Creator Detailed Profile Modal Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @Get('creators/:id')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
@@ -223,7 +231,7 @@ export class AdminCreatorsController {
     return this.adminCreatorsService.getCreatorReviews(id);
   }
 
-  // ── Internal Admin Notes Endpoints ──────────────────────────────────────────
+  // â”€â”€ Internal Admin Notes Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @Get('creators/:id/notes')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
@@ -281,5 +289,76 @@ export class AdminCreatorsController {
     @CurrentUser() admin: User,
   ): Promise<{ success: boolean }> {
     return this.adminNotesService.deleteNote(admin.id, noteId);
+  }
+
+  // ── Creator Moderation Endpoints ──────────────────────────────────────────
+
+  @Patch('creators/:id/campaign-access')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suspend or reactivate creator ability to apply to campaigns' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async updateCreatorCampaignAccess(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Body() dto: UpdateCampaignAccessDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminCreatorsService.updateCreatorCampaignAccess(
+      admin,
+      id,
+      dto,
+      ipAddress,
+      userAgent,
+    );
+  }
+
+  @Patch('creators/:id/suspend')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suspend a creator account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async suspendCreator(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Body() dto: SuspendUserDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminCreatorsService.suspendCreator(admin, id, dto, ipAddress, userAgent);
+  }
+
+  @Patch('creators/:id/reactivate')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reactivate a suspended creator account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async reactivateCreator(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminCreatorsService.reactivateCreator(admin, id, ipAddress, userAgent);
+  }
+
+  @Post('creators/:id/ban')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Permanently ban a creator account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async banCreator(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Body() dto: BanUserDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminCreatorsService.banCreator(admin, id, dto, ipAddress, userAgent);
   }
 }

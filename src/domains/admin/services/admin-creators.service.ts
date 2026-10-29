@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { User } from '../../users/entities/user.entity';
@@ -9,6 +9,14 @@ import { Bank } from '../../users/entities/bank.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { PaymentRelease } from '../../campaigns/entities/payment-release.entity';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { AuditLogService } from './audit-log.service';
+import {
+  UpdateCampaignAccessDto,
+  SuspendUserDto,
+  BanUserDto,
+  AdminModerationResponseDto,
+} from '../dtos/admin-moderation.dto';
 import {
   QueryWidgetTimeFilterDto,
   QueryTopCreatorsWidgetDto,
@@ -45,7 +53,15 @@ export class AdminCreatorsService {
     private readonly applicationModel: typeof CampaignApplication,
     @InjectModel(PaymentRelease)
     private readonly releaseModel: typeof PaymentRelease,
+    private readonly notificationsService: NotificationsService,
+    @Optional()
+    private readonly auditLogService?: AuditLogService,
   ) {}
+
+  private static adminDisplayName(admin: User): string {
+    const fullName = `${admin.firstName || ''} ${admin.lastName || ''}`.trim();
+    return fullName || admin.email || 'Admin';
+  }
 
   private async getCreatorRoleId(): Promise<string | null> {
     const role = await this.roleModel.findOne({ where: { name: 'creator' } });
@@ -98,7 +114,7 @@ export class AdminCreatorsService {
     return where;
   }
 
-  // ── 1. Summary & Profile Completion ─────────────────────────────────────────
+  // â”€â”€ 1. Summary & Profile Completion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorsSummary(): Promise<AdminCreatorSummaryResponseDto> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -168,7 +184,7 @@ export class AdminCreatorsService {
     };
   }
 
-  // ── 2. Signup Growth Widget ──────────────────────────────────────────────────
+  // â”€â”€ 2. Signup Growth Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getSignupGrowth(query: QueryWidgetTimeFilterDto): Promise<TimeSeriesPointDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -183,7 +199,7 @@ export class AdminCreatorsService {
     return this.generateTimeSeries(creators, query.period || 'monthly');
   }
 
-  // ── 3. Active Users Widget ───────────────────────────────────────────────────
+  // â”€â”€ 3. Active Users Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getActiveUsers(query: QueryWidgetTimeFilterDto): Promise<TimeSeriesPointDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -198,7 +214,7 @@ export class AdminCreatorsService {
     return this.generateTimeSeries(creators, query.period || 'monthly', 'lastLoginAt');
   }
 
-  // ── 4. Top Creators Widget ───────────────────────────────────────────────────
+  // â”€â”€ 4. Top Creators Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getTopCreators(query: QueryTopCreatorsWidgetDto): Promise<TopCreatorWidgetDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -213,7 +229,7 @@ export class AdminCreatorsService {
       attributes: ['creatorId', 'amount', 'campaignId'],
     });
 
-    // Build a map: creatorId → { totalEarnings, unique campaignIds }
+    // Build a map: creatorId â†’ { totalEarnings, unique campaignIds }
     const earningsMap = new Map<string, { totalEarnings: number; campaignIds: Set<string> }>();
     for (const r of releases) {
       const entry = earningsMap.get(r.creatorId) ?? {
@@ -293,7 +309,7 @@ export class AdminCreatorsService {
       .filter((item): item is TopCreatorWidgetDto => item !== null);
   }
 
-  // ── 5. Creator Tier Distribution Widget ─────────────────────────────────────
+  // â”€â”€ 5. Creator Tier Distribution Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getTierDistribution(query: QueryWidgetTimeFilterDto): Promise<TierDistributionItemDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -345,7 +361,7 @@ export class AdminCreatorsService {
     ];
   }
 
-  // ── 6. Gender Distribution Widget ───────────────────────────────────────────
+  // â”€â”€ 6. Gender Distribution Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getGenderDistribution(
     query: QueryWidgetTimeFilterDto,
@@ -377,7 +393,7 @@ export class AdminCreatorsService {
     }));
   }
 
-  // ── 7. Niche Breakdown Widget ───────────────────────────────────────────────
+  // â”€â”€ 7. Niche Breakdown Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getNicheBreakdown(query: QueryWidgetTimeFilterDto): Promise<NicheBreakdownItemDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -410,7 +426,7 @@ export class AdminCreatorsService {
       .slice(0, 10);
   }
 
-  // ── 8. Country Breakdown Widget ─────────────────────────────────────────────
+  // â”€â”€ 8. Country Breakdown Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCountryBreakdown(query: QueryWidgetTimeFilterDto): Promise<CountryBreakdownItemDto[]> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -440,7 +456,7 @@ export class AdminCreatorsService {
       .slice(0, 10);
   }
 
-  // ── 9. Combined Analytics Initial Load ─────────────────────────────────────
+  // â”€â”€ 9. Combined Analytics Initial Load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorsAnalytics(
     query: QueryAdminCreatorAnalyticsDto,
@@ -475,7 +491,7 @@ export class AdminCreatorsService {
     };
   }
 
-  // ── 10. Creators Table Listing ─────────────────────────────────────────────
+  // â”€â”€ 10. Creators Table Listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorsList(query: QueryAdminCreatorsListDto): Promise<AdminCreatorsListResponseDto> {
     const creatorRoleId = await this.getCreatorRoleId();
@@ -605,7 +621,9 @@ export class AdminCreatorsService {
       }
 
       let creatorStatus = 'ACTIVE';
-      if (!creator.isActive) {
+      if (creator.isBanned) {
+        creatorStatus = 'BANNED';
+      } else if (!creator.isActive) {
         creatorStatus = 'SUSPENDED';
       } else if (creator.verificationStatus === 'pending') {
         creatorStatus = 'PENDING';
@@ -639,6 +657,8 @@ export class AdminCreatorsService {
         },
         gender: creator.gender || null,
         status: creatorStatus,
+        canApplyToCampaigns: creator.canApplyToCampaigns !== false,
+        isBanned: !!creator.isBanned,
         profileCompletion: creator.onboardingPercentage,
         platformsConnected,
         campaignsCount: completedApps.length,
@@ -660,7 +680,7 @@ export class AdminCreatorsService {
     };
   }
 
-  // ── Time-series helper functions ──────────────────────────────────────────
+  // â”€â”€ Time-series helper functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private generateTimeSeries(
     creators: User[],
@@ -685,7 +705,7 @@ export class AdminCreatorsService {
     const getTargetDate = (c: User): Date | null => {
       // `dateField` is `keyof User`, so `c[dateField]` can type as one of the
       // model's methods, which trips @typescript-eslint/unbound-method. Index
-      // through a plain record instead — the value is only ever a date column.
+      // through a plain record instead â€” the value is only ever a date column.
       const val = (
         typeof c.getDataValue === 'function'
           ? c.getDataValue(dateField)
@@ -739,7 +759,7 @@ export class AdminCreatorsService {
     }));
   }
 
-  // ── 11. Detailed Creator Profile Overview ───────────────────────────────────
+  // â”€â”€ 11. Detailed Creator Profile Overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorProfileDetails(creatorId: string): Promise<AdminCreatorProfileResponseDto> {
     const creator = await this.userModel.findByPk(creatorId, {
@@ -822,7 +842,11 @@ export class AdminCreatorsService {
     const bankAccountStatus =
       creator.bankAccountNumber && creator.bankAccountName ? 'Verified' : 'Unverified';
 
-    const accountStatus = !creator.isActive ? 'Suspended' : 'Active';
+    const accountStatus = creator.isBanned
+      ? 'Banned'
+      : !creator.isActive
+        ? 'Suspended'
+        : 'Active';
 
     const dobFormatted = creator.dateOfBirth
       ? new Date(creator.dateOfBirth).toLocaleDateString('en-GB')
@@ -853,6 +877,10 @@ export class AdminCreatorsService {
         bankAccountStatus,
         dateJoined: creator.createdAt,
         accountStatus,
+        canApplyToCampaigns: creator.canApplyToCampaigns !== false,
+        isBanned: !!creator.isBanned,
+        bannedAt: creator.bannedAt || null,
+        banReason: creator.banReason || null,
         tier: computedTier,
         verificationStatus: creator.verificationStatus
           ? creator.verificationStatus.charAt(0).toUpperCase() + creator.verificationStatus.slice(1)
@@ -870,7 +898,7 @@ export class AdminCreatorsService {
     };
   }
 
-  // ── 12. Creator Campaign History ────────────────────────────────────────────
+  // â”€â”€ 12. Creator Campaign History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorCampaignHistory(
     creatorId: string,
@@ -948,7 +976,7 @@ export class AdminCreatorsService {
     };
   }
 
-  // ── 13. Creator Reviews ─────────────────────────────────────────────────────
+  // â”€â”€ 13. Creator Reviews â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCreatorReviews(creatorId: string): Promise<AdminCreatorReviewsResponseDto> {
     const creator = await this.userModel.findByPk(creatorId);
@@ -960,6 +988,302 @@ export class AdminCreatorsService {
       data: [],
       averageRating: 5.0,
       totalReviews: 0,
+    };
+  }
+
+  // ── Moderation Endpoints ────────────────────────────────────────────────────
+
+  async updateCreatorCampaignAccess(
+    admin: User,
+    creatorId: string,
+    dto: UpdateCampaignAccessDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const creatorRoleId = await this.getCreatorRoleId();
+    const creator = await this.userModel.findOne({
+      where: { id: creatorId, ...(creatorRoleId ? { roleId: creatorRoleId } : {}) },
+    });
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    await creator.update({ canApplyToCampaigns: dto.canApply });
+
+    const adminName = AdminCreatorsService.adminDisplayName(admin);
+    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: dto.canApply ? 'CREATOR_CAMPAIGN_ACCESS_REACTIVATED' : 'CREATOR_CAMPAIGN_ACCESS_SUSPENDED',
+        targetUserId: creatorId,
+        ipAddress,
+        userAgent,
+        details: { canApply: dto.canApply, reason: dto.reason },
+      });
+    }
+
+    if (!dto.canApply) {
+      await this.notificationsService.notify({
+        type: 'campaign_access.suspended',
+        recipientId: creator.id,
+        actorId: admin.id,
+        data: { reason: dto.reason },
+      });
+
+      await this.notificationsService.notify({
+        type: 'admin.creator_campaign_access_suspended',
+        recipientRole: ['owner', 'super_admin', 'moderator'],
+        actorId: admin.id,
+        data: {
+          creatorId: creator.id,
+          creatorName,
+          adminName,
+          reason: dto.reason,
+        },
+      });
+    } else {
+      await this.notificationsService.notify({
+        type: 'campaign_access.reactivated',
+        recipientId: creator.id,
+        actorId: admin.id,
+        data: {},
+      });
+
+      await this.notificationsService.notify({
+        type: 'admin.creator_campaign_access_reactivated',
+        recipientRole: ['owner', 'super_admin', 'moderator'],
+        actorId: admin.id,
+        data: {
+          creatorId: creator.id,
+          creatorName,
+          adminName,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: dto.canApply
+        ? `Campaign application access restored for ${creatorName}.`
+        : `Campaign application access suspended for ${creatorName}.`,
+      user: {
+        id: creator.id,
+        name: creatorName,
+        email: creator.email,
+        isActive: creator.isActive,
+        canApplyToCampaigns: creator.canApplyToCampaigns,
+        isBanned: creator.isBanned,
+        bannedAt: creator.bannedAt,
+        banReason: creator.banReason,
+      },
+    };
+  }
+
+  async suspendCreator(
+    admin: User,
+    creatorId: string,
+    dto?: SuspendUserDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const creatorRoleId = await this.getCreatorRoleId();
+    const creator = await this.userModel.findOne({
+      where: { id: creatorId, ...(creatorRoleId ? { roleId: creatorRoleId } : {}) },
+    });
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    await creator.update({ isActive: false });
+
+    const adminName = AdminCreatorsService.adminDisplayName(admin);
+    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'CREATOR_SUSPENDED',
+        targetUserId: creatorId,
+        ipAddress,
+        userAgent,
+        details: { reason: dto?.reason },
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.suspended',
+      recipientId: creator.id,
+      actorId: admin.id,
+      data: { reason: dto?.reason || 'Account suspended by administrator' },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_suspended',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: creator.id,
+        userName: creatorName,
+        userRole: 'creator',
+        adminName,
+        reason: dto?.reason,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Creator account ${creatorName} has been suspended.`,
+      user: {
+        id: creator.id,
+        name: creatorName,
+        email: creator.email,
+        isActive: creator.isActive,
+        canApplyToCampaigns: creator.canApplyToCampaigns,
+        isBanned: creator.isBanned,
+        bannedAt: creator.bannedAt,
+        banReason: creator.banReason,
+      },
+    };
+  }
+
+  async reactivateCreator(
+    admin: User,
+    creatorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const creatorRoleId = await this.getCreatorRoleId();
+    const creator = await this.userModel.findOne({
+      where: { id: creatorId, ...(creatorRoleId ? { roleId: creatorRoleId } : {}) },
+    });
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    await creator.update({ isActive: true });
+
+    const adminName = AdminCreatorsService.adminDisplayName(admin);
+    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'CREATOR_REACTIVATED',
+        targetUserId: creatorId,
+        ipAddress,
+        userAgent,
+        details: {},
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.reactivated',
+      recipientId: creator.id,
+      actorId: admin.id,
+      data: {},
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_reactivated',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: creator.id,
+        userName: creatorName,
+        userRole: 'creator',
+        adminName,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Creator account ${creatorName} has been reactivated.`,
+      user: {
+        id: creator.id,
+        name: creatorName,
+        email: creator.email,
+        isActive: creator.isActive,
+        canApplyToCampaigns: creator.canApplyToCampaigns,
+        isBanned: creator.isBanned,
+        bannedAt: creator.bannedAt,
+        banReason: creator.banReason,
+      },
+    };
+  }
+
+  async banCreator(
+    admin: User,
+    creatorId: string,
+    dto?: BanUserDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const creatorRoleId = await this.getCreatorRoleId();
+    const creator = await this.userModel.findOne({
+      where: { id: creatorId, ...(creatorRoleId ? { roleId: creatorRoleId } : {}) },
+    });
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    const banReason = dto?.reason || 'Permanently banned by administrator';
+    const bannedAt = new Date();
+    await creator.update({
+      isBanned: true,
+      isActive: false,
+      bannedAt,
+      banReason,
+    });
+
+    const adminName = AdminCreatorsService.adminDisplayName(admin);
+    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'CREATOR_BANNED',
+        targetUserId: creatorId,
+        ipAddress,
+        userAgent,
+        details: { reason: banReason },
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.banned',
+      recipientId: creator.id,
+      actorId: admin.id,
+      data: { reason: banReason },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_banned',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: creator.id,
+        userName: creatorName,
+        userRole: 'creator',
+        adminName,
+        reason: banReason,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Creator account ${creatorName} has been permanently banned.`,
+      user: {
+        id: creator.id,
+        name: creatorName,
+        email: creator.email,
+        isActive: creator.isActive,
+        canApplyToCampaigns: creator.canApplyToCampaigns,
+        isBanned: creator.isBanned,
+        bannedAt: creator.bannedAt,
+        banReason: creator.banReason,
+      },
     };
   }
 }

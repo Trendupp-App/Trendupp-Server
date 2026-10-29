@@ -28,20 +28,29 @@ export class JwtAuthGuard implements CanActivate {
 
     const token = authHeader.split(' ')[1];
 
+    let decoded: { id: string; email: string };
     try {
-      const decoded = jwt.verify(token, this.jwtSecret) as { id: string; email: string };
-
-      // Load user with niches
-      const user = await this.usersService.findOneWithNiches(decoded.id);
-
-      if (!user || !user.isActive) {
-        throw new UnauthorizedException('User is inactive or no longer exists');
-      }
-
-      request.user = user;
-      return true;
+      decoded = jwt.verify(token, this.jwtSecret) as { id: string; email: string };
     } catch {
       throw new UnauthorizedException('Invalid or expired authentication token');
     }
+
+    // Load user with niches
+    const user = await this.usersService.findOneWithNiches(decoded.id);
+
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+
+    if (user.isBanned) {
+      throw new UnauthorizedException('User account has been permanently banned');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('User is inactive or no longer exists');
+    }
+
+    request.user = user;
+    return true;
   }
 }

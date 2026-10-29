@@ -8,13 +8,20 @@ import {
   Query,
   Param,
   Body,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { AdminBrandsService } from '../services/admin-brands.service';
 import { AdminNotesService } from '../services/admin-notes.service';
+import {
+  SuspendUserDto,
+  BanUserDto,
+  AdminModerationResponseDto,
+} from '../dtos/admin-moderation.dto';
 import {
   QueryBrandWidgetTimeFilterDto,
   QueryTopBrandsWidgetDto,
@@ -184,7 +191,7 @@ export class AdminBrandsController {
     return this.adminBrandsService.getBrandCampaignHistory(id, query.page || 1, query.limit || 10);
   }
 
-  // ── Brand Internal Admin Notes CRUD ────────────────────────────────────────
+  // â”€â”€ Brand Internal Admin Notes CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @Get('brands/:id/notes')
   @Roles('owner', 'super_admin', 'finance_admin', 'moderator', 'support_agent')
@@ -242,5 +249,54 @@ export class AdminBrandsController {
   ): Promise<void> {
     const adminId = admin.id;
     await this.adminNotesService.deleteNote(adminId, noteId);
+  }
+
+  // ── Brand Moderation Endpoints ────────────────────────────────────────────
+
+  @Patch('brands/:id/suspend')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suspend a brand account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async suspendBrand(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Body() dto: SuspendUserDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminBrandsService.suspendBrand(admin, id, dto, ipAddress, userAgent);
+  }
+
+  @Patch('brands/:id/reactivate')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reactivate a suspended brand account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async reactivateBrand(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminBrandsService.reactivateBrand(admin, id, ipAddress, userAgent);
+  }
+
+  @Post('brands/:id/ban')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Permanently ban a brand account' })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async banBrand(
+    @Param('id') id: string,
+    @CurrentUser() admin: User,
+    @Body() dto: BanUserDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminBrandsService.banBrand(admin, id, dto, ipAddress, userAgent);
   }
 }

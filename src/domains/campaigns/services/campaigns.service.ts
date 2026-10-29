@@ -60,7 +60,7 @@ export class CampaignsService {
     private readonly userModel: typeof User,
   ) {}
 
-  // ─── Billing Calculations ──────────────────────────────────────────────────
+  // â”€â”€â”€ Billing Calculations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async calculateBreakdown(
     budget: number,
@@ -99,11 +99,11 @@ export class CampaignsService {
     }
 
     // 1. Agency commission is calculated ON the campaign budget and added ON TOP.
-    //    e.g. 15% of ₦1,000,000 = ₦150,000
+    //    e.g. 15% of â‚¦1,000,000 = â‚¦150,000
     const trenduppFee = Math.round(budget * trenduppRate);
 
     // 2. VAT is applied only to the commission amount (not the full budget) and added ON TOP.
-    //    e.g. 7.5% of ₦150,000 = ₦11,250
+    //    e.g. 7.5% of â‚¦150,000 = â‚¦11,250
     const vatFeeRecord = await this.feeModel.findOne({ where: { name: 'VAT' } });
     const vatRate = vatFeeRecord?.value ?? 0.075; // safe fallback to 7.5%
     const vat = Math.round(trenduppFee * vatRate);
@@ -113,7 +113,7 @@ export class CampaignsService {
     const campaignBudget = budget;
 
     // 4. Grand total charged to the brand = budget + commission + VAT.
-    //    e.g. ₦1,000,000 + ₦150,000 + ₦11,250 = ₦1,161,250
+    //    e.g. â‚¦1,000,000 + â‚¦150,000 + â‚¦11,250 = â‚¦1,161,250
     const totalToPay = budget + trenduppFee + vat;
 
     // 5. Gateway fee rate from fees table (3% NGN/Paystack, 5% USD/Stripe).
@@ -456,7 +456,7 @@ export class CampaignsService {
     }
 
     // Only run completeness validation on fresh submissions from 'draft'.
-    // On retry (pending_payment), the campaign data is frozen — updateDraft() blocks
+    // On retry (pending_payment), the campaign data is frozen â€” updateDraft() blocks
     // edits once the campaign leaves draft, so we know it was already validated.
     if (!isPaymentRetry) {
       const errors: string[] = [];
@@ -594,7 +594,7 @@ export class CampaignsService {
       throw new NotFoundException('No payment record found for this campaign');
     }
 
-    // ── 1. Idempotency Check ─────────────────────────────────────────────────
+    // â”€â”€ 1. Idempotency Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // If the campaign is already live or payment is already paid, return cleanly.
     if (campaign.status === 'live' || payment.paymentStatus === 'paid') {
       this.logger.log(
@@ -608,7 +608,7 @@ export class CampaignsService {
       };
     }
 
-    // ── 2. Pandascrow Status Check ──────────────────────────────────────────
+    // â”€â”€ 2. Pandascrow Status Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let isFunded = false;
     let gatewayRef: string | undefined;
     const pandascrowLookupId = payment.escrowId || payment.transactionRef || escrowId;
@@ -638,7 +638,7 @@ export class CampaignsService {
       );
     }
 
-    // ── 3. Perform Updates & Send Notifications ─────────────────────────────
+    // â”€â”€ 3. Perform Updates & Send Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const paymentUpdates: Record<string, unknown> = {
       paymentStatus: 'paid',
       escrowStatus: 'funded',
@@ -808,7 +808,7 @@ export class CampaignsService {
         // Admins see all applications
       }
     } else if (campaign.applications && !requestingUser) {
-      // Public (unauthenticated) access — strip all applications
+      // Public (unauthenticated) access â€” strip all applications
       campaign.setDataValue('applications' as any, []);
     }
 
@@ -861,7 +861,7 @@ export class CampaignsService {
     return result;
   }
 
-  // ─── Lookup endpoints ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Lookup endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getCreatorCategories(): Promise<CreatorCategory[]> {
     return this.campaignRepository.findAllCategories();
@@ -872,7 +872,7 @@ export class CampaignsService {
   }
 
   /**
-   * Approve a pending campaign — sets status to 'live' and stamps approvedAt.
+   * Approve a pending campaign â€” sets status to 'live' and stamps approvedAt.
    * Only campaigns in 'pending_approval' status can be approved.
    */
   async approve(campaignId: string): Promise<Campaign> {
@@ -912,13 +912,19 @@ export class CampaignsService {
       throw new ForbiddenException(`Oops! You can only apply to live campaigns. Kindly refresh!`);
     }
 
-    // ── Profile completeness guard ────────────────────────────────────────────
+    // â”€â”€ Profile completeness guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Creators must have at least one social account connected before they can
     // apply to any campaign. Load with niches so onboardingStepsCompleted
     // computes correctly.
     const creator = await this.usersService.findOneWithNiches(creatorId);
     if (!creator) {
       throw new NotFoundException('Creator profile not found');
+    }
+
+    if (creator.canApplyToCampaigns === false) {
+      throw new ForbiddenException(
+        'Your account has been restricted from applying to campaigns. Please contact support.',
+      );
     }
 
     const hasSocials = Object.values(creator.socialsConnected).some((connected) => connected);
@@ -932,7 +938,7 @@ export class CampaignsService {
     if (!hasBankDetails) {
       throw new ForbiddenException('kindly add your payout details in the profile section');
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     const existingApp = await this.campaignRepository.findApplication(campaignId, creatorId);
     if (existingApp) {
@@ -1096,20 +1102,26 @@ export class CampaignsService {
     }
 
     if (status === 'accepted') {
-      const validation = await this.validateCreatorSelection(campaignId, [appId]);
-      if (!validation.isValid) {
-        throw new BadRequestException(validation.message);
+      if (application.status !== 'accepted') {
+        const validation = await this.validateCreatorSelection(campaignId, [appId]);
+        if (!validation.isValid) {
+          throw new BadRequestException(validation.message);
+        }
       }
       const appUpdates: Record<string, any> = { status: 'accepted' };
-      appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
-      await application.update(appUpdates);
+      if (campaign.status === 'active') {
+        appUpdates.timeline = this.timelineService.initCreatorApplicationTimeline(campaign.goal);
+        await application.update(appUpdates);
 
-      await this.notificationsService.notify({
-        type: 'application.accepted',
-        recipientId: application.creatorId,
-        actorId: callerId,
-        data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
-      });
+        await this.notificationsService.notify({
+          type: 'application.accepted',
+          recipientId: application.creatorId,
+          actorId: callerId,
+          data: { campaignId, campaignTitle: campaign.title, applicationId: application.id },
+        });
+      } else {
+        await application.update(appUpdates);
+      }
 
       const updated = await this.campaignRepository.findApplicationById(appId);
       if (updated?.campaign) await this.populateBreakdown(updated.campaign);
@@ -1117,8 +1129,8 @@ export class CampaignsService {
     }
 
     if (status === 'rejected') {
-      // Attempting to undo an already-accepted application
-      if (application.status === 'accepted') {
+      // Attempting to undo an already-accepted application on an active campaign
+      if (application.status === 'accepted' && campaign.status === 'active') {
         if (!isAdmin) {
           throw new ForbiddenException(
             `You do not have sufficient access to undo an accepted application. Please contact support.`,
@@ -1312,7 +1324,7 @@ export class CampaignsService {
     const shortfall = Math.max(0, selectedTotal - amountAvailable);
     const isValid = shortfall === 0;
 
-    const currencySymbol = campaign.currency === 'NGN' ? '₦' : '$';
+    const currencySymbol = campaign.currency === 'NGN' ? 'â‚¦' : '$';
     let message = `Selection is valid. The selected creators' total fee of ${currencySymbol}${selectedTotal.toLocaleString()} fits inside the available budget pool of ${currencySymbol}${amountAvailable.toLocaleString()}.`;
 
     if (!isValid) {
@@ -1376,8 +1388,10 @@ export class CampaignsService {
       });
     }
 
-    const pendingApps = applications.filter((app) => app.status === 'pending');
-    for (const app of pendingApps) {
+    const nonSelectedApps = applications.filter(
+      (app) => app.status !== 'selected' && app.status !== 'accepted' && app.status !== 'rejected',
+    );
+    for (const app of nonSelectedApps) {
       await app.update({ status: 'rejected' });
       await this.notificationsService.notify({
         type: 'application.rejected',
@@ -1481,7 +1495,7 @@ export class CampaignsService {
     return application;
   }
 
-  // ─── Content Submissions Flow ─────────────────────────────────────────────
+  // â”€â”€â”€ Content Submissions Flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async submitDraft(
     campaignId: string,
@@ -1776,7 +1790,7 @@ export class CampaignsService {
       );
     }
 
-    // Basic URL format validation only — live-check deferred to a future integration
+    // Basic URL format validation only â€” live-check deferred to a future integration
     for (const [platform, url] of Object.entries(liveLink)) {
       if (typeof url !== 'string') {
         throw new BadRequestException(`URL for platform "${platform}" must be a string`);
@@ -1788,7 +1802,7 @@ export class CampaignsService {
       }
     }
 
-    // Update submission — store the raw liveLink as submitted; urlIsLive / urlCheckedAt left null
+    // Update submission â€” store the raw liveLink as submitted; urlIsLive / urlCheckedAt left null
     await submission.update({
       liveLink: liveLink,
       status: 'livelink_available',
@@ -1874,7 +1888,7 @@ export class CampaignsService {
     }
 
     // Fetch the campaign's payment record to carry the Pandascrow escrow ID
-    // into the payment_release row — used by the payout cron to guard the bank transfer.
+    // into the payment_release row â€” used by the payout cron to guard the bank transfer.
     const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
 
     await this.campaignRepository.createPaymentRelease({
@@ -1935,7 +1949,7 @@ export class CampaignsService {
     return submissions;
   }
 
-  // ─── Fee Management Actions ────────────────────────────────────────────────
+  // â”€â”€â”€ Fee Management Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getFees(): Promise<Fee[]> {
     return this.campaignRepository.findFees();
@@ -1957,7 +1971,7 @@ export class CampaignsService {
     return true;
   }
 
-  // ─── Reviews & Star Ratings ────────────────────────────────────────────────
+  // â”€â”€â”€ Reviews & Star Ratings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async submitReview(dto: CreateReviewDto, brandUser: User): Promise<CampaignReview> {
     // 1. Fetch target campaign
@@ -2043,7 +2057,7 @@ export class CampaignsService {
     return this.campaignRepository.findReviewsByCreator(creatorId);
   }
 
-  // ─── Delete Draft Campaign ─────────────────────────────────────────────────
+  // â”€â”€â”€ Delete Draft Campaign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async deleteDraft(id: string, brandId: string): Promise<void> {
     const campaign = await this.campaignRepository.findByIdAndBrandId(id, brandId);
@@ -2061,7 +2075,7 @@ export class CampaignsService {
     await this.campaignRepository.deleteDraftById(id, brandId);
   }
 
-  // ─── Activity Timeline Feed ────────────────────────────────────────────────
+  // â”€â”€â”€ Activity Timeline Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getActivityTimeline(campaignId: string): Promise<CampaignActivityTimelineResponse> {
     const campaign = await this.campaignRepository.findById(campaignId);
@@ -2096,7 +2110,7 @@ export class CampaignsService {
       const ampm = hours >= 12 ? 'PM' : 'AM';
       hours = hours % 12;
       hours = hours ? hours : 12;
-      return `${month} ${day}, ${year} · ${hours}:${minutes} ${ampm}`;
+      return `${month} ${day}, ${year} Â· ${hours}:${minutes} ${ampm}`;
     };
 
     // 1. Campaign created
@@ -2107,7 +2121,7 @@ export class CampaignsService {
         actorType: 'Brand',
         timestamp: createdDate.toISOString(),
         formattedTime: formatEventTime(createdDate),
-        description: `Campaign created — ${campaign.title}`,
+        description: `Campaign created â€” ${campaign.title}`,
       });
     }
 
@@ -2115,14 +2129,14 @@ export class CampaignsService {
     const payment = await this.campaignRepository.findPaymentByCampaignId(campaignId);
     if (payment && (payment.paymentStatus === 'paid' || payment.escrowStatus === 'funded')) {
       const paidDate = payment.updatedAt ? new Date(payment.updatedAt) : new Date();
-      const symbol = campaign.currency === 'NGN' ? '₦' : '$';
+      const symbol = campaign.currency === 'NGN' ? 'â‚¦' : '$';
       const formattedAmount = Number(payment.totalAmount ?? payment.amount).toLocaleString('en-US');
       activities.push({
         id: `act-${actIndex++}`,
         actorType: 'Brand',
         timestamp: paidDate.toISOString(),
         formattedTime: formatEventTime(paidDate),
-        description: `Escrow funded — ${symbol}${formattedAmount} secured`,
+        description: `Escrow funded â€” ${symbol}${formattedAmount} secured`,
       });
     }
 
@@ -2134,7 +2148,7 @@ export class CampaignsService {
         actorType: 'System',
         timestamp: pubDate.toISOString(),
         formattedTime: formatEventTime(pubDate),
-        description: 'Campaign published — Applications opened (48hr window)',
+        description: 'Campaign published â€” Applications opened (48hr window)',
       });
 
       // 4. Applications closed automatically after 48h
@@ -2165,14 +2179,14 @@ export class CampaignsService {
             app.creator.username ||
             'Creator'
           : 'Creator';
-        const symbol = campaign.currency === 'NGN' ? '₦' : '$';
+        const symbol = campaign.currency === 'NGN' ? 'â‚¦' : '$';
         const feeStr = `${symbol}${Number(app.feeRequest || 0).toLocaleString('en-US')}`;
         activities.push({
           id: `act-${actIndex++}`,
           actorType: 'Creator',
           timestamp: appDate.toISOString(),
           formattedTime: formatEventTime(appDate),
-          description: `${creatorName} applied — fee: ${feeStr}`,
+          description: `${creatorName} applied â€” fee: ${feeStr}`,
         });
       }
     }
@@ -2197,7 +2211,7 @@ export class CampaignsService {
         actorType: 'Brand',
         timestamp: maxAcceptedDate.toISOString(),
         formattedTime: formatEventTime(maxAcceptedDate),
-        description: `Creator selection completed — ${acceptedApps.length} creator${
+        description: `Creator selection completed â€” ${acceptedApps.length} creator${
           acceptedApps.length > 1 ? 's' : ''
         } chosen`,
       });
@@ -2278,7 +2292,7 @@ export class CampaignsService {
     return comment;
   }
 
-  // ─── Social Impact Creator Flow ──────────────────────────────────────────
+  // â”€â”€â”€ Social Impact Creator Flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async participateInSocialImpact(
     campaignId: string,
