@@ -171,12 +171,16 @@ export class OnboardingService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    await user.update({
+    const updatePayload: Record<string, any> = {
       repFirstName: dto.repFirstName,
       repLastName: dto.repLastName,
       repEmail: dto.repEmail,
       repPhone: dto.repPhone,
-    });
+    };
+    if (dto.gender !== undefined) {
+      updatePayload.gender = dto.gender;
+    }
+    await user.update(updatePayload);
     return this.userRepository.findById(userId);
   }
 
