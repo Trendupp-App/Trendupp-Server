@@ -1,6 +1,6 @@
 import { CatalogEntry, NotificationType } from './notification.types';
 
-const CURRENCY_SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$' };
+const CURRENCY_SYMBOLS: Record<string, string> = { NGN: 'â‚¦', USD: '$' };
 
 const money = (amount: number, currency?: string): string => {
   const code = currency || 'NGN';
@@ -16,7 +16,7 @@ const money = (amount: number, currency?: string): string => {
  * notificationsService.notify() call at the trigger point.
  */
 export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } = {
-  // ── Applications (gated on notificationSettings.applicationUpdates) ───────
+  // â”€â”€ Applications (gated on notificationSettings.applicationUpdates) â”€â”€â”€â”€â”€â”€â”€
   'application.submitted': {
     category: 'applications',
     channels: ['inApp', 'email'],
@@ -24,10 +24,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `New application on "${d.campaignTitle}"`,
     body: (d) =>
       `${d.creatorName} applied to your campaign "${d.campaignTitle}". Review their application to get started.`,
-    inAppTitle: () => `New Application Received 🎯`,
+    inAppTitle: () => `New Application Received ðŸŽ¯`,
     inAppBody: (d) =>
       `${d.creatorName} applied to your campaign. Review their application to get started.`,
-    pushTitle: () => `New Application Received 🎯`,
+    pushTitle: () => `New Application Received ðŸŽ¯`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/applications`,
   },
   'application.accepted': {
@@ -37,12 +37,12 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: () => `You're in! Application accepted`,
     body: (d) =>
       `Your application for "${d.campaignTitle}" was accepted. Next step: create and submit your content draft.`,
-    inAppTitle: () => `Application Accepted! You're in. 🔥`,
+    inAppTitle: () => `Application Accepted! You're in. ðŸ”¥`,
     inAppBody: (d) =>
       `Your application for "${d.campaignTitle}" has been accepted. You have 3 - 5 days to create and submit your content for review.`,
-    pushTitle: () => `Application Accepted! You're in. 🔥`,
+    pushTitle: () => `Application Accepted! You're in. ðŸ”¥`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `Your application for "${d.campaignTitle}" was accepted — Trendupp`,
+    emailSubject: (d) => `Your application for "${d.campaignTitle}" was accepted â€” Trendupp`,
   },
   'application.rejected': {
     category: 'applications',
@@ -50,11 +50,11 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: (d) => `Application update on "${d.campaignTitle}"`,
     body: (d) =>
-      `Your application for "${d.campaignTitle}" was not selected this time. Keep exploring — new campaigns go live regularly.`,
-    inAppTitle: () => `Application Rejected. Explore Other Paid Campaigns 👊🏽`,
+      `Your application for "${d.campaignTitle}" was not selected this time. Keep exploring â€” new campaigns go live regularly.`,
+    inAppTitle: () => `Application Rejected. Explore Other Paid Campaigns ðŸ‘ŠðŸ½`,
     inAppBody: (d) =>
       `Your application for "${d.campaignTitle}" has been rejected. Keep exploring; apply to other paid campaigns.`,
-    pushTitle: () => `Application Rejected. Explore Other Paid Campaigns 👊🏽`,
+    pushTitle: () => `Application Rejected. Explore Other Paid Campaigns ðŸ‘ŠðŸ½`,
     actionUrl: () => `/campaigns/explore`,
   },
   'application.acceptance_undone': {
@@ -72,14 +72,14 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Application window closing`,
     body: (d) => `${d.campaignTitle}'s window closes in 24 hours, apply now.`,
-    inAppTitle: () => `Application Window Closes in 24 Hours ⏱️`,
+    inAppTitle: () => `Application Window Closes in 24 Hours â±ï¸`,
     inAppBody: (d) =>
       `The application window for ${d.campaignTitle} closes in 24 hours. Apply now!`,
-    pushTitle: () => `Application Window Closes in 24 Hours ⏱️`,
+    pushTitle: () => `Application Window Closes in 24 Hours â±ï¸`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
 
-  // ── Content submissions (gated on applicationUpdates) ─────────────────────
+  // â”€â”€ Content submissions (gated on applicationUpdates) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'submission.draft_submitted': {
     category: 'applications',
     channels: ['inApp', 'email'],
@@ -87,10 +87,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Draft ready for review on "${d.campaignTitle}"`,
     body: (d) =>
       `A creator submitted a content draft for "${d.campaignTitle}". Review it to approve or request a revision.`,
-    inAppTitle: () => `Content Received for Review 📝`,
+    inAppTitle: () => `Content Received for Review ðŸ“`,
     inAppBody: (d) =>
       `A creator has submitted content for ${d.campaignTitle}. Approve or request a revision.`,
-    pushTitle: () => `Content Received for Review 📝`,
+    pushTitle: () => `Content Received for Review ðŸ“`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.revision_resubmitted': {
@@ -100,25 +100,25 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Revised draft ready on "${d.campaignTitle}"`,
     body: (d) =>
       `The creator submitted a revised draft for "${d.campaignTitle}". This revision must be approved or escalated to a dispute.`,
-    inAppTitle: () => `Revised Content Submitted 📝`,
+    inAppTitle: () => `Revised Content Submitted ðŸ“`,
     inAppBody: (d) =>
       `The creator submitted revised content for ${d.campaignTitle}. Approve or raise a dispute.`,
-    pushTitle: () => `Revised Content Submitted 📝`,
+    pushTitle: () => `Revised Content Submitted ðŸ“`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.draft_approved': {
     category: 'applications',
     channels: ['inApp', 'email'],
     priority: 'critical',
-    title: () => `Draft approved — time to go live!`,
+    title: () => `Draft approved â€” time to go live!`,
     body: (d) =>
       `Your draft for "${d.campaignTitle}" was approved. Post your content and submit the live link to complete the campaign.`,
-    inAppTitle: () => `Your Content Has Been Approved! 🎉`,
+    inAppTitle: () => `Your Content Has Been Approved! ðŸŽ‰`,
     inAppBody: (d) =>
       `Your content for "${d.campaignTitle}" has been approved. Publish approved content on agreed platform(s) and submit post link(s) to conclude the campaign.`,
-    pushTitle: () => `Your Content Has Been Approved! 🎉`,
+    pushTitle: () => `Your Content Has Been Approved! ðŸŽ‰`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `Your draft for "${d.campaignTitle}" was approved — Trendupp`,
+    emailSubject: (d) => `Your draft for "${d.campaignTitle}" was approved â€” Trendupp`,
   },
   'submission.revision_requested': {
     category: 'applications',
@@ -128,11 +128,11 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) =>
       `The Advertiser requested changes to your draft for "${d.campaignTitle}"` +
       (d.feedback ? `: "${d.feedback}"` : '.'),
-    inAppTitle: () => `Content Revision Requested 📝`,
+    inAppTitle: () => `Content Revision Requested ðŸ“`,
     inAppBody: (d) =>
       `Advertiser has requested a revision on your content for ${d.campaignTitle}` +
       (d.feedback ? `: "${d.feedback}"` : '.'),
-    pushTitle: () => `Content Revision Requested 📝`,
+    pushTitle: () => `Content Revision Requested ðŸ“`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.deadline_approaching': {
@@ -141,10 +141,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Submission deadline approaching`,
     body: (d) => `Your content for ${d.campaignTitle} is due in 24 hours.`,
-    inAppTitle: () => `Content Submission Due in 24 Hours ⏱️`,
+    inAppTitle: () => `Content Submission Due in 24 Hours â±ï¸`,
     inAppBody: (d) =>
       `Your content for ${d.campaignTitle} is due in 24 hours. Submit for review before the deadline.`,
-    pushTitle: () => `Content Submission Due in 24 Hours ⏱️`,
+    pushTitle: () => `Content Submission Due in 24 Hours â±ï¸`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.revision_deadline_approaching': {
@@ -153,10 +153,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Revision deadline approaching`,
     body: (d) => `Your revised content for ${d.campaignTitle} is due in 24 hours.`,
-    inAppTitle: () => `Content Revision Due in 24 Hours ⏱️`,
+    inAppTitle: () => `Content Revision Due in 24 Hours â±ï¸`,
     inAppBody: (d) =>
       `Your revised content for ${d.campaignTitle} is due in 24 hours. Submit before the deadline.`,
-    pushTitle: () => `Content Revision Due in 24 Hours ⏱️`,
+    pushTitle: () => `Content Revision Due in 24 Hours â±ï¸`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.revision_approved': {
@@ -165,10 +165,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'critical',
     title: () => `Revised content approved`,
     body: (d) => `Your revised content for ${d.campaignTitle} was approved.`,
-    inAppTitle: () => `Revised Content Approved! 🎉`,
+    inAppTitle: () => `Revised Content Approved! ðŸŽ‰`,
     inAppBody: (d) =>
       `Your revised content for ${d.campaignTitle} was approved. Post the approved content on agreed platform(s) and submit post link(s) to conclude the campaign.`,
-    pushTitle: () => `Revised Content Approved! 🎉`,
+    pushTitle: () => `Revised Content Approved! ðŸŽ‰`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.live_posted': {
@@ -177,25 +177,25 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: (d) => `Live post submitted on "${d.campaignTitle}"`,
     body: (d) => `The creator posted their content live for "${d.campaignTitle}". Review the post.`,
-    inAppTitle: () => `Post Link Submitted ✅`,
+    inAppTitle: () => `Post Link Submitted âœ…`,
     inAppBody: (d) =>
       `The creator shared the post link for "${d.campaignTitle}". Review now to conclude the campaign.`,
-    pushTitle: () => `Post Link Submitted ✅`,
+    pushTitle: () => `Post Link Submitted âœ…`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.live_approved': {
     category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
-    title: () => `Content approved — payout scheduled`,
+    title: () => `Content approved â€” payout scheduled`,
     body: (d) =>
       `Your live post for "${d.campaignTitle}" was approved. A payout of ${money(d.amount, d.currency)} is scheduled for ${d.releaseDate}.`,
-    inAppTitle: () => `Content Approved! Payment in 30 Days 🤑`,
+    inAppTitle: () => `Content Approved! Payment in 30 Days ðŸ¤‘`,
     inAppBody: (d) =>
       `Your post for "${d.campaignTitle}" has been approved and the campaign is now concluded. Expect payment in 30 days.`,
-    pushTitle: () => `Content Approved! Payment in 30 Days 🤑`,
+    pushTitle: () => `Content Approved! Payment in 30 Days ðŸ¤‘`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `Payout of ${money(d.amount, d.currency)} scheduled — Trendupp`,
+    emailSubject: (d) => `Payout of ${money(d.amount, d.currency)} scheduled â€” Trendupp`,
   },
   'submission.live_link_needed': {
     category: 'applications',
@@ -203,10 +203,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Live post link needed`,
     body: (d) => `You haven't submitted your live post link(s) for ${d.campaignTitle}.`,
-    inAppTitle: () => `Submit Post Link to Facilitate Your Payment 🔔`,
+    inAppTitle: () => `Submit Post Link to Facilitate Your Payment ðŸ””`,
     inAppBody: (d) =>
       `You are yet to submit your post link(s) for ${d.campaignTitle}. Submit now to facilitate your payment`,
-    pushTitle: () => `Reminder: Submit Post Link to Facilitate Your Payment 🔔`,
+    pushTitle: () => `Reminder: Submit Post Link to Facilitate Your Payment ðŸ””`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'submission.review_deadline_approaching': {
@@ -215,9 +215,9 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Review deadline approaching`,
     body: (d) => `You have 24 hours left to review ${d.creatorName}'s content.`,
-    inAppTitle: () => `Content Review Due in 24 Hours ⏱️`,
+    inAppTitle: () => `Content Review Due in 24 Hours â±ï¸`,
     inAppBody: (d) => `You have 24 hours left to review ${d.creatorName}'s content.`,
-    pushTitle: () => `Content Review Due in 24 Hours ⏱️`,
+    pushTitle: () => `Content Review Due in 24 Hours â±ï¸`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.revision_review_deadline_approaching': {
@@ -226,9 +226,9 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Revision review deadline approaching`,
     body: (d) => `You have 24 hours left to review ${d.creatorName}'s revised content.`,
-    inAppTitle: () => `Reviewed Content Approval Due in 24 Hours ⏱️`,
+    inAppTitle: () => `Reviewed Content Approval Due in 24 Hours â±ï¸`,
     inAppBody: (d) => `You have 24 hours left to review ${d.creatorName}'s revised content.`,
-    pushTitle: () => `Reviewed Content Approval Due in 24 Hours ⏱️`,
+    pushTitle: () => `Reviewed Content Approval Due in 24 Hours â±ï¸`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
   'submission.live_post_review_needed': {
@@ -237,14 +237,14 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Live post review needed`,
     body: (d) => `You haven't reviewed ${d.creatorName}'s live post yet.`,
-    inAppTitle: () => `Review Published Post 🔔`,
+    inAppTitle: () => `Review Published Post ðŸ””`,
     inAppBody: (d) =>
       `You are yet to review ${d.creatorName}'s published post for ${d.campaignTitle}. Review now to conclude the campaign.`,
-    pushTitle: () => `Reminder: Review Published Post 🔔`,
+    pushTitle: () => `Reminder: Review Published Post ðŸ””`,
     actionUrl: (d) => `/campaigns/${d.campaignId}/submissions`,
   },
 
-  // ── Payments & payouts ─────────────────────────────────────────────────────
+  // â”€â”€ Payments & payouts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'payout.released': {
     category: 'payments',
     channels: ['inApp', 'email'],
@@ -252,12 +252,12 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Payment sent: ${money(d.amount, d.currency)}`,
     body: (d) =>
       `Your payout of ${money(d.amount, d.currency)} for "${d.campaignTitle}" has been sent to your bank account.`,
-    inAppTitle: () => `You Have Been Paid 🤑`,
+    inAppTitle: () => `You Have Been Paid ðŸ¤‘`,
     inAppBody: (d) =>
       `${money(d.amount, d.currency)} has been sent as payment for "${d.campaignTitle}" to your bank account.`,
-    pushTitle: () => `You Have Been Paid 🤑`,
+    pushTitle: () => `You Have Been Paid ðŸ¤‘`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `You've been paid ${money(d.amount, d.currency)} — Trendupp`,
+    emailSubject: (d) => `You've been paid ${money(d.amount, d.currency)} â€” Trendupp`,
   },
   'payout.failed': {
     category: 'payments',
@@ -268,7 +268,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
       `The payout of ${money(d.amount, d.currency)} for "${d.campaignTitle}" could not be completed (${d.reason}). Our team has been alerted and will retry.`,
     inAppTitle: () => `Payment Failed.`,
     inAppBody: (d) =>
-      `We couldn’t complete your payment for "${d.campaignTitle}" due to ${d.reason}. Kindly resolve.`,
+      `We couldnâ€™t complete your payment for "${d.campaignTitle}" due to ${d.reason}. Kindly resolve.`,
     pushTitle: () => `Your Payment Failed. Kindly Resolve`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
@@ -291,10 +291,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Refund sent`,
     body: (d) => `${money(d.amount, d.currency)} has been refunded for ${d.campaignTitle}.`,
-    inAppTitle: () => `You Have Been Refunded! 💰`,
+    inAppTitle: () => `You Have Been Refunded! ðŸ’°`,
     inAppBody: (d) =>
       `Your ${money(d.amount, d.currency)} refund for "${d.campaignTitle}" has been sent to your bank account.`,
-    pushTitle: () => `You Have Been Refunded! 💰`,
+    pushTitle: () => `You Have Been Refunded! ðŸ’°`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'refund.failed': {
@@ -306,7 +306,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
       `The refund of ${money(d.amount, d.currency)} for "${d.campaignTitle}" could not be completed (${d.reason}). Our team has been alerted and will retry.`,
     inAppTitle: () => `Refund Failed. Kindly Resolve`,
     inAppBody: (d) =>
-      `We couldn’t complete your ${money(d.amount, d.currency)} refund for ${d.campaignTitle} due to ${d.reason}. Kindly resolve.`,
+      `We couldnâ€™t complete your ${money(d.amount, d.currency)} refund for ${d.campaignTitle} due to ${d.reason}. Kindly resolve.`,
     pushTitle: () => `Refund Failed. Contact Support`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
@@ -314,15 +314,15 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     category: 'payments',
     channels: ['inApp', 'email'],
     priority: 'critical',
-    title: (d) => `Payment confirmed — "${d.campaignTitle}" is live!`,
+    title: (d) => `Payment confirmed â€” "${d.campaignTitle}" is live!`,
     body: (d) =>
       `Your payment of ${money(d.amount, d.currency)} was confirmed and "${d.campaignTitle}" is now live. Creators can start applying.`,
-    inAppTitle: () => `Payment Confirmed! Campaign Is Now Live 💰`,
+    inAppTitle: () => `Payment Confirmed! Campaign Is Now Live ðŸ’°`,
     inAppBody: (d) =>
       `Your ${money(d.amount, d.currency)} payment has been received, and your "${d.campaignTitle}" is now live. Creators have been notified to start applying.`,
-    pushTitle: () => `Payment Confirmed! Your Campaign Is Now Live 💰`,
+    pushTitle: () => `Payment Confirmed! Your Campaign Is Now Live ðŸ’°`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
-    emailSubject: (d) => `Payment confirmed — "${d.campaignTitle}" is now live`,
+    emailSubject: (d) => `Payment confirmed â€” "${d.campaignTitle}" is now live`,
     emailTemplate: 'payment-escrow-receipt',
   },
   'campaign.completed': {
@@ -332,10 +332,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Campaign completed: "${d.campaignTitle}"`,
     body: (d) =>
       `All deliverables and payouts for "${d.campaignTitle}" are done. The campaign is now complete.`,
-    inAppTitle: () => `Campaign Completed! 🍾`,
+    inAppTitle: () => `Campaign Completed! ðŸ¾`,
     inAppBody: (d) =>
       `All deliverables / payouts for "${d.campaignTitle}" have been done. The campaign is now concluded.`,
-    pushTitle: () => `Campaign Completed! 🍾`,
+    pushTitle: () => `Campaign Completed! ðŸ¾`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'campaign.cancelled': {
@@ -357,10 +357,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Campaign paused`,
     body: (d) => `${d.campaignTitle} has been paused by Trendupp.`,
-    inAppTitle: () => `Campaign Paused ✋🏽`,
+    inAppTitle: () => `Campaign Paused âœ‹ðŸ½`,
     inAppBody: (d) =>
       `Creator participation has been paused on ${d.campaignTitle}. Pending resolution.`,
-    pushTitle: (d) => `${d.campaignTitle} Campaign Paused ✋🏽`,
+    pushTitle: (d) => `${d.campaignTitle} Campaign Paused âœ‹ðŸ½`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'campaign.resumed': {
@@ -369,23 +369,23 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'high',
     title: () => `Campaign resumed`,
     body: (d) => `${d.campaignTitle} is active again.`,
-    inAppTitle: () => `Campaign Is Active Again 🚀`,
+    inAppTitle: () => `Campaign Is Active Again ðŸš€`,
     inAppBody: (d) => `Creator participation has resumed on ${d.campaignTitle}.`,
-    pushTitle: (d) => `${d.campaignTitle} Campaign Is Active Again 🚀`,
+    pushTitle: (d) => `${d.campaignTitle} Campaign Is Active Again ðŸš€`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
 
-  // ── Account & Opportunities ───────────────────────────────────────────────
+  // â”€â”€ Account & Opportunities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'opportunity.new_campaign': {
     category: 'opportunities',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `New campaign for you`,
     body: (d) => `A new ${d.niche || 'matching'} campaign matches your tier.`,
-    inAppTitle: () => `New Campaign Brief 📝`,
+    inAppTitle: () => `New Campaign Brief ðŸ“`,
     inAppBody: (d) =>
       `${d.advertiserName} published a new campaign. Review and apply to get started.`,
-    pushTitle: () => `New Campaign Brief 📝`,
+    pushTitle: () => `New Campaign Brief ðŸ“`,
     actionUrl: (d) => `/campaigns/${d.campaignId}`,
   },
   'account.suspended': {
@@ -400,6 +400,32 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     pushTitle: () => `Your Account Has Been Suspended 🚫`,
     actionUrl: () => `/support`,
   },
+  'account.reactivated': {
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: () => `Account reactivated`,
+    body: () =>
+      `Your Trendupp account has been reactivated. You can now access all platform features.`,
+    inAppTitle: () => `Your Account Has Been Reactivated ✅`,
+    inAppBody: () =>
+      `Your Trendupp account has been reactivated. Welcome back!`,
+    pushTitle: () => `Account Reactivated ✅`,
+    actionUrl: () => `/`,
+  },
+  'account.banned': {
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'critical',
+    title: () => `Account permanently banned`,
+    body: (d) =>
+      `Your account has been permanently banned.${d.reason ? ` Reason: ${d.reason}.` : ''} Please contact support if you believe this was an error.`,
+    inAppTitle: () => `Account Permanently Banned 🚫`,
+    inAppBody: (d) =>
+      `Your Trendupp account has been permanently banned.${d.reason ? ` Reason: ${d.reason}.` : ''}`,
+    pushTitle: () => `Account Permanently Banned 🚫`,
+    actionUrl: () => `/support`,
+  },
   'campaign_access.suspended': {
     category: 'security',
     channels: ['inApp', 'email'],
@@ -412,6 +438,19 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
       `You will be unable to apply for or participate in campaigns until your access is restored. Kindly support.`,
     pushTitle: () => `Your Campaign Access Has Been Suspended. Contact Support`,
     actionUrl: () => `/support`,
+  },
+  'campaign_access.reactivated': {
+    category: 'security',
+    channels: ['inApp', 'email'],
+    priority: 'high',
+    title: () => `Campaign access restored`,
+    body: () =>
+      `Your access to apply for campaigns has been restored. You can now browse and apply for active campaigns.`,
+    inAppTitle: () => `Campaign Access Restored ✅`,
+    inAppBody: () =>
+      `Your ability to apply for campaigns has been restored. Explore available opportunities!`,
+    pushTitle: () => `Campaign Access Restored ✅`,
+    actionUrl: () => `/campaigns`,
   },
   'campaign.unfunded_reminder': {
     category: 'campaigns',
@@ -434,8 +473,8 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     inAppTitle: () => `Complete Your Profile Setup`,
     inAppBody: (d) =>
       d.role === 'brand'
-        ? `You’re almost there! Complete your profile to launch your first campaign.`
-        : `You’re almost there! Complete your profile to start applying for paid campaigns.`,
+        ? `Youâ€™re almost there! Complete your profile to launch your first campaign.`
+        : `Youâ€™re almost there! Complete your profile to start applying for paid campaigns.`,
     pushTitle: (d) =>
       d.role === 'brand'
         ? `Complete Your Profile to Launch Your First Campaign`
@@ -448,13 +487,13 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'medium',
     title: () => `You leveled up`,
     body: (d) => `You're now a ${d.newTier} creator. Keep up the great work!`,
-    inAppTitle: (d) => `Congratuations! You’re Now a ${d.newTier} Creator 🎖️`,
-    inAppBody: (d) => `You’re now a ${d.newTier} creator. Keep earning on Trendupp.`,
-    pushTitle: (d) => `Congratuations! You’re Now a ${d.newTier} Creator 🎖️`,
+    inAppTitle: (d) => `Congratuations! Youâ€™re Now a ${d.newTier} Creator ðŸŽ–ï¸`,
+    inAppBody: (d) => `Youâ€™re now a ${d.newTier} creator. Keep earning on Trendupp.`,
+    pushTitle: (d) => `Congratuations! Youâ€™re Now a ${d.newTier} Creator ðŸŽ–ï¸`,
     actionUrl: () => `/profile`,
   },
 
-  // ── Social connections (account-change confirmations — never suppressible) ─
+  // â”€â”€ Social connections (account-change confirmations â€” never suppressible) â”€
   'social.connected': {
     category: 'security',
     channels: ['inApp', 'email'],
@@ -463,7 +502,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) =>
       `@${String(d.username).replace(/^@+/, '')} was verified with ${Number(d.followerCount).toLocaleString('en-NG')} followers. Your creator tier is now ${d.tier}.`,
     actionUrl: () => `/settings/socials`,
-    emailSubject: (d) => `Your ${d.platformLabel} account is now connected — Trendupp`,
+    emailSubject: (d) => `Your ${d.platformLabel} account is now connected â€” Trendupp`,
   },
   'social.disconnected': {
     category: 'security',
@@ -473,10 +512,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: (d) =>
       `Your ${d.platformLabel} account was disconnected. Your creator tier is now ${d.tier}. If this wasn't you, contact support.`,
     actionUrl: () => `/settings/socials`,
-    emailSubject: (d) => `Your ${d.platformLabel} account was disconnected — Trendupp`,
+    emailSubject: (d) => `Your ${d.platformLabel} account was disconnected â€” Trendupp`,
   },
 
-  // ── Disputes (contractual process — never suppressible) ───────────────────
+  // â”€â”€ Disputes (contractual process â€” never suppressible) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'dispute.raised': {
     category: 'chatDispute',
     channels: ['inApp', 'email'],
@@ -533,7 +572,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/disputes/${d.disputeId}`,
   },
 
-  // ── Admin / staff inbox ─────────────────────────────────────────────────────
+  // â”€â”€ Admin / staff inbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'admin.team_member_invited': {
     category: 'account',
     channels: ['inApp'],
@@ -565,6 +604,69 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: (d) => `Team member removed: ${d.adminName}`,
     body: (d) => `${d.adminName} was removed from the admin team.`,
     actionUrl: () => `/admin/team`,
+  },
+  'admin.creator_campaign_access_suspended': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'high',
+    title: (d) => `Creator campaign access suspended: ${d.creatorName}`,
+    body: (d) =>
+      `${d.creatorName}'s ability to apply to campaigns was suspended by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    inAppTitle: (d) => `Campaign Access Suspended: ${d.creatorName}`,
+    inAppBody: (d) =>
+      `${d.creatorName} was restricted from applying to campaigns by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    actionUrl: (d) => `/admin/creators/${d.creatorId}`,
+  },
+  'admin.creator_campaign_access_reactivated': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: (d) => `Creator campaign access reactivated: ${d.creatorName}`,
+    body: (d) =>
+      `${d.creatorName}'s ability to apply to campaigns was restored by ${d.adminName}.`,
+    inAppTitle: (d) => `Campaign Access Restored: ${d.creatorName}`,
+    inAppBody: (d) =>
+      `${d.creatorName}'s ability to apply to campaigns was restored by ${d.adminName}.`,
+    actionUrl: (d) => `/admin/creators/${d.creatorId}`,
+  },
+  'admin.user_account_suspended': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'high',
+    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account suspended: ${d.userName}`,
+    body: (d) =>
+      `${d.userName}'s ${d.userRole} account was suspended by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    inAppTitle: (d) => `Account Suspended: ${d.userName}`,
+    inAppBody: (d) =>
+      `${d.userName}'s account was suspended by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    actionUrl: (d) =>
+      d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
+  },
+  'admin.user_account_reactivated': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'medium',
+    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account reactivated: ${d.userName}`,
+    body: (d) =>
+      `${d.userName}'s ${d.userRole} account was reactivated by ${d.adminName}.`,
+    inAppTitle: (d) => `Account Reactivated: ${d.userName}`,
+    inAppBody: (d) =>
+      `${d.userName}'s account was restored by ${d.adminName}.`,
+    actionUrl: (d) =>
+      d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
+  },
+  'admin.user_account_banned': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'critical',
+    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account permanently banned: ${d.userName}`,
+    body: (d) =>
+      `${d.userName}'s ${d.userRole} account was permanently banned by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    inAppTitle: (d) => `Account Banned: ${d.userName}`,
+    inAppBody: (d) =>
+      `${d.userName}'s account was permanently banned by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    actionUrl: (d) =>
+      d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
   },
   'admin.dispute_pending_activation': {
     category: 'chatDispute',
@@ -612,17 +714,17 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: () => `/admin/notifications`,
   },
 
-  // ── Social Impact — creator-facing ────────────────────────────────────────
+  // â”€â”€ Social Impact â€” creator-facing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'social_impact.tokens_awarded': {
     category: 'opportunities',
     channels: ['inApp', 'email'],
     priority: 'high',
     title: () => `Tokens earned`,
     body: (d) => `You earned ${d.reward} token(s) for ${d.campaignTitle}.`,
-    inAppTitle: () => `Congratulations! You Have Earned New Tokens! 🤩`,
+    inAppTitle: () => `Congratulations! You Have Earned New Tokens! ðŸ¤©`,
     inAppBody: (d) =>
       `You have earned ${d.reward} tokens for your participation on ${d.campaignTitle}.`,
-    pushTitle: () => `Congratulations! You Have Earned New Tokens! 🤩`,
+    pushTitle: () => `Congratulations! You Have Earned New Tokens! ðŸ¤©`,
   },
   'social_impact.reminder': {
     category: 'opportunities',
@@ -646,7 +748,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     title: () => `Final reminder`,
     body: (d) =>
       `Only 2 hours remain before ${d.campaignTitle} closes. Submit your live content now to receive your reward.`,
-    inAppTitle: () => `2 Hours to Go ⏱️`,
+    inAppTitle: () => `2 Hours to Go â±ï¸`,
     inAppBody: (d) =>
       `Only 2 hours before ${d.campaignTitle} closes. Submit your post link(s) now to receive your tokens.`,
     pushTitle: () => `Social Campaign Ends in 2 Hours. Upload Content Now`,
@@ -658,10 +760,10 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     priority: 'medium',
     title: () => `Badge earned`,
     body: (d) => `You've earned the ${d.badgeName} badge. It's now displayed on your profile.`,
-    inAppTitle: () => `Congratulations! You Have Earned a New Badge🎖️`,
+    inAppTitle: () => `Congratulations! You Have Earned a New BadgeðŸŽ–ï¸`,
     inAppBody: (d) =>
       `You've earned the ${d.badgeName} badge. Keep participating in social campaigns for more rewards.`,
-    pushTitle: () => `Congratulations! You Have Earned a New Badge 🎖️`,
+    pushTitle: () => `Congratulations! You Have Earned a New Badge ðŸŽ–ï¸`,
     actionUrl: () => `/profile`,
   },
   'social_impact.paused': {
@@ -699,7 +801,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     actionUrl: (d) => `/campaigns/social-impact/${d.campaignId}`,
   },
 
-  // ── Social Impact — admin inbox ───────────────────────────────────────────
+  // â”€â”€ Social Impact â€” admin inbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'social_impact.admin_published': {
     category: 'campaigns',
     channels: ['inApp'],

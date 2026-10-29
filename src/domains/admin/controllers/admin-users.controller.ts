@@ -13,7 +13,15 @@ import {
   HttpStatus,
   Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminUsersService } from '../services/admin-users.service';
 import { AuditLogService } from '../services/audit-log.service';
@@ -21,6 +29,7 @@ import { AdminInviteDto } from '../dtos/admin-invite.dto';
 import { UpdateAdminProfileDto } from '../dtos/update-admin-profile.dto';
 import { QueryAdminUsersDto } from '../dtos/query-admin-users.dto';
 import { QueryAuditLogsDto } from '../dtos/query-audit-logs.dto';
+import { BanUserDto, AdminModerationResponseDto } from '../dtos/admin-moderation.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
@@ -123,7 +132,7 @@ export class AdminUsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Suspend/pause a sub-admin account (Owner ONLY)' })
   @ApiResponse({ status: 200, description: 'Sub-admin account suspended' })
-  @ApiResponse({ status: 403, description: 'Forbidden — Owner role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden â€” Owner role required' })
   async suspendAdmin(@CurrentUser() user: User, @Param('id') id: string, @Req() req: Request) {
     const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
     const userAgent = req.headers['user-agent'] || '';
@@ -135,7 +144,7 @@ export class AdminUsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate a suspended sub-admin account (Owner ONLY)' })
   @ApiResponse({ status: 200, description: 'Sub-admin account reactivated' })
-  @ApiResponse({ status: 403, description: 'Forbidden — Owner role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden â€” Owner role required' })
   async reactivateAdmin(@CurrentUser() user: User, @Param('id') id: string, @Req() req: Request) {
     const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
     const userAgent = req.headers['user-agent'] || '';
@@ -147,11 +156,34 @@ export class AdminUsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Permanently delete a sub-admin account (Owner ONLY)' })
   @ApiResponse({ status: 200, description: 'Sub-admin account deleted' })
-  @ApiResponse({ status: 403, description: 'Forbidden — Owner role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden â€” Owner role required' })
   async deleteAdmin(@CurrentUser() user: User, @Param('id') id: string, @Req() req: Request) {
     const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
     const userAgent = req.headers['user-agent'] || '';
     return this.adminUsersService.deleteAdmin(user.id, id, ipAddress, userAgent);
+  }
+
+  @Post('users/:id/ban')
+  @Roles('owner', 'super_admin', 'moderator')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Permanently ban any user account (Creator, Brand, or User)' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID to ban (Creator, Brand, or User)',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: BanUserDto, required: false })
+  @ApiResponse({ status: 200, type: AdminModerationResponseDto })
+  async banUser(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: BanUserDto,
+    @Req() req: Request,
+  ): Promise<AdminModerationResponseDto> {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.adminUsersService.banUser(user.id, id, dto, ipAddress, userAgent);
   }
 
   @Get('audit-logs')

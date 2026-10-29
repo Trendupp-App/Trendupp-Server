@@ -165,7 +165,7 @@ export class AuthService {
       return { signinEnabled: row.signinEnabled, signupEnabled: row.signupEnabled };
     } catch (error) {
       this.logger.warn(
-        `Could not load auth provider policy for "${provider}" — allowing: ${(error as Error).message}`,
+        `Could not load auth provider policy for "${provider}" â€” allowing: ${(error as Error).message}`,
       );
       return { signinEnabled: true, signupEnabled: true };
     }
@@ -187,7 +187,7 @@ export class AuthService {
     }
   }
 
-  /** Public list of provider availability — drives which buttons clients show. */
+  /** Public list of provider availability â€” drives which buttons clients show. */
   async getAuthProviders(): Promise<
     Array<{ provider: string; signinEnabled: boolean; signupEnabled: boolean }>
   > {
@@ -225,8 +225,8 @@ export class AuthService {
   }
 
   /**
-   * Derive a presentable first name from an email's local part —
-   * "ada.obi99@gmail.com" → "Ada". Returns null for addresses whose local
+   * Derive a presentable first name from an email's local part â€”
+   * "ada.obi99@gmail.com" â†’ "Ada". Returns null for addresses whose local
    * part means nothing to a human: Apple private relay (random tokens like
    * "x9f3k2q@privaterelay.appleid.com") and our own synthetic fallbacks.
    */
@@ -819,7 +819,7 @@ export class AuthService {
     let user = await this.usersService.findByFacebookOpenId(facebookOpenId);
 
     if (!user && profile.email) {
-      // Same mailbox, existing account (e.g. signed up with Google) — link it.
+      // Same mailbox, existing account (e.g. signed up with Google) â€” link it.
       user = await this.usersService.findByEmail(profile.email);
       if (user) {
         await this.usersService.update(user.id, { facebookOpenId, isEmailVerified: true });
@@ -873,14 +873,14 @@ export class AuthService {
 
     const appleUserId = identity.appleUserId;
     // identity.email is real or a private-relay address (both deliverable);
-    // it can be absent on repeat logins — synthetic fallback covers that.
+    // it can be absent on repeat logins â€” synthetic fallback covers that.
     const email = identity.email || `apple_${appleUserId}@trendupp.apple`;
 
     // Server-side name backup: Apple sends the name exactly once per Apple
     // ID, and that one delivery often lands on a request that does NOT create
     // the account (sign-in before signup, abandoned flow). Stash it keyed by
-    // the verified appleUserId whenever it shows up, so a later signup — from
-    // ANY device — can recover it. Deleted once consumed.
+    // the verified appleUserId whenever it shows up, so a later signup â€” from
+    // ANY device â€” can recover it. Deleted once consumed.
     if (appleLoginDto.firstName) {
       await this.upsertAppleNameCache(appleUserId, identity.email, appleLoginDto);
     }
@@ -888,7 +888,7 @@ export class AuthService {
     let user = await this.usersService.findByAppleUserId(appleUserId);
 
     if (!user && identity.email) {
-      // Same mailbox, existing account — link the Apple identity to it.
+      // Same mailbox, existing account â€” link the Apple identity to it.
       user = await this.usersService.findByEmail(identity.email);
       if (user) {
         await this.usersService.update(user.id, { appleUserId, isEmailVerified: true });
@@ -929,12 +929,12 @@ export class AuthService {
       });
       user = await this.usersService.findOne(user.id);
 
-      // The cache did its job (or was never needed) — don't keep PII around.
+      // The cache did its job (or was never needed) â€” don't keep PII around.
       await this.appleNameCacheModel.destroy({ where: { appleUserId }, force: true });
     } else {
       // Self-heal: if this login carried the name (first authorization, or a
-      // Settings revoke + re-grant, which makes Apple resend it) — or an
-      // earlier attempt stashed it in the server-side cache — and the stored
+      // Settings revoke + re-grant, which makes Apple resend it) â€” or an
+      // earlier attempt stashed it in the server-side cache â€” and the stored
       // name is still a placeholder, adopt it.
       const hasPlaceholderName =
         !user.firstName || user.firstName === 'Apple' || user.firstName === 'User';
@@ -1034,7 +1034,7 @@ export class AuthService {
       return { message: 'OTP verified successfully. You may now reset your password.' };
     }
 
-    // For all other OTP types (registration, login, etc.) — verify and delete as normal.
+    // For all other OTP types (registration, login, etc.) â€” verify and delete as normal.
     const isValid = await this.otpService.verifyOtp(email, code);
 
     if (!isValid) {
@@ -1091,7 +1091,7 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    // Normalise email before lookup — prevents false negatives if user typed in mixed case.
+    // Normalise email before lookup â€” prevents false negatives if user typed in mixed case.
     const email = forgotPasswordDto.email.toLowerCase().trim();
 
     const user = await this.usersService.findByEmail(email);
@@ -1152,6 +1152,9 @@ export class AuthService {
   }
 
   private checkAndReactivateUser(user: User): void {
+    if (user.isBanned) {
+      throw new ForbiddenException('Your account has been permanently banned.');
+    }
     if (user.isActive === false || user.deactivatedAt) {
       throw new ForbiddenException(
         'Your account has been deleted or deactivated. You cannot log in with this account.',

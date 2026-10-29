@@ -851,6 +851,25 @@ describe('CampaignsService', () => {
         ForbiddenException,
       );
     });
+
+    it('should throw ForbiddenException if creator campaign access is suspended', async () => {
+      const liveCampaign = { ...mockCampaign, status: 'live' } as unknown as Campaign;
+      const mockCreator = {
+        id: 'creator1',
+        canApplyToCampaigns: false,
+        socialsConnected: { instagram: true, tiktok: false, youtube: false, twitter: false },
+        bankCode: '057',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Creator Account',
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(liveCampaign);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockCreator as any);
+
+      await expect(service.applyToCampaign('c1', 'creator1', mockAppDto)).rejects.toThrow(
+        'Your account has been restricted from applying to campaigns. Please contact support.',
+      );
+    });
   });
 
   describe('getCampaignApplications', () => {
@@ -877,8 +896,8 @@ describe('CampaignsService', () => {
   });
 
   describe('reviewCampaignApplication', () => {
-    it('should successfully update status to accepted', async () => {
-      const liveCampaign = { ...mockCampaign, brandId: 'brand1' } as unknown as Campaign;
+    it('should successfully update status to accepted (deferring timeline if campaign is not active yet)', async () => {
+      const liveCampaign = { ...mockCampaign, brandId: 'brand1', status: 'live' } as unknown as Campaign;
       const mockApp = {
         id: 'app1',
         campaignId: 'c1',
@@ -892,8 +911,33 @@ describe('CampaignsService', () => {
 
       expect(mockApp.update).toHaveBeenCalledWith({
         status: 'accepted',
+      });
+    });
+
+    it('should initialize timeline and send notification when accepting on an already active campaign', async () => {
+      const activeCampaign = { ...mockCampaign, brandId: 'brand1', status: 'active', goal: 'Amplify Content' } as unknown as Campaign;
+      const mockApp = {
+        id: 'app1',
+        campaignId: 'c1',
+        creatorId: 'creator1',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      campaignRepoMock.findById.mockResolvedValue(activeCampaign);
+      campaignRepoMock.findApplicationById.mockResolvedValue(mockApp as any);
+
+      await service.reviewCampaignApplication('c1', 'app1', 'brand1', 'accepted');
+
+      expect(mockApp.update).toHaveBeenCalledWith({
+        status: 'accepted',
         timeline: expect.any(Object),
       });
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'application.accepted',
+          recipientId: 'creator1',
+        }),
+      );
     });
 
     it('should successfully select a pending application without sending notifications', async () => {
@@ -1128,7 +1172,7 @@ describe('CampaignsService', () => {
     });
   });
 
-  // ─── Content Submissions Flow Tests ────────────────────────────────────────
+  // â”€â”€â”€ Content Submissions Flow Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   describe('submitDraft', () => {
     it('should submit draft successfully for accepted application', async () => {

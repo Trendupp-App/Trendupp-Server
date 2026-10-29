@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { User } from '../../users/entities/user.entity';
@@ -9,6 +9,13 @@ import { Bank } from '../../users/entities/bank.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { CampaignApplication } from '../../campaigns/entities/campaign-application.entity';
 import { Payment } from '../../campaigns/entities/payment.entity';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { AuditLogService } from './audit-log.service';
+import {
+  SuspendUserDto,
+  BanUserDto,
+  AdminModerationResponseDto,
+} from '../dtos/admin-moderation.dto';
 import {
   QueryBrandWidgetTimeFilterDto,
   QueryTopBrandsWidgetDto,
@@ -40,7 +47,15 @@ export class AdminBrandsService {
     private readonly nationalityModel: typeof Nationality,
     @InjectModel(Campaign)
     private readonly campaignModel: typeof Campaign,
+    private readonly notificationsService: NotificationsService,
+    @Optional()
+    private readonly auditLogService?: AuditLogService,
   ) {}
+
+  private static adminDisplayName(admin: User): string {
+    const fullName = `${admin.firstName || ''} ${admin.lastName || ''}`.trim();
+    return fullName || admin.email || 'Admin';
+  }
 
   private async getBrandRoleId(): Promise<string | null> {
     const role = await this.roleModel.findOne({ where: { name: 'brand' } });
@@ -93,7 +108,7 @@ export class AdminBrandsService {
     return where;
   }
 
-  // ── 1. Summary & Profile Completion ─────────────────────────────────────────
+  // â”€â”€ 1. Summary & Profile Completion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getBrandsSummary(): Promise<AdminBrandSummaryResponseDto> {
     const brandRoleId = await this.getBrandRoleId();
@@ -156,7 +171,7 @@ export class AdminBrandsService {
     };
   }
 
-  // ── 2. Signup Growth Widget ──────────────────────────────────────────────────
+  // â”€â”€ 2. Signup Growth Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getSignupGrowth(query: QueryBrandWidgetTimeFilterDto): Promise<TimeSeriesPointDto[]> {
     const brandRoleId = await this.getBrandRoleId();
@@ -171,7 +186,7 @@ export class AdminBrandsService {
     return this.generateTimeSeries(advertisers, query.period || 'monthly');
   }
 
-  // ── 3. Active Users Widget ───────────────────────────────────────────────────
+  // â”€â”€ 3. Active Users Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getActiveUsers(query: QueryBrandWidgetTimeFilterDto): Promise<TimeSeriesPointDto[]> {
     const brandRoleId = await this.getBrandRoleId();
@@ -186,7 +201,7 @@ export class AdminBrandsService {
     return this.generateTimeSeries(advertisers, query.period || 'monthly', 'lastLoginAt');
   }
 
-  // ── 4. Top Brands Widget ─────────────────────────────────────────────────────
+  // â”€â”€ 4. Top Brands Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getTopBrands(query: QueryTopBrandsWidgetDto): Promise<TopBrandWidgetDto[]> {
     const brandRoleId = await this.getBrandRoleId();
@@ -232,7 +247,7 @@ export class AdminBrandsService {
       .slice(0, limit);
   }
 
-  // ── 5. Industry Breakdown Widget ───────────────────────────────────────────
+  // â”€â”€ 5. Industry Breakdown Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getIndustryBreakdown(
     query: QueryBrandWidgetTimeFilterDto,
@@ -267,7 +282,7 @@ export class AdminBrandsService {
       .slice(0, 10);
   }
 
-  // ── 6. Country Breakdown Widget ─────────────────────────────────────────────
+  // â”€â”€ 6. Country Breakdown Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getCountryBreakdown(
     query: QueryBrandWidgetTimeFilterDto,
@@ -299,7 +314,7 @@ export class AdminBrandsService {
       .slice(0, 10);
   }
 
-  // ── 7. Combined Analytics Initial Load ─────────────────────────────────────
+  // â”€â”€ 7. Combined Analytics Initial Load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getBrandsAnalytics(
     query: QueryAdminBrandAnalyticsDto,
@@ -322,7 +337,7 @@ export class AdminBrandsService {
     };
   }
 
-  // ── 8. Advertisers Table Listing ───────────────────────────────────────────
+  // â”€â”€ 8. Advertisers Table Listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getBrandsList(query: QueryAdminBrandsListDto): Promise<AdminBrandsListResponseDto> {
     const brandRoleId = await this.getBrandRoleId();
@@ -425,7 +440,9 @@ export class AdminBrandsService {
       const industryName = (b.industries || []).map((i) => i.name).join(', ') || 'Beverages';
 
       let brandStatus = 'ACTIVE';
-      if (!b.isActive) {
+      if (b.isBanned) {
+        brandStatus = 'BANNED';
+      } else if (!b.isActive) {
         brandStatus = 'SUSPENDED';
       } else if (b.verificationStatus === 'pending') {
         brandStatus = 'PENDING';
@@ -457,6 +474,7 @@ export class AdminBrandsService {
         gender: b.gender || null,
         profileCompletion: b.onboardingPercentage,
         status: brandStatus,
+        isBanned: !!b.isBanned,
         totalSpend,
         campaignsCount: campaigns.length,
         joinDate: b.createdAt,
@@ -476,7 +494,7 @@ export class AdminBrandsService {
     };
   }
 
-  // ── 9. Brand Profile View Details ────────────────────────────────────────────
+  // â”€â”€ 9. Brand Profile View Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getBrandProfileDetails(id: string): Promise<AdminBrandProfileResponseDto> {
     const advertiser = await this.userModel.findOne({
@@ -504,11 +522,13 @@ export class AdminBrandsService {
 
     const industryName = (advertiser.industries || []).map((i) => i.name).join(', ') || 'FMCG';
 
-    const accountStatus = !advertiser.isActive
-      ? 'Suspended'
-      : advertiser.verificationStatus === 'pending'
-        ? 'Pending'
-        : 'Active';
+    const accountStatus = advertiser.isBanned
+      ? 'Banned'
+      : !advertiser.isActive
+        ? 'Suspended'
+        : advertiser.verificationStatus === 'pending'
+          ? 'Pending'
+          : 'Active';
 
     const repFullName =
       `${advertiser.repFirstName || ''} ${advertiser.repLastName || ''}`.trim() || brandName;
@@ -563,6 +583,9 @@ export class AdminBrandsService {
         profileCompletion: advertiser.onboardingPercentage,
         dateJoined: formattedDateJoined,
         accountStatus,
+        isBanned: !!advertiser.isBanned,
+        bannedAt: advertiser.bannedAt || null,
+        banReason: advertiser.banReason || null,
       },
       metrics: {
         totalCampaigns,
@@ -580,7 +603,7 @@ export class AdminBrandsService {
     };
   }
 
-  // ── 10. Brand Campaign History ───────────────────────────────────────────────
+  // â”€â”€ 10. Brand Campaign History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getBrandCampaignHistory(
     id: string,
@@ -663,7 +686,7 @@ export class AdminBrandsService {
     };
   }
 
-  // ── Helper methods for chart series generation ────────────────────────────
+  // â”€â”€ Helper methods for chart series generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private generateTimeSeries(
     advertisers: User[],
@@ -688,7 +711,7 @@ export class AdminBrandsService {
     const getTargetDate = (u: User): Date | null => {
       // `dateField` is `keyof User`, so `u[dateField]` can type as one of the
       // model's methods, which trips @typescript-eslint/unbound-method. Index
-      // through a plain record instead — the value is only ever a date column.
+      // through a plain record instead â€” the value is only ever a date column.
       const val = (
         typeof u.getDataValue === 'function'
           ? u.getDataValue(dateField)
@@ -740,5 +763,216 @@ export class AdminBrandsService {
       label: `Day ${i + 1}`,
       count: cnt || 0,
     }));
+  }
+
+  // ── Brand Moderation Endpoints ──────────────────────────────────────────────
+
+  async suspendBrand(
+    admin: User,
+    brandId: string,
+    dto?: SuspendUserDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const brandRoleId = await this.getBrandRoleId();
+    const brand = await this.userModel.findOne({
+      where: { id: brandId, ...(brandRoleId ? { roleId: brandRoleId } : {}) },
+    });
+    if (!brand) {
+      throw new NotFoundException('Brand/Advertiser not found');
+    }
+
+    await brand.update({ isActive: false });
+
+    const adminName = AdminBrandsService.adminDisplayName(admin);
+    const brandName =
+      `${brand.firstName || ''} ${brand.lastName || ''}`.trim() || brand.username || brand.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'BRAND_SUSPENDED',
+        targetUserId: brandId,
+        ipAddress,
+        userAgent,
+        details: { reason: dto?.reason },
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.suspended',
+      recipientId: brand.id,
+      actorId: admin.id,
+      data: { reason: dto?.reason || 'Account suspended by administrator' },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_suspended',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: brand.id,
+        userName: brandName,
+        userRole: 'brand',
+        adminName,
+        reason: dto?.reason,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Brand account ${brandName} has been suspended.`,
+      user: {
+        id: brand.id,
+        name: brandName,
+        email: brand.email,
+        isActive: brand.isActive,
+        canApplyToCampaigns: brand.canApplyToCampaigns,
+        isBanned: brand.isBanned,
+        bannedAt: brand.bannedAt,
+        banReason: brand.banReason,
+      },
+    };
+  }
+
+  async reactivateBrand(
+    admin: User,
+    brandId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const brandRoleId = await this.getBrandRoleId();
+    const brand = await this.userModel.findOne({
+      where: { id: brandId, ...(brandRoleId ? { roleId: brandRoleId } : {}) },
+    });
+    if (!brand) {
+      throw new NotFoundException('Brand/Advertiser not found');
+    }
+
+    await brand.update({ isActive: true });
+
+    const adminName = AdminBrandsService.adminDisplayName(admin);
+    const brandName =
+      `${brand.firstName || ''} ${brand.lastName || ''}`.trim() || brand.username || brand.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'BRAND_REACTIVATED',
+        targetUserId: brandId,
+        ipAddress,
+        userAgent,
+        details: {},
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.reactivated',
+      recipientId: brand.id,
+      actorId: admin.id,
+      data: {},
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_reactivated',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: brand.id,
+        userName: brandName,
+        userRole: 'brand',
+        adminName,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Brand account ${brandName} has been reactivated.`,
+      user: {
+        id: brand.id,
+        name: brandName,
+        email: brand.email,
+        isActive: brand.isActive,
+        canApplyToCampaigns: brand.canApplyToCampaigns,
+        isBanned: brand.isBanned,
+        bannedAt: brand.bannedAt,
+        banReason: brand.banReason,
+      },
+    };
+  }
+
+  async banBrand(
+    admin: User,
+    brandId: string,
+    dto?: BanUserDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const brandRoleId = await this.getBrandRoleId();
+    const brand = await this.userModel.findOne({
+      where: { id: brandId, ...(brandRoleId ? { roleId: brandRoleId } : {}) },
+    });
+    if (!brand) {
+      throw new NotFoundException('Brand/Advertiser not found');
+    }
+
+    const banReason = dto?.reason || 'Permanently banned by administrator';
+    const bannedAt = new Date();
+    await brand.update({
+      isBanned: true,
+      isActive: false,
+      bannedAt,
+      banReason,
+    });
+
+    const adminName = AdminBrandsService.adminDisplayName(admin);
+    const brandName =
+      `${brand.firstName || ''} ${brand.lastName || ''}`.trim() || brand.username || brand.email;
+
+    if (this.auditLogService) {
+      await this.auditLogService.log({
+        adminId: admin.id,
+        action: 'BRAND_BANNED',
+        targetUserId: brandId,
+        ipAddress,
+        userAgent,
+        details: { reason: banReason },
+      });
+    }
+
+    await this.notificationsService.notify({
+      type: 'account.banned',
+      recipientId: brand.id,
+      actorId: admin.id,
+      data: { reason: banReason },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_banned',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: admin.id,
+      data: {
+        userId: brand.id,
+        userName: brandName,
+        userRole: 'brand',
+        adminName,
+        reason: banReason,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Brand account ${brandName} has been permanently banned.`,
+      user: {
+        id: brand.id,
+        name: brandName,
+        email: brand.email,
+        isActive: brand.isActive,
+        canApplyToCampaigns: brand.canApplyToCampaigns,
+        isBanned: brand.isBanned,
+        bannedAt: brand.bannedAt,
+        banReason: brand.banReason,
+      },
+    };
   }
 }

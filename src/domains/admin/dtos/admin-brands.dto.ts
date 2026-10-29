@@ -26,7 +26,7 @@ export class PaginationQueryDto {
   limit?: number = 10;
 }
 
-// ── Query DTOs ────────────────────────────────────────────────────────────────
+// â”€â”€ Query DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class QueryBrandWidgetTimeFilterDto {
   @ApiPropertyOptional({
@@ -150,7 +150,7 @@ export class QueryAdminBrandsListDto {
   limit?: number = 20;
 }
 
-// ── Widget Component Response DTOs ────────────────────────────────────────────
+// â”€â”€ Widget Component Response DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class BrandSummaryDto {
   @ApiProperty({ example: 3847 })
@@ -239,7 +239,7 @@ export class AdminBrandAnalyticsResponseDto {
   countryBreakdown: BrandCountryBreakdownItemDto[];
 }
 
-// ── Advertisers Table Listing DTOs ────────────────────────────────────────────
+// â”€â”€ Advertisers Table Listing DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class AdminAdvertiserListItemDto {
   @ApiProperty({ example: 'uuid-1' })
@@ -279,6 +279,9 @@ export class AdminAdvertiserListItemDto {
   @ApiProperty({ example: 14 })
   campaignsCount: number;
 
+  @ApiProperty({ example: false })
+  isBanned?: boolean;
+
   @ApiProperty({ example: '2023-10-12T00:00:00Z' })
   joinDate: Date;
 }
@@ -291,7 +294,7 @@ export class AdminBrandsListResponseDto {
   meta: PaginationMetaDto;
 }
 
-// ── Brand Profile Modal DTOs ──────────────────────────────────────────────────
+// â”€â”€ Brand Profile Modal DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class BrandHeaderInfoDto {
   @ApiProperty({ example: 'Pepsi Nigeria' })
@@ -329,7 +332,7 @@ export class BrandDetailsInfoDto {
   @ApiProperty({ example: 'Lagos/Ikeja', nullable: true })
   stateCity: string | null;
 
-  @ApiProperty({ example: '₦4.7M', nullable: true })
+  @ApiProperty({ example: 'â‚¦4.7M', nullable: true })
   monthlyBudget: string | null;
 }
 
@@ -354,6 +357,15 @@ export class BrandRepresentativeInfoDto {
 
   @ApiProperty({ example: 'Active' })
   accountStatus: string;
+
+  @ApiProperty({ example: false })
+  isBanned?: boolean;
+
+  @ApiProperty({ example: null, nullable: true })
+  bannedAt?: Date | null;
+
+  @ApiProperty({ example: null, nullable: true })
+  banReason?: string | null;
 }
 
 export class BrandMetricsInfoDto {
@@ -387,7 +399,7 @@ export class AdminBrandProfileResponseDto {
   bankDetails: BankDetailsDto | null;
 }
 
-// ── Brand Campaign History DTOs ───────────────────────────────────────────────
+// â”€â”€ Brand Campaign History DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class BrandCampaignHistoryItemDto {
   @ApiProperty({ example: 'uuid-1' })

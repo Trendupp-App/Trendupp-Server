@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsIn, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// ── Query DTOs ────────────────────────────────────────────────────────────────
+// â”€â”€ Query DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class QueryWidgetTimeFilterDto {
   @ApiPropertyOptional({
@@ -131,7 +131,7 @@ export class QueryAdminCreatorsListDto {
   limit?: number = 20;
 }
 
-// ── Widget Component Response DTOs ────────────────────────────────────────────
+// â”€â”€ Widget Component Response DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class CreatorSummaryDto {
   @ApiProperty({ example: 3847 })
@@ -247,7 +247,7 @@ export class TopCreatorWidgetDto {
   totalEarnings: number;
 }
 
-// ── Response Wrappers for Widget Endpoints ────────────────────────────────────
+// â”€â”€ Response Wrappers for Widget Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class AdminCreatorSummaryResponseDto {
   @ApiProperty({ type: CreatorSummaryDto })
@@ -286,7 +286,7 @@ export class AdminCreatorAnalyticsResponseDto {
   countryBreakdown: CountryBreakdownItemDto[];
 }
 
-// ── Response DTOs for Creator Table Listing ───────────────────────────────────
+// â”€â”€ Response DTOs for Creator Table Listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class AdminCreatorListItemDto {
   @ApiProperty({ example: 'uuid-1' })
@@ -331,6 +331,12 @@ export class AdminCreatorListItemDto {
   @ApiProperty({ example: 1200000 })
   totalEarnings: number;
 
+  @ApiProperty({ example: true })
+  canApplyToCampaigns?: boolean;
+
+  @ApiProperty({ example: false })
+  isBanned?: boolean;
+
   @ApiProperty({ example: '2026-06-15T10:00:00Z' })
   createdAt: Date;
 }
@@ -357,7 +363,7 @@ export class AdminCreatorsListResponseDto {
   meta: PaginationMetaDto;
 }
 
-// ── Creator Profile Details DTOs ──────────────────────────────────────────────
+// â”€â”€ Creator Profile Details DTOs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class CreatorProfileMetricsDto {
   @ApiProperty({ example: 18 })
@@ -427,6 +433,18 @@ export class CreatorProfileDetailsDto {
 
   @ApiProperty({ example: 'https://...', nullable: true })
   avatarUrl: string | null;
+
+  @ApiProperty({ example: true })
+  canApplyToCampaigns?: boolean;
+
+  @ApiProperty({ example: false })
+  isBanned?: boolean;
+
+  @ApiProperty({ example: null, nullable: true })
+  bannedAt?: Date | null;
+
+  @ApiProperty({ example: null, nullable: true })
+  banReason?: string | null;
 }
 
 export class CreatorSocialAccountDto {

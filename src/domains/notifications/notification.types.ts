@@ -3,12 +3,12 @@
  *
  * Every notification type declares its payload shape here. The catalog
  * (notification.catalog.ts) must have exactly one entry per type, and
- * NotificationsService.notify() is typed against this map end-to-end —
+ * NotificationsService.notify() is typed against this map end-to-end â€”
  * a wrong payload shape at a call site is a compile error.
  */
 
 /**
- * Display/filter category of a notification — the product taxonomy shown as
+ * Display/filter category of a notification â€” the product taxonomy shown as
  * tabs in the clients (see GET /notifications/categories). Preference gating
  * maps each category to a users.notification_settings key separately via
  * CATEGORY_SETTINGS_KEY in notifications.constants.ts; 'security' and
@@ -40,7 +40,7 @@ export type NotificationRecipientRole =
 
 /** Payload contract per notification type. */
 export interface NotificationPayloads {
-  // ── Applications ──────────────────────────────────────────────────────────
+  // â”€â”€ Applications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'application.submitted': {
     campaignId: string;
     campaignTitle: string;
@@ -55,7 +55,7 @@ export interface NotificationPayloads {
     applicationId: string;
   };
 
-  // ── Content submissions ───────────────────────────────────────────────────
+  // â”€â”€ Content submissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'submission.draft_submitted': { campaignId: string; campaignTitle: string; submissionId: string };
   'submission.revision_resubmitted': {
     campaignId: string;
@@ -79,7 +79,7 @@ export interface NotificationPayloads {
     releaseDate: string;
   };
 
-  // ── Payments & payouts ────────────────────────────────────────────────────
+  // â”€â”€ Payments & payouts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'payout.released': {
     campaignId: string;
     campaignTitle: string;
@@ -106,9 +106,9 @@ export interface NotificationPayloads {
     campaignTitle: string;
     amount: number;
     currency?: string;
-    /** Pandascrow transaction reference — used in the payment receipt email. */
+    /** Pandascrow transaction reference â€” used in the payment receipt email. */
     transactionRef?: string;
-    /** Pandascrow escrow ID — used in the payment receipt email. */
+    /** Pandascrow escrow ID â€” used in the payment receipt email. */
     escrowId?: string;
     /** ISO timestamp of when the payment was confirmed. */
     paidAt?: string;
@@ -134,7 +134,7 @@ export interface NotificationPayloads {
     reason?: string;
   };
 
-  // ── Social connections ────────────────────────────────────────────────────
+  // â”€â”€ Social connections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'social.connected': {
     platform: string;
     platformLabel: string;
@@ -148,7 +148,7 @@ export interface NotificationPayloads {
     tier: string;
   };
 
-  // ── Disputes ──────────────────────────────────────────────────────────────
+  // â”€â”€ Disputes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'dispute.raised': { disputeId: string; campaignId: string; reason: string };
   'dispute.activated': { disputeId: string; campaignId: string };
   'dispute.resolved': {
@@ -164,29 +164,29 @@ export interface NotificationPayloads {
   };
   'dispute.rejected': { disputeId: string; campaignId: string; reason: string };
 
-  // ── Admin / staff inbox (delivered via role fan-outs; never suppressible) ──
+  // â”€â”€ Admin / staff inbox (delivered via role fan-outs; never suppressible) â”€â”€
   'admin.team_member_invited': { adminName: string; roleName: string };
   'admin.team_member_suspended': { adminName: string };
   'admin.team_member_reactivated': { adminName: string };
   'admin.team_member_removed': { adminName: string };
   'broadcast.sent': { broadcastId: string; title: string; totalRecipients: number };
 
-  // ── Social Impact — creator-facing ────────────────────────────────────────
+  // â”€â”€ Social Impact â€” creator-facing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'social_impact.tokens_awarded': {
     campaignId: string;
     campaignTitle: string;
     reward: number;
     totalTokens: number;
   };
-  /** First reminder — timing tier depends on campaign duration (see scheduler). */
+  /** First reminder â€” timing tier depends on campaign duration (see scheduler). */
   'social_impact.reminder': {
     campaignId: string;
     campaignTitle: string;
-    /** Human-readable window, e.g. "12 hours" — rendered into the body. */
+    /** Human-readable window, e.g. "12 hours" â€” rendered into the body. */
     remainingTime: string;
     tokenReward: number;
   };
-  /** Final reminder — always 2 hours before the campaign ends. */
+  /** Final reminder â€” always 2 hours before the campaign ends. */
   'social_impact.final_reminder': {
     campaignId: string;
     campaignTitle: string;
@@ -202,8 +202,8 @@ export interface NotificationPayloads {
     newEndDate: string;
   };
 
-  // ── Social Impact — admin inbox (role fan-outs; separate types because the
-  //    deep link targets the admin console, not the creator app) ─────────────
+  // â”€â”€ Social Impact â€” admin inbox (role fan-outs; separate types because the
+  //    deep link targets the admin console, not the creator app) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'social_impact.admin_published': { campaignId: string; campaignTitle: string };
   'social_impact.admin_paused': { campaignId: string; campaignTitle: string };
   'social_impact.admin_resumed': { campaignId: string; campaignTitle: string };
@@ -226,7 +226,7 @@ export interface NotificationPayloads {
   'social_impact.admin_ended': { campaignId: string; campaignTitle: string };
   'social_impact.admin_completed': { campaignId: string; campaignTitle: string };
 
-  // ── Extended Stakeholder Notification Types ────────────────────────────────
+  // â”€â”€ Extended Stakeholder Notification Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   'opportunity.new_campaign': {
     campaignId: string;
     campaignTitle: string;
@@ -262,10 +262,44 @@ export interface NotificationPayloads {
     reason: string;
   };
   'account.suspended': { reason: string };
+  'account.reactivated': Record<string, never>;
+  'account.banned': { reason?: string };
   'campaign_access.suspended': { reason?: string };
+  'campaign_access.reactivated': Record<string, never>;
   'campaign.unfunded_reminder': { campaignId: string; campaignTitle: string };
   'onboarding.nudge': { role?: string };
   'tier.upgraded': { newTier: string };
+  'admin.creator_campaign_access_suspended': {
+    creatorId: string;
+    creatorName: string;
+    adminName: string;
+    reason?: string;
+  };
+  'admin.creator_campaign_access_reactivated': {
+    creatorId: string;
+    creatorName: string;
+    adminName: string;
+  };
+  'admin.user_account_suspended': {
+    userId: string;
+    userName: string;
+    userRole: string;
+    adminName: string;
+    reason?: string;
+  };
+  'admin.user_account_reactivated': {
+    userId: string;
+    userName: string;
+    userRole: string;
+    adminName: string;
+  };
+  'admin.user_account_banned': {
+    userId: string;
+    userName: string;
+    userRole: string;
+    adminName: string;
+    reason?: string;
+  };
   'admin.dispute_pending_activation': {
     disputeId: string;
     campaignId: string;
