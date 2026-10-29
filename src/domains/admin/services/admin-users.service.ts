@@ -20,6 +20,7 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { AdminInviteDto } from '../dtos/admin-invite.dto';
 import { UpdateAdminProfileDto } from '../dtos/update-admin-profile.dto';
 import { QueryAdminUsersDto } from '../dtos/query-admin-users.dto';
+import { BanUserDto, AdminModerationResponseDto } from '../dtos/admin-moderation.dto';
 import { paginate, PaginatedResult } from '../../../shared/utils/pagination.utils';
 
 @Injectable()
@@ -56,7 +57,7 @@ export class AdminUsersService {
 
     const existingUser = await this.usersService.findByEmail(email);
 
-    // ── RE-INVITE path ────────────────────────────────────────────────────────
+    // â”€â”€ RE-INVITE path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // If the account already exists we treat this as a resend rather than a
     // conflict, PROVIDED the account belongs to an admin role and the invite
     // OTP (password-reset type) for that email still exists in the DB (i.e.
@@ -65,7 +66,7 @@ export class AdminUsersService {
       const existingOtp = await this.otpService.findPendingInviteOtp(email);
 
       if (!existingOtp && existingUser.lastLoginAt) {
-        // Account exists and admin has completed initial login → setup fully done
+        // Account exists and admin has completed initial login â†’ setup fully done
         throw new ConflictException(
           'An account with this email already exists and has been fully set up. ' +
             'If you need to reset their access, use the suspend or delete options.',
@@ -122,7 +123,7 @@ export class AdminUsersService {
       lastName = parts.slice(1).join(' ') || '';
     }
 
-    // ── NEW INVITE path ───────────────────────────────────────────────────────
+    // â”€â”€ NEW INVITE path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const role = await this.roleModel.findOne({ where: { name: dto.role } });
     if (!role) {
       throw new NotFoundException(`Role '${dto.role}' does not exist.`);
@@ -572,5 +573,81 @@ export class AdminUsersService {
     });
 
     return { message: `Administrator account ${email} has been permanently deleted.` };
+  }
+
+  async banUser(
+    callerId: string,
+    targetId: string,
+    dto?: BanUserDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AdminModerationResponseDto> {
+    const user = await this.userModel.findByPk(targetId, { include: [Role] });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const roleName = user.role?.name || (typeof user.role === 'string' ? user.role : 'user');
+    if (roleName === 'owner') {
+      throw new ForbiddenException('The owner account cannot be banned.');
+    }
+
+    const banReason = dto?.reason || 'Permanently banned by administrator';
+    const bannedAt = new Date();
+    await user.update({
+      isBanned: true,
+      isActive: false,
+      bannedAt,
+      banReason,
+    });
+
+    const admin = await this.userModel.findByPk(callerId);
+    const adminName = admin ? AdminUsersService.adminDisplayName(admin) : 'Admin';
+    const userName =
+      `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || user.email;
+
+    await this.auditLogService.log({
+      adminId: callerId,
+      action: 'USER_BANNED',
+      targetUserId: targetId,
+      ipAddress,
+      userAgent,
+      details: { role: roleName, reason: banReason },
+    });
+
+    await this.notificationsService.notify({
+      type: 'account.banned',
+      recipientId: user.id,
+      actorId: callerId,
+      data: { reason: banReason },
+    });
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_banned',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: callerId,
+      data: {
+        userId: user.id,
+        userName,
+        userRole: roleName,
+        adminName,
+        reason: banReason,
+      },
+    });
+
+    return {
+      success: true,
+      message: `User account ${userName} has been permanently banned.`,
+      user: {
+        id: user.id,
+        name: userName,
+        email: user.email,
+        isActive: user.isActive,
+        canApplyToCampaigns: user.canApplyToCampaigns,
+        isBanned: user.isBanned,
+        bannedAt: user.bannedAt,
+        banReason: user.banReason,
+      },
+    };
   }
 }

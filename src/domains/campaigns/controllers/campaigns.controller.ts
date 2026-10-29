@@ -23,6 +23,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
+  ApiBody,
   ApiConsumes,
   ApiExtraModels,
   getSchemaPath,
@@ -591,6 +593,12 @@ export class CampaignsController {
   @ApiOperation({
     summary: 'Activate campaign and lock in selected creators (brand owner only)',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Campaign ID',
+    type: String,
+    example: 'f9f57bb5-aef5-4c6b-a105-d91cc20ee062',
+  })
   @ApiResponse({ status: 200, description: 'Campaign activated and timelines started' })
   async activateCampaign(@Param('id') campaignId: string, @CurrentUser() user: User) {
     const callerId = user.id;
@@ -611,6 +619,13 @@ export class CampaignsController {
     summary:
       '[deprecated]...Batch review (accept/reject) creator campaign applications (brand owner only)',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Campaign ID',
+    type: String,
+    example: 'f9f57bb5-aef5-4c6b-a105-d91cc20ee062',
+  })
+  @ApiBody({ type: ReviewApplicationsBatchDto })
   @ApiResponse({ status: 200, description: 'Applications reviewed successfully' })
   async reviewApplicationsBatch(
     @Param('id') campaignId: string,
@@ -640,6 +655,19 @@ export class CampaignsController {
   @ApiOperation({
     summary: 'Review (accept/reject) a creator campaign application (brand owner only)',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Campaign ID',
+    type: String,
+    example: 'f9f57bb5-aef5-4c6b-a105-d91cc20ee062',
+  })
+  @ApiParam({
+    name: 'appId',
+    description: 'Campaign Application ID',
+    type: String,
+    example: 'ffb98e1a-3061-45cd-a70c-a1ba08edc1c8',
+  })
+  @ApiBody({ type: ReviewApplicationDto })
   @ApiResponse({ status: 200, description: 'Application reviewed successfully' })
   async reviewApplication(
     @Param('id') campaignId: string,

@@ -14,7 +14,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AdminCreatorsService } from '../services/admin-creators.service';
 import { AdminNotesService } from '../services/admin-notes.service';
 import {
@@ -297,6 +304,13 @@ export class AdminCreatorsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Suspend or reactivate creator ability to apply to campaigns' })
+  @ApiParam({
+    name: 'id',
+    description: 'Creator User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: UpdateCampaignAccessDto })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async updateCreatorCampaignAccess(
     @Param('id') id: string,
@@ -319,6 +333,13 @@ export class AdminCreatorsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Suspend a creator account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Creator User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: SuspendUserDto, required: false })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async suspendCreator(
     @Param('id') id: string,
@@ -335,6 +356,12 @@ export class AdminCreatorsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate a suspended creator account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Creator User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async reactivateCreator(
     @Param('id') id: string,
@@ -350,6 +377,13 @@ export class AdminCreatorsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Permanently ban a creator account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Creator User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: BanUserDto, required: false })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async banCreator(
     @Param('id') id: string,

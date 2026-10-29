@@ -14,7 +14,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AdminBrandsService } from '../services/admin-brands.service';
 import { AdminNotesService } from '../services/admin-notes.service';
 import {
@@ -257,6 +264,13 @@ export class AdminBrandsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Suspend a brand account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Brand/Advertiser User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: SuspendUserDto, required: false })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async suspendBrand(
     @Param('id') id: string,
@@ -273,6 +287,12 @@ export class AdminBrandsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate a suspended brand account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Brand/Advertiser User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async reactivateBrand(
     @Param('id') id: string,
@@ -288,6 +308,13 @@ export class AdminBrandsController {
   @Roles('owner', 'super_admin', 'moderator')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Permanently ban a brand account' })
+  @ApiParam({
+    name: 'id',
+    description: 'Brand/Advertiser User ID',
+    type: String,
+    example: 'b0e9a826-665a-4933-913a-ff19e347adbb',
+  })
+  @ApiBody({ type: BanUserDto, required: false })
   @ApiResponse({ status: 200, type: AdminModerationResponseDto })
   async banBrand(
     @Param('id') id: string,
