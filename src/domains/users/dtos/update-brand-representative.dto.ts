@@ -1,5 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 
 export class UpdateBrandRepresentativeDto {
   @ApiProperty({
@@ -35,4 +36,14 @@ export class UpdateBrandRepresentativeDto {
   @IsString()
   @IsNotEmpty()
   repPhone: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender of the brand representative',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  gender?: string;
 }

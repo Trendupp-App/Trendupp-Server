@@ -148,6 +148,34 @@ describe('OnboardingService', () => {
         repPhone: '123',
       });
     });
+
+    it('should update and return user including gender when provided', async () => {
+      const mockUserUpdate = jest.fn();
+      const mockUser = {
+        id: 'user-1',
+        update: mockUserUpdate,
+      } as unknown as User;
+
+      userRepositoryMock.findById.mockResolvedValueOnce(mockUser);
+      userRepositoryMock.findById.mockResolvedValueOnce(mockUser);
+
+      const result = await service.setUserRepresentative('user-1', {
+        repFirstName: 'Jane',
+        repLastName: 'Doe',
+        repEmail: 'jane@test.com',
+        repPhone: '123',
+        gender: 'female',
+      });
+
+      expect(result).toEqual(mockUser);
+      expect(mockUserUpdate).toHaveBeenCalledWith({
+        repFirstName: 'Jane',
+        repLastName: 'Doe',
+        repEmail: 'jane@test.com',
+        repPhone: '123',
+        gender: 'female',
+      });
+    });
   });
 
   describe('getCitiesByCountryAndState', () => {

@@ -306,6 +306,7 @@ export class OnboardingController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Step 3: Save representative details (Brands)' })
+  @ApiBody({ type: UpdateBrandRepresentativeDto })
   @ApiResponse({ status: 200, description: 'Brand representative saved successfully' })
   async updateRepresentative(@CurrentUser() user: User, @Body() dto: UpdateBrandRepresentativeDto) {
     const updated = await this.onboardingService.setUserRepresentative(user.id, dto);
