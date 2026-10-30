@@ -254,9 +254,9 @@ export class AdminAdvertiserListItemDto {
   advertiser: { brandName: string; logoUrl: string | null };
 
   @ApiProperty({
-    example: { name: 'Emeka Obi', email: 'emeka@pepsi.ng' },
+    example: { name: 'Emeka Obi', email: 'emeka@pepsi.ng', gender: 'Female' },
   })
-  representative: { name: string; email: string };
+  representative: { name: string; email: string; gender?: string | null };
 
   @ApiProperty({ example: 'Beverages' })
   industry: string;
