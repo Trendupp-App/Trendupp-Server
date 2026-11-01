@@ -465,6 +465,7 @@ export class AdminBrandsService {
         representative: {
           name: repName,
           email: repEmail,
+          gender: b.gender || null,
         },
         industry: industryName,
         location: {
