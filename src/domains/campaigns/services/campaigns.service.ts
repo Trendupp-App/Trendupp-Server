@@ -656,12 +656,6 @@ export class CampaignsService {
     if (channelDetails) {
       paymentUpdates.channelDetails = channelDetails;
     }
-    if (txDetails?.channel) {
-      paymentUpdates.paymentChannel = txDetails.channel;
-    }
-    if (txDetails?.channel_details) {
-      paymentUpdates.channelDetails = txDetails.channel_details;
-    }
     await payment.update(paymentUpdates);
 
     const approvedAt = new Date();

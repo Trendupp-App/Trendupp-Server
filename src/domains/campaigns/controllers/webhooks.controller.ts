@@ -252,15 +252,15 @@ export class WebhooksController {
     channel?: string;
     details?: Record<string, unknown>;
   } {
-    const tx = ((data.transaction || {}) as Record<string, unknown>);
+    const tx = (data.transaction || {}) as Record<string, unknown>;
     const rawChannel =
       (typeof data.channel === 'string' && data.channel) ||
-      (typeof tx.channel === 'string' && tx.channel) ||
+      (typeof tx['channel'] === 'string' && tx['channel']) ||
       (typeof data.payment_method === 'string' && data.payment_method) ||
-      (typeof tx.payment_method === 'string' && tx.payment_method) ||
+      (typeof tx['payment_method'] === 'string' && tx['payment_method']) ||
       undefined;
 
-    const auth = ((data.authorization || tx.authorization || {}) as Record<string, unknown>);
+    const auth = (data.authorization || tx['authorization'] || {}) as Record<string, unknown>;
     const details: Record<string, unknown> = {};
 
     if (rawChannel) {
@@ -268,22 +268,35 @@ export class WebhooksController {
     }
 
     if (auth && Object.keys(auth).length > 0) {
-      if (auth.card_type || auth.brand) details.cardBrand = auth.card_type || auth.brand;
-      if (auth.last4) details.last4 = auth.last4;
-      if (auth.bank) details.bank = auth.bank;
-      if (auth.country_code) details.countryCode = auth.country_code;
+      const cardBrand =
+        (typeof auth['card_type'] === 'string' && auth['card_type']) ||
+        (typeof auth['brand'] === 'string' && auth['brand']) ||
+        undefined;
+      if (cardBrand) details.cardBrand = cardBrand;
+      if (typeof auth['last4'] === 'string') details.last4 = auth['last4'];
+      if (typeof auth['bank'] === 'string') details.bank = auth['bank'];
+      if (typeof auth['country_code'] === 'string') details.countryCode = auth['country_code'];
     }
 
-    const bank = ((data.bank || tx.bank || data.source || tx.source || {}) as Record<string, unknown>);
+    const bank = (data.bank || tx['bank'] || data.source || tx['source']) as
+      | Record<string, unknown>
+      | string
+      | undefined;
     if (typeof bank === 'string') {
       details.bank = bank;
     } else if (typeof bank === 'object' && bank !== null) {
-      if (bank.bank_name || bank.name) details.bank = bank.bank_name || bank.name;
-      if (bank.account_number) details.accountNumber = bank.account_number;
+      const bankName =
+        (typeof bank['bank_name'] === 'string' && bank['bank_name']) ||
+        (typeof bank['name'] === 'string' && bank['name']) ||
+        undefined;
+      if (bankName) details.bank = bankName;
+      if (typeof bank['account_number'] === 'string') {
+        details.accountNumber = bank['account_number'];
+      }
     }
 
     return {
-      channel: rawChannel || (auth.last4 ? 'card' : undefined),
+      channel: rawChannel || (typeof auth['last4'] === 'string' ? 'card' : undefined),
       details: Object.keys(details).length > 0 ? details : undefined,
     };
   }
