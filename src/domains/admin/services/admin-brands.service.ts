@@ -466,6 +466,7 @@ export class AdminBrandsService {
           name: repName,
           email: repEmail,
           gender: b.gender || null,
+          repGender: b.gender || null,
         },
         industry: industryName,
         location: {
@@ -581,6 +582,7 @@ export class AdminBrandsService {
         email: repEmail,
         phoneNumber: repPhone,
         gender: advertiser.gender || null,
+        repGender: advertiser.gender || null,
         profileCompletion: advertiser.onboardingPercentage,
         dateJoined: formattedDateJoined,
         accountStatus,

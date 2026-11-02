@@ -94,7 +94,7 @@ describe('AdminCampaignsService - Pause and Resume', () => {
     it('should query campaigns excluding social_impact type', async () => {
       campaignModelMock.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
 
-      await service.getCampaignsList({ page: 1, limit: 10 } as any);
+      await service.getCampaignsList({ page: 1, limit: 10 });
 
       expect(campaignModelMock.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({

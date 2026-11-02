@@ -11,11 +11,13 @@ import { SupportTicketRepository } from './repository/support-ticket.repository'
 import { IssueCategory } from './entities/issue-category.entity';
 import { IssueCategoryRepository } from './repository/issue-category.repository';
 import { StartbuttonModule } from '../../integration/payment-gateway/startbutton.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     UsersModule,
     StartbuttonModule,
+    NotificationsModule,
     SequelizeModule.forFeature([SupportTicket, IssueCategory]),
   ],
   controllers: [OnboardingController, ProfileController],

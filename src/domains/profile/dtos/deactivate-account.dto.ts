@@ -10,4 +10,12 @@ export class DeactivateAccountDto {
   @IsString()
   @IsOptional()
   password?: string;
+
+  @ApiPropertyOptional({
+    description: 'Reason for deactivating / deleting the account',
+    example: 'Taking a break from content creation',
+  })
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }

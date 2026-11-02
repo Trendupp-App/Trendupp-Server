@@ -44,6 +44,28 @@ export class UpdateBrandRepresentativeDto {
   })
   @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
   @IsOptional()
-  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  @Transform(({ value }): unknown =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim().toLowerCase()
+      : value,
+  )
   gender?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender of the brand representative (alias for gender)',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim().toLowerCase()
+      : value,
+  )
+  repGender?: string;
 }

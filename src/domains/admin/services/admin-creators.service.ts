@@ -842,11 +842,7 @@ export class AdminCreatorsService {
     const bankAccountStatus =
       creator.bankAccountNumber && creator.bankAccountName ? 'Verified' : 'Unverified';
 
-    const accountStatus = creator.isBanned
-      ? 'Banned'
-      : !creator.isActive
-        ? 'Suspended'
-        : 'Active';
+    const accountStatus = creator.isBanned ? 'Banned' : !creator.isActive ? 'Suspended' : 'Active';
 
     const dobFormatted = creator.dateOfBirth
       ? new Date(creator.dateOfBirth).toLocaleDateString('en-GB')
@@ -1011,12 +1007,15 @@ export class AdminCreatorsService {
     await creator.update({ canApplyToCampaigns: dto.canApply });
 
     const adminName = AdminCreatorsService.adminDisplayName(admin);
-    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+    const creatorName =
+      `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
 
     if (this.auditLogService) {
       await this.auditLogService.log({
         adminId: admin.id,
-        action: dto.canApply ? 'CREATOR_CAMPAIGN_ACCESS_REACTIVATED' : 'CREATOR_CAMPAIGN_ACCESS_SUSPENDED',
+        action: dto.canApply
+          ? 'CREATOR_CAMPAIGN_ACCESS_REACTIVATED'
+          : 'CREATOR_CAMPAIGN_ACCESS_SUSPENDED',
         targetUserId: creatorId,
         ipAddress,
         userAgent,
@@ -1099,7 +1098,8 @@ export class AdminCreatorsService {
     await creator.update({ isActive: false });
 
     const adminName = AdminCreatorsService.adminDisplayName(admin);
-    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+    const creatorName =
+      `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
 
     if (this.auditLogService) {
       await this.auditLogService.log({
@@ -1165,7 +1165,8 @@ export class AdminCreatorsService {
     await creator.update({ isActive: true });
 
     const adminName = AdminCreatorsService.adminDisplayName(admin);
-    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+    const creatorName =
+      `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
 
     if (this.auditLogService) {
       await this.auditLogService.log({
@@ -1238,7 +1239,8 @@ export class AdminCreatorsService {
     });
 
     const adminName = AdminCreatorsService.adminDisplayName(admin);
-    const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
+    const creatorName =
+      `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email;
 
     if (this.auditLogService) {
       await this.auditLogService.log({

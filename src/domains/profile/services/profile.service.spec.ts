@@ -19,6 +19,7 @@ import { CreateSupportTicketDto } from '../dtos/create-support-ticket.dto';
 import { IssueCategoryRepository } from '../repository/issue-category.repository';
 import { SupportTicket } from '../entities/support-ticket.entity';
 import { IssueCategory } from '../entities/issue-category.entity';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import * as bcrypt from 'bcryptjs';
 
 jest.mock('bcryptjs');
@@ -31,6 +32,7 @@ describe('ProfileService', () => {
   let supportTicketRepositoryMock: jest.Mocked<SupportTicketRepository>;
   let issueCategoryRepositoryMock: jest.Mocked<IssueCategoryRepository>;
   let startbuttonServiceMock: jest.Mocked<StartbuttonService>;
+  let notificationsServiceMock: jest.Mocked<NotificationsService>;
 
   beforeEach(async () => {
     usersServiceMock = {
@@ -71,6 +73,10 @@ describe('ProfileService', () => {
       initiateRefund: jest.fn(),
     } as unknown as jest.Mocked<StartbuttonService>;
 
+    notificationsServiceMock = {
+      notify: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<NotificationsService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProfileService,
@@ -80,6 +86,7 @@ describe('ProfileService', () => {
         { provide: SupportTicketRepository, useValue: supportTicketRepositoryMock },
         { provide: IssueCategoryRepository, useValue: issueCategoryRepositoryMock },
         { provide: StartbuttonService, useValue: startbuttonServiceMock },
+        { provide: NotificationsService, useValue: notificationsServiceMock },
       ],
     }).compile();
 
@@ -134,6 +141,32 @@ describe('ProfileService', () => {
         gender: 'female',
       });
       expect(result.username).toBe('newuser');
+    });
+
+    it('should support repGender alias when updating personal info', async () => {
+      const mockUser = {
+        id: 'u1',
+        email: 'old@example.com',
+        username: 'olduser',
+      } as unknown as User;
+      usersServiceMock.findOne.mockResolvedValue(mockUser);
+      usersServiceMock.findByUsername.mockResolvedValue(null);
+      usersServiceMock.findByEmail.mockResolvedValue(null);
+      usersServiceMock.update.mockResolvedValue(mockUser);
+      usersServiceMock.findOneWithNiches.mockResolvedValue(mockUser);
+
+      const dto: UpdatePersonalInfoDto = {
+        repGender: 'male',
+      };
+
+      await service.updatePersonalInfo('u1', dto);
+
+      expect(usersServiceMock.update).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({
+          gender: 'male',
+        }),
+      );
     });
 
     it('should upload profile picture and set avatarUrl when file is provided', async () => {
@@ -617,14 +650,21 @@ describe('ProfileService', () => {
   });
 
   describe('deactivateAccount', () => {
-    it('should deactivate account successfully when password matches', async () => {
-      const mockUser = { id: 'u1', password: 'hashed_password' } as unknown as User;
+    it('should deactivate account successfully and notify admins when password matches', async () => {
+      const mockUser = {
+        id: 'u1',
+        password: 'hashed_password',
+        firstName: 'John',
+        lastName: 'Doe',
+        role: { name: 'creator' },
+      } as unknown as User;
       usersServiceMock.findOne.mockResolvedValue(mockUser);
       usersServiceMock.update.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const dto: DeactivateAccountDto = {
         password: 'Password123!',
+        reason: 'Taking a break',
       };
 
       await service.deactivateAccount('u1', dto);
@@ -637,6 +677,17 @@ describe('ProfileService', () => {
           deactivatedAt: expect.any(Date),
         }),
       );
+      expect(notificationsServiceMock.notify).toHaveBeenCalledWith({
+        type: 'admin.user_account_deactivated',
+        recipientRole: ['owner', 'super_admin', 'moderator'],
+        actorId: 'u1',
+        data: {
+          userId: 'u1',
+          userName: 'John Doe',
+          userRole: 'creator',
+          reason: 'Taking a break',
+        },
+      });
     });
 
     it('should throw ConflictException if password does not match during deactivation', async () => {
@@ -649,6 +700,7 @@ describe('ProfileService', () => {
       };
 
       await expect(service.deactivateAccount('u1', dto)).rejects.toThrow(ConflictException);
+      expect(notificationsServiceMock.notify).not.toHaveBeenCalled();
     });
   });
 

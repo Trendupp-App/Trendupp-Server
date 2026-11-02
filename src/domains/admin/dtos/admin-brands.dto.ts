@@ -254,9 +254,14 @@ export class AdminAdvertiserListItemDto {
   advertiser: { brandName: string; logoUrl: string | null };
 
   @ApiProperty({
-    example: { name: 'Emeka Obi', email: 'emeka@pepsi.ng', gender: 'Female' },
+    example: { name: 'Emeka Obi', email: 'emeka@pepsi.ng', gender: 'Female', repGender: 'Female' },
   })
-  representative: { name: string; email: string; gender?: string | null };
+  representative: {
+    name: string;
+    email: string;
+    gender?: string | null;
+    repGender?: string | null;
+  };
 
   @ApiProperty({ example: 'Beverages' })
   industry: string;
@@ -348,6 +353,9 @@ export class BrandRepresentativeInfoDto {
 
   @ApiPropertyOptional({ example: 'Female', nullable: true })
   gender?: string | null;
+
+  @ApiPropertyOptional({ example: 'Female', nullable: true })
+  repGender?: string | null;
 
   @ApiProperty({ example: 100 })
   profileCompletion: number;

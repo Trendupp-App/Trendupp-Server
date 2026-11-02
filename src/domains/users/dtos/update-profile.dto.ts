@@ -97,8 +97,30 @@ export class UpdateProfileDto {
   })
   @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
   @IsOptional()
-  @Transform(({ value }): unknown => (value === '' ? undefined : value))
+  @Transform(({ value }): unknown =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim().toLowerCase()
+      : value,
+  )
   gender?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gender alias for brand representative or creator',
+    example: 'female',
+    enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
+  })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim().toLowerCase()
+      : value,
+  )
+  repGender?: string;
 
   @ApiPropertyOptional({
     type: 'string',
@@ -152,6 +174,15 @@ export class CreatorProfileDto {
     example: 'female',
     enum: ['male', 'female', 'non-binary', 'prefer-not-to-say'],
   })
+  @IsEnum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
+  @IsOptional()
+  @Transform(({ value }): unknown =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim().toLowerCase()
+      : value,
+  )
   gender?: string;
 
   @ApiPropertyOptional({

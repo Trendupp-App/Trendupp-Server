@@ -176,6 +176,34 @@ describe('OnboardingService', () => {
         gender: 'female',
       });
     });
+
+    it('should support repGender alias when updating user representative', async () => {
+      const mockUserUpdate = jest.fn();
+      const mockUser = {
+        id: 'user-1',
+        update: mockUserUpdate,
+      } as unknown as User;
+
+      userRepositoryMock.findById.mockResolvedValueOnce(mockUser);
+      userRepositoryMock.findById.mockResolvedValueOnce(mockUser);
+
+      const result = await service.setUserRepresentative('user-1', {
+        repFirstName: 'Jane',
+        repLastName: 'Doe',
+        repEmail: 'jane@test.com',
+        repPhone: '123',
+        repGender: 'female',
+      });
+
+      expect(result).toEqual(mockUser);
+      expect(mockUserUpdate).toHaveBeenCalledWith({
+        repFirstName: 'Jane',
+        repLastName: 'Doe',
+        repEmail: 'jane@test.com',
+        repPhone: '123',
+        gender: 'female',
+      });
+    });
   });
 
   describe('getCitiesByCountryAndState', () => {
