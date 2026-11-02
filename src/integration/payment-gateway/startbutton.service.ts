@@ -164,6 +164,8 @@ export class StartbuttonService {
     status: string;
     amount?: number;
     currency?: string;
+    channel?: string;
+    channel_details?: Record<string, unknown>;
   }> {
     if (!this.secretKey) {
       this.logger.warn('Startbutton credentials missing. Returning simulated funded status.');
@@ -171,6 +173,8 @@ export class StartbuttonService {
         transaction_ref: reference,
         gateway_ref: reference,
         status: 'funded',
+        channel: 'card',
+        channel_details: { cardBrand: 'visa', last4: '4242', bank: 'Simulated Bank' },
       };
     }
 
@@ -216,12 +220,49 @@ export class StartbuttonService {
       const amount = tx?.amount !== undefined ? Number(tx.amount) / 100 : undefined;
       const gatewayRef = tx?.transactionReference || dataObj?.transactionReference;
 
+      const rawChannel =
+        (typeof (tx as any)?.channel === 'string' && (tx as any).channel) ||
+        (typeof (dataObj as any)?.channel === 'string' && (dataObj as any).channel) ||
+        (typeof (tx as any)?.payment_method === 'string' && (tx as any).payment_method) ||
+        (typeof (dataObj as any)?.payment_method === 'string' && (dataObj as any).payment_method) ||
+        undefined;
+
+      const auth = (((tx as any)?.authorization ||
+        (dataObj as any)?.authorization ||
+        {}) as Record<string, unknown>);
+      const channelDetails: Record<string, unknown> = {};
+
+      if (rawChannel) {
+        channelDetails.channel = rawChannel;
+      }
+      if (auth && Object.keys(auth).length > 0) {
+        if (auth.card_type || auth.brand) channelDetails.cardBrand = auth.card_type || auth.brand;
+        if (auth.last4) channelDetails.last4 = auth.last4;
+        if (auth.bank) channelDetails.bank = auth.bank;
+        if (auth.country_code) channelDetails.countryCode = auth.country_code;
+      }
+      const bank = (((tx as any)?.bank ||
+        (dataObj as any)?.bank ||
+        (tx as any)?.source ||
+        (dataObj as any)?.source ||
+        {}) as Record<string, unknown>);
+      if (typeof bank === 'string') {
+        channelDetails.bank = bank;
+      } else if (typeof bank === 'object' && bank !== null) {
+        if (bank.bank_name || bank.name) channelDetails.bank = bank.bank_name || bank.name;
+        if (bank.account_number) channelDetails.accountNumber = bank.account_number;
+      }
+
+      const channel = rawChannel || (auth.last4 ? 'card' : undefined);
+
       return {
         transaction_ref: reference,
         gateway_ref: gatewayRef,
         status: parsedStatus,
         amount,
         currency: tx?.currency,
+        channel,
+        channel_details: Object.keys(channelDetails).length > 0 ? channelDetails : undefined,
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);

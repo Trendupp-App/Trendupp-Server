@@ -166,6 +166,13 @@ export class WebhooksController {
     if (gatewayReference) {
       paymentUpdates.transactionRef = gatewayReference;
     }
+    const { channel, details } = this.extractChannelInfo(data);
+    if (channel) {
+      paymentUpdates.paymentChannel = channel;
+    }
+    if (details) {
+      paymentUpdates.channelDetails = details;
+    }
     await payment.update(paymentUpdates);
 
     // Transition campaign: pending_payment → live
@@ -239,6 +246,46 @@ export class WebhooksController {
       data.transaction?.transactionReference ||
       data.transactionReference;
     return typeof rawRef === 'string' ? rawRef : undefined;
+  }
+
+  private extractChannelInfo(data: StartbuttonWebhookPayload['data']): {
+    channel?: string;
+    details?: Record<string, unknown>;
+  } {
+    const tx = ((data.transaction || {}) as Record<string, unknown>);
+    const rawChannel =
+      (typeof data.channel === 'string' && data.channel) ||
+      (typeof tx.channel === 'string' && tx.channel) ||
+      (typeof data.payment_method === 'string' && data.payment_method) ||
+      (typeof tx.payment_method === 'string' && tx.payment_method) ||
+      undefined;
+
+    const auth = ((data.authorization || tx.authorization || {}) as Record<string, unknown>);
+    const details: Record<string, unknown> = {};
+
+    if (rawChannel) {
+      details.channel = rawChannel;
+    }
+
+    if (auth && Object.keys(auth).length > 0) {
+      if (auth.card_type || auth.brand) details.cardBrand = auth.card_type || auth.brand;
+      if (auth.last4) details.last4 = auth.last4;
+      if (auth.bank) details.bank = auth.bank;
+      if (auth.country_code) details.countryCode = auth.country_code;
+    }
+
+    const bank = ((data.bank || tx.bank || data.source || tx.source || {}) as Record<string, unknown>);
+    if (typeof bank === 'string') {
+      details.bank = bank;
+    } else if (typeof bank === 'object' && bank !== null) {
+      if (bank.bank_name || bank.name) details.bank = bank.bank_name || bank.name;
+      if (bank.account_number) details.accountNumber = bank.account_number;
+    }
+
+    return {
+      channel: rawChannel || (auth.last4 ? 'card' : undefined),
+      details: Object.keys(details).length > 0 ? details : undefined,
+    };
   }
 
   private async handleTransferSuccess(data: StartbuttonWebhookPayload['data']) {
@@ -414,6 +461,7 @@ export class WebhooksController {
     await refund.update({
       status: 'completed',
       refundReference,
+      refundMethod: refund.refundMethod || 'gateway_reversal',
       errorDetails: null,
     });
     this.logger.log(`Successfully processed refund success webhook for refund ID: ${refund.id}`);

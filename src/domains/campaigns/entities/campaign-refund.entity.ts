@@ -37,6 +37,12 @@ export class CampaignRefund extends BaseEntity<CampaignRefund> {
   @Column({ type: DataType.STRING, allowNull: true, field: 'refund_reference' })
   declare refundReference?: string | null;
 
+  @Column({ type: DataType.STRING, allowNull: true, field: 'refund_method' })
+  declare refundMethod?: string | null;
+
+  @Column({ type: DataType.JSONB, allowNull: true, field: 'channel_details' })
+  declare channelDetails?: Record<string, any> | null;
+
   @Column({ type: DataType.TEXT, allowNull: true, field: 'error_details' })
   declare errorDetails?: string | null;
 

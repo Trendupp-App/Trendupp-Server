@@ -159,15 +159,14 @@ describe('PayoutScheduler', () => {
   });
 
   describe('processPendingRefunds', () => {
-    it('should request payout and complete refund if details and escrow are valid', async () => {
+    it('should complete refund via native gateway reversal if transaction ref exists and succeeds', async () => {
       const mockBrand = {
         id: 'b1',
         email: 'brand@test.com',
         firstName: 'Brand',
         lastName: 'User',
-        bankAccountNumber: '1234567890',
-        bankCode: '058',
-        bank: { code: '058' },
+        bankAccountNumber: null,
+        bankCode: null,
       };
 
       const mockRefund = {
@@ -183,6 +182,8 @@ describe('PayoutScheduler', () => {
         campaignId: 'c1',
         escrowStatus: 'completed',
         transactionRef: 'tx_ref_123',
+        paymentChannel: 'card',
+        channelDetails: { cardBrand: 'visa', last4: '4242' },
       };
 
       campaignRepoMock.findPendingRefunds.mockResolvedValue([mockRefund as any]);
@@ -201,15 +202,21 @@ describe('PayoutScheduler', () => {
       expect(mockRefund.update).toHaveBeenCalledWith({
         status: 'completed',
         refundReference: expect.any(String),
+        refundMethod: 'gateway_reversal',
+        channelDetails: { cardBrand: 'visa', last4: '4242' },
         errorDetails: null,
       });
     });
 
-    it('should park refund as pending_bank_details if details are missing', async () => {
+    it('should execute fallback bank payout when native gateway refund fails but brand has bank details', async () => {
       const mockBrand = {
         id: 'b1',
         email: 'brand@test.com',
-        bankAccountNumber: null,
+        firstName: 'Brand',
+        lastName: 'User',
+        bankAccountNumber: '1234567890',
+        bankCode: '058',
+        bankName: 'GTBank',
       };
 
       const mockRefund = {
@@ -221,13 +228,79 @@ describe('PayoutScheduler', () => {
         update: jest.fn().mockResolvedValue(undefined),
       };
 
+      const mockPayment = {
+        campaignId: 'c1',
+        escrowStatus: 'completed',
+        transactionRef: 'tx_ref_stale',
+      };
+
       campaignRepoMock.findPendingRefunds.mockResolvedValue([mockRefund as any]);
       usersServiceMock.findOne.mockResolvedValue(mockBrand as any);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue(mockPayment as any);
+      campaignRepoMock.findById.mockResolvedValue({ id: 'c1', title: 'Test Campaign' } as any);
+      startbuttonServiceMock.initiateRefund.mockRejectedValue(new Error('Gateway reversal expired'));
+      startbuttonServiceMock.requestPayout.mockResolvedValue(true);
+
+      await scheduler.processPendingRefunds();
+
+      expect(startbuttonServiceMock.initiateRefund).toHaveBeenCalled();
+      expect(startbuttonServiceMock.requestPayout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 100000,
+          currency: 'NGN',
+          bankCode: '058',
+          accountNumber: '1234567890',
+        }),
+      );
+      expect(mockRefund.update).toHaveBeenCalledWith({
+        status: 'completed',
+        refundReference: expect.any(String),
+        refundMethod: 'bank_payout',
+        channelDetails: {
+          channel: 'bank_transfer',
+          bankCode: '058',
+          bankName: 'GTBank',
+          accountNumber: '1234567890',
+          accountName: 'Brand User',
+        },
+        errorDetails: null,
+      });
+    });
+
+    it('should park refund as pending_bank_details when native refund fails and brand has no bank details', async () => {
+      const mockBrand = {
+        id: 'b1',
+        email: 'brand@test.com',
+        bankAccountNumber: null,
+        bankCode: null,
+      };
+
+      const mockRefund = {
+        id: 'r1',
+        campaignId: 'c1',
+        brandId: 'b1',
+        amount: 100000,
+        currency: 'NGN',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const mockPayment = {
+        campaignId: 'c1',
+        escrowStatus: 'completed',
+        transactionRef: 'tx_ref_stale',
+      };
+
+      campaignRepoMock.findPendingRefunds.mockResolvedValue([mockRefund as any]);
+      usersServiceMock.findOne.mockResolvedValue(mockBrand as any);
+      campaignRepoMock.findPaymentByCampaignId.mockResolvedValue(mockPayment as any);
+      campaignRepoMock.findById.mockResolvedValue({ id: 'c1', title: 'Test Campaign' } as any);
+      startbuttonServiceMock.initiateRefund.mockRejectedValue(new Error('Gateway reversal failed'));
 
       await scheduler.processPendingRefunds();
 
       expect(mockRefund.update).toHaveBeenCalledWith({
         status: 'pending_bank_details',
+        errorDetails: 'Gateway reversal failed',
       });
     });
   });
