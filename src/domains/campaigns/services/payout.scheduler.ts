@@ -278,8 +278,7 @@ export class PayoutScheduler {
           const refundRef = `ref_${refund.id.replace(/-/g, '').substring(0, 14)}_${Date.now().toString().slice(-5)}`;
           this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
 
-          const txRef =
-            campaignPayment?.transactionRef || campaignPayment?.paymentReference || '';
+          const txRef = campaignPayment?.transactionRef || campaignPayment?.paymentReference || '';
           let gatewayRefundSuccess = false;
           let gatewayRefundError: string | null = null;
 

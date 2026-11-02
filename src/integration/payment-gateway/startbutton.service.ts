@@ -197,63 +197,69 @@ export class StartbuttonService {
         throw new Error(`Startbutton verifyTransaction failed: ${response.status} - ${rawText}`);
       }
 
-      interface VerifyTxResponseData {
+      interface VerifyTxItem {
         status?: string;
         amount?: number;
         currency?: string;
         transactionReference?: string;
         userTransactionReference?: string;
-        transaction?: {
-          status?: string;
-          amount?: number;
-          currency?: string;
-          transactionReference?: string;
-          userTransactionReference?: string;
-        };
+        channel?: string;
+        payment_method?: string;
+        authorization?: Record<string, unknown>;
+        bank?: Record<string, unknown> | string;
+        source?: Record<string, unknown> | string;
+      }
+      interface VerifyTxResponseData extends VerifyTxItem {
+        transaction?: VerifyTxItem;
       }
       const resData = JSON.parse(rawText) as StartbuttonResponse<VerifyTxResponseData>;
 
       const dataObj = resData.data;
-      const tx = dataObj?.transaction || dataObj;
+      const tx: VerifyTxItem | undefined = dataObj?.transaction || dataObj;
       const rawStatus = tx?.status;
       const parsedStatus = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : 'pending';
       const amount = tx?.amount !== undefined ? Number(tx.amount) / 100 : undefined;
       const gatewayRef = tx?.transactionReference || dataObj?.transactionReference;
 
       const rawChannel =
-        (typeof (tx as any)?.channel === 'string' && (tx as any).channel) ||
-        (typeof (dataObj as any)?.channel === 'string' && (dataObj as any).channel) ||
-        (typeof (tx as any)?.payment_method === 'string' && (tx as any).payment_method) ||
-        (typeof (dataObj as any)?.payment_method === 'string' && (dataObj as any).payment_method) ||
+        (typeof tx?.channel === 'string' && tx.channel) ||
+        (typeof dataObj?.channel === 'string' && dataObj.channel) ||
+        (typeof tx?.payment_method === 'string' && tx.payment_method) ||
+        (typeof dataObj?.payment_method === 'string' && dataObj.payment_method) ||
         undefined;
 
-      const auth = (((tx as any)?.authorization ||
-        (dataObj as any)?.authorization ||
-        {}) as Record<string, unknown>);
+      const auth = tx?.authorization || dataObj?.authorization || {};
       const channelDetails: Record<string, unknown> = {};
 
       if (rawChannel) {
         channelDetails.channel = rawChannel;
       }
       if (auth && Object.keys(auth).length > 0) {
-        if (auth.card_type || auth.brand) channelDetails.cardBrand = auth.card_type || auth.brand;
-        if (auth.last4) channelDetails.last4 = auth.last4;
-        if (auth.bank) channelDetails.bank = auth.bank;
-        if (auth.country_code) channelDetails.countryCode = auth.country_code;
+        const cardBrand =
+          (typeof auth.card_type === 'string' && auth.card_type) ||
+          (typeof auth.brand === 'string' && auth.brand) ||
+          undefined;
+        if (cardBrand) channelDetails.cardBrand = cardBrand;
+        if (typeof auth.last4 === 'string') channelDetails.last4 = auth.last4;
+        if (typeof auth.bank === 'string') channelDetails.bank = auth.bank;
+        if (typeof auth.country_code === 'string') channelDetails.countryCode = auth.country_code;
       }
-      const bank = (((tx as any)?.bank ||
-        (dataObj as any)?.bank ||
-        (tx as any)?.source ||
-        (dataObj as any)?.source ||
-        {}) as Record<string, unknown>);
+      const bank = tx?.bank || dataObj?.bank || tx?.source || dataObj?.source;
       if (typeof bank === 'string') {
         channelDetails.bank = bank;
       } else if (typeof bank === 'object' && bank !== null) {
-        if (bank.bank_name || bank.name) channelDetails.bank = bank.bank_name || bank.name;
-        if (bank.account_number) channelDetails.accountNumber = bank.account_number;
+        const bankObj = bank;
+        const bankName =
+          (typeof bankObj.bank_name === 'string' && bankObj.bank_name) ||
+          (typeof bankObj.name === 'string' && bankObj.name) ||
+          undefined;
+        if (bankName) channelDetails.bank = bankName;
+        if (typeof bankObj.account_number === 'string') {
+          channelDetails.accountNumber = bankObj.account_number;
+        }
       }
 
-      const channel = rawChannel || (auth.last4 ? 'card' : undefined);
+      const channel = rawChannel || (typeof auth.last4 === 'string' ? 'card' : undefined);
 
       return {
         transaction_ref: reference,
