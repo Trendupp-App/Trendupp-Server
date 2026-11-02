@@ -408,8 +408,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     body: () =>
       `Your Trendupp account has been reactivated. You can now access all platform features.`,
     inAppTitle: () => `Your Account Has Been Reactivated ✅`,
-    inAppBody: () =>
-      `Your Trendupp account has been reactivated. Welcome back!`,
+    inAppBody: () => `Your Trendupp account has been reactivated. Welcome back!`,
     pushTitle: () => `Account Reactivated ✅`,
     actionUrl: () => `/`,
   },
@@ -622,8 +621,7 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     channels: ['inApp'],
     priority: 'medium',
     title: (d) => `Creator campaign access reactivated: ${d.creatorName}`,
-    body: (d) =>
-      `${d.creatorName}'s ability to apply to campaigns was restored by ${d.adminName}.`,
+    body: (d) => `${d.creatorName}'s ability to apply to campaigns was restored by ${d.adminName}.`,
     inAppTitle: (d) => `Campaign Access Restored: ${d.creatorName}`,
     inAppBody: (d) =>
       `${d.creatorName}'s ability to apply to campaigns was restored by ${d.adminName}.`,
@@ -633,7 +631,8 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     category: 'account',
     channels: ['inApp'],
     priority: 'high',
-    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account suspended: ${d.userName}`,
+    title: (d) =>
+      `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account suspended: ${d.userName}`,
     body: (d) =>
       `${d.userName}'s ${d.userRole} account was suspended by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
     inAppTitle: (d) => `Account Suspended: ${d.userName}`,
@@ -646,12 +645,11 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     category: 'account',
     channels: ['inApp'],
     priority: 'medium',
-    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account reactivated: ${d.userName}`,
-    body: (d) =>
-      `${d.userName}'s ${d.userRole} account was reactivated by ${d.adminName}.`,
+    title: (d) =>
+      `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account reactivated: ${d.userName}`,
+    body: (d) => `${d.userName}'s ${d.userRole} account was reactivated by ${d.adminName}.`,
     inAppTitle: (d) => `Account Reactivated: ${d.userName}`,
-    inAppBody: (d) =>
-      `${d.userName}'s account was restored by ${d.adminName}.`,
+    inAppBody: (d) => `${d.userName}'s account was restored by ${d.adminName}.`,
     actionUrl: (d) =>
       d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
   },
@@ -659,12 +657,27 @@ export const NOTIFICATION_CATALOG: { [T in NotificationType]: CatalogEntry<T> } 
     category: 'account',
     channels: ['inApp'],
     priority: 'critical',
-    title: (d) => `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account permanently banned: ${d.userName}`,
+    title: (d) =>
+      `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account permanently banned: ${d.userName}`,
     body: (d) =>
       `${d.userName}'s ${d.userRole} account was permanently banned by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
     inAppTitle: (d) => `Account Banned: ${d.userName}`,
     inAppBody: (d) =>
       `${d.userName}'s account was permanently banned by ${d.adminName}.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    actionUrl: (d) =>
+      d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
+  },
+  'admin.user_account_deactivated': {
+    category: 'account',
+    channels: ['inApp'],
+    priority: 'high',
+    title: (d) =>
+      `${d.userRole === 'brand' ? 'Brand' : 'Creator'} account deactivated/deleted: ${d.userName}`,
+    body: (d) =>
+      `${d.userName} (${d.userRole}) has deactivated/deleted their account.${d.reason ? ` Reason: ${d.reason}` : ''}`,
+    inAppTitle: (d) => `Account Deactivated: ${d.userName}`,
+    inAppBody: (d) =>
+      `${d.userName} has deactivated and deleted their account.${d.reason ? ` Reason: ${d.reason}` : ''}`,
     actionUrl: (d) =>
       d.userRole === 'brand' ? `/admin/brands/${d.userId}` : `/admin/creators/${d.userId}`,
   },

@@ -300,6 +300,12 @@ export interface NotificationPayloads {
     adminName: string;
     reason?: string;
   };
+  'admin.user_account_deactivated': {
+    userId: string;
+    userName: string;
+    userRole: string;
+    reason?: string;
+  };
   'admin.dispute_pending_activation': {
     disputeId: string;
     campaignId: string;

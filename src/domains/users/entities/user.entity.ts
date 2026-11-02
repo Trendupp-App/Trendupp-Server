@@ -575,6 +575,7 @@ export class User extends BaseEntity<User> {
       email: this.repEmail || null,
       phone: this.repPhone || null,
       gender: this.gender || null,
+      repGender: this.gender || null,
     };
 
     values['avgRating'] = this.avgRating ? parseFloat(this.avgRating.toString()) : null;

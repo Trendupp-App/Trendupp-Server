@@ -897,7 +897,11 @@ describe('CampaignsService', () => {
 
   describe('reviewCampaignApplication', () => {
     it('should successfully update status to accepted (deferring timeline if campaign is not active yet)', async () => {
-      const liveCampaign = { ...mockCampaign, brandId: 'brand1', status: 'live' } as unknown as Campaign;
+      const liveCampaign = {
+        ...mockCampaign,
+        brandId: 'brand1',
+        status: 'live',
+      } as unknown as Campaign;
       const mockApp = {
         id: 'app1',
         campaignId: 'c1',
@@ -915,7 +919,12 @@ describe('CampaignsService', () => {
     });
 
     it('should initialize timeline and send notification when accepting on an already active campaign', async () => {
-      const activeCampaign = { ...mockCampaign, brandId: 'brand1', status: 'active', goal: 'Amplify Content' } as unknown as Campaign;
+      const activeCampaign = {
+        ...mockCampaign,
+        brandId: 'brand1',
+        status: 'active',
+        goal: 'Amplify Content',
+      } as unknown as Campaign;
       const mockApp = {
         id: 'app1',
         campaignId: 'c1',

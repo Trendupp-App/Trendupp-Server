@@ -18,6 +18,7 @@ import { IssueCategoryRepository } from '../repository/issue-category.repository
 import * as bcrypt from 'bcryptjs';
 import { computeTier } from '../../socials/constants/social-platforms';
 import { StartbuttonService } from '../../../integration/payment-gateway/startbutton.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 @Injectable()
 export class ProfileService {
@@ -28,6 +29,7 @@ export class ProfileService {
     private readonly supportTicketRepository: SupportTicketRepository,
     private readonly issueCategoryRepository: IssueCategoryRepository,
     private readonly startbuttonService: StartbuttonService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async updatePersonalInfo(
@@ -110,11 +112,12 @@ export class ProfileService {
       }
     }
 
-    if (dto.gender !== undefined) {
-      if (dto.gender === null) {
+    const resolvedGender = dto.gender ?? dto.repGender;
+    if (resolvedGender !== undefined) {
+      if (resolvedGender === null) {
         updates.gender = null;
-      } else if (dto.gender.trim() !== '') {
-        updates.gender = dto.gender;
+      } else if (resolvedGender.trim() !== '') {
+        updates.gender = resolvedGender;
       }
     }
 
@@ -459,6 +462,24 @@ export class ProfileService {
       instagramOpenId: null as unknown as string,
       facebookOpenId: null as unknown as string,
       appleUserId: null as unknown as string,
+    });
+
+    const roleName =
+      (typeof user.role === 'object' && user.role !== null ? user.role.name : undefined) ||
+      (typeof user.role === 'string' ? user.role : 'creator');
+    const userName =
+      `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User';
+
+    await this.notificationsService.notify({
+      type: 'admin.user_account_deactivated',
+      recipientRole: ['owner', 'super_admin', 'moderator'],
+      actorId: user.id,
+      data: {
+        userId: user.id,
+        userName,
+        userRole: roleName,
+        reason: dto?.reason,
+      },
     });
   }
 
