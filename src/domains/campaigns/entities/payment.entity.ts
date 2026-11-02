@@ -73,4 +73,10 @@ export class Payment extends BaseEntity<Payment> {
    */
   @Column({ type: DataType.FLOAT, allowNull: true, field: 'gateway_rate' })
   declare gatewayRate?: number;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'payment_channel' })
+  declare paymentChannel?: string;
+
+  @Column({ type: DataType.JSONB, allowNull: true, field: 'channel_details' })
+  declare channelDetails?: Record<string, any>;
 }

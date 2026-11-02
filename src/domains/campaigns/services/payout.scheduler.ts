@@ -262,15 +262,6 @@ export class PayoutScheduler {
             throw new Error('Brand user profile not found');
           }
 
-          if (!brand.bankAccountNumber || !brand.bankCode) {
-            this.logger.warn(
-              `Brand payout bank details are missing for refund ID ${refund.id}. ` +
-                `Parking as pending_bank_details.`,
-            );
-            await refund.update({ status: 'pending_bank_details' });
-            continue;
-          }
-
           const campaignPayment = await this.campaignRepository.findPaymentByCampaignId(
             refund.campaignId,
           );
@@ -285,23 +276,48 @@ export class PayoutScheduler {
           }
 
           const refundRef = `ref_${refund.id.replace(/-/g, '').substring(0, 14)}_${Date.now().toString().slice(-5)}`;
-
           this.logger.log(`Processing refund ID: ${refund.id}, Brand: ${brand.email}`);
 
-          const success = await this.startbuttonService.initiateRefund({
-            transactionReference:
-              campaignPayment?.transactionRef || campaignPayment?.paymentReference || '',
-            amount: refund.amount,
-            reason: `Refund for campaign ${refund.campaignId}`,
-          });
+          const txRef =
+            campaignPayment?.transactionRef || campaignPayment?.paymentReference || '';
+          let gatewayRefundSuccess = false;
+          let gatewayRefundError: string | null = null;
 
-          if (success) {
+          // ─── 1. Primary Tier: Native Gateway Refund ─────────────────────────
+          if (txRef) {
+            try {
+              gatewayRefundSuccess = await this.startbuttonService.initiateRefund({
+                transactionReference: txRef,
+                amount: refund.amount,
+                reason: `Refund for campaign ${refund.campaignId}`,
+              });
+            } catch (err: unknown) {
+              gatewayRefundError = err instanceof Error ? err.message : String(err);
+              this.logger.warn(
+                `Native gateway refund failed for refund ID ${refund.id} (txRef: ${txRef}): ${gatewayRefundError}. Checking fallback options.`,
+              );
+            }
+          } else {
+            gatewayRefundError = 'No gateway transaction reference found on payment record';
+          }
+
+          if (gatewayRefundSuccess) {
+            const channelDetails =
+              campaignPayment?.channelDetails ||
+              (campaignPayment?.paymentChannel
+                ? { channel: campaignPayment.paymentChannel }
+                : null);
+
             await refund.update({
               status: 'completed',
               refundReference: refundRef,
+              refundMethod: 'gateway_reversal',
+              channelDetails,
               errorDetails: null,
             });
-            this.logger.log(`Successfully completed refund transfer for refund ID: ${refund.id}`);
+            this.logger.log(
+              `Successfully completed native gateway refund for refund ID: ${refund.id}`,
+            );
 
             const campaign = await this.campaignRepository
               .findById(refund.campaignId)
@@ -317,9 +333,98 @@ export class PayoutScheduler {
               },
               dedupeKey: `refund-sent:${refund.id}`,
             });
-          } else {
-            throw new Error('Startbutton refund returned failure');
+            continue;
           }
+
+          // ─── 2. Fallback Tier: Payout to Supplied Bank Details ──────────────
+          if (brand.bankAccountNumber && brand.bankCode) {
+            this.logger.log(
+              `Attempting fallback bank payout for refund ID: ${refund.id} to ${brand.bankAccountNumber}`,
+            );
+            const countryName =
+              typeof brand.country === 'string' ? brand.country : brand.country?.name;
+            const country: string = countryName || 'Nigeria';
+
+            const accountName =
+              brand.bankAccountName ||
+              `${brand.firstName || ''} ${brand.lastName || ''}`.trim() ||
+              brand.username ||
+              'Brand Representative';
+
+            const payoutSuccess = await this.startbuttonService.requestPayout({
+              payoutRef: refundRef,
+              amount: refund.amount,
+              currency: refund.currency,
+              country,
+              bankCode: brand.bankCode,
+              accountNumber: brand.bankAccountNumber,
+              accountName,
+            });
+
+            if (payoutSuccess) {
+              await refund.update({
+                status: 'completed',
+                refundReference: refundRef,
+                refundMethod: 'bank_payout',
+                channelDetails: {
+                  channel: 'bank_transfer',
+                  bankCode: brand.bankCode,
+                  bankName: brand.bankName,
+                  accountNumber: brand.bankAccountNumber,
+                  accountName,
+                },
+                errorDetails: null,
+              });
+              this.logger.log(
+                `Successfully completed fallback bank payout for refund ID: ${refund.id}`,
+              );
+
+              const campaign = await this.campaignRepository
+                .findById(refund.campaignId)
+                .catch(() => null);
+              await this.notificationsService.notify({
+                type: 'refund.sent',
+                recipientId: refund.brandId,
+                data: {
+                  campaignId: refund.campaignId,
+                  campaignTitle: campaign?.title ?? 'your campaign',
+                  amount: Number(refund.amount),
+                  currency: refund.currency,
+                },
+                dedupeKey: `refund-sent:${refund.id}`,
+              });
+              continue;
+            } else {
+              throw new Error('Startbutton fallback bank payout returned failure');
+            }
+          }
+
+          // ─── 3. Park as Pending Bank Details (No bank info available) ──────
+          this.logger.warn(
+            `Gateway refund could not be completed for refund ID ${refund.id} and brand payout bank details are missing. Parking as pending_bank_details.`,
+          );
+          await refund.update({
+            status: 'pending_bank_details',
+            errorDetails:
+              gatewayRefundError ||
+              'Gateway reversal failed and no bank details are on file for brand',
+          });
+
+          const campaign = await this.campaignRepository
+            .findById(refund.campaignId)
+            .catch(() => null);
+          await this.notificationsService.notify({
+            type: 'refund.failed',
+            recipientId: refund.brandId,
+            data: {
+              campaignId: refund.campaignId,
+              campaignTitle: campaign?.title ?? 'your campaign',
+              amount: Number(refund.amount),
+              currency: refund.currency,
+              reason: 'Please provide bank details for refund payout.',
+            },
+            dedupeKey: `refund-pending-bank:${refund.id}`,
+          });
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           this.logger.error(`Refund failed for refund ID ${refund.id}: ${errMsg}`);

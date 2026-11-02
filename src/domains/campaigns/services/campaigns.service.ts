@@ -611,12 +611,16 @@ export class CampaignsService {
     // â”€â”€ 2. Pandascrow Status Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let isFunded = false;
     let gatewayRef: string | undefined;
+    let paymentChannel: string | undefined;
+    let channelDetails: Record<string, unknown> | undefined;
     const pandascrowLookupId = payment.escrowId || payment.transactionRef || escrowId;
 
     if (pandascrowLookupId) {
       try {
         const txDetails = await this.startbuttonService.verifyTransaction(pandascrowLookupId);
         gatewayRef = txDetails.gateway_ref;
+        paymentChannel = txDetails.channel;
+        channelDetails = txDetails.channel_details;
 
         const st = (txDetails.status || '').toLowerCase();
         isFunded =
@@ -645,6 +649,18 @@ export class CampaignsService {
     };
     if (gatewayRef) {
       paymentUpdates.transactionRef = gatewayRef;
+    }
+    if (paymentChannel) {
+      paymentUpdates.paymentChannel = paymentChannel;
+    }
+    if (channelDetails) {
+      paymentUpdates.channelDetails = channelDetails;
+    }
+    if (txDetails?.channel) {
+      paymentUpdates.paymentChannel = txDetails.channel;
+    }
+    if (txDetails?.channel_details) {
+      paymentUpdates.channelDetails = txDetails.channel_details;
     }
     await payment.update(paymentUpdates);
 

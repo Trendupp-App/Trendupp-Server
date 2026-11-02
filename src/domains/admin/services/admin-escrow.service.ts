@@ -610,6 +610,8 @@ export class AdminEscrowService {
         },
         amount: rf.amount,
         status: uiStatus,
+        refundMethod: rf.refundMethod || null,
+        channelDetails: rf.channelDetails || null,
         failureReason: rf.errorDetails || null,
         lastUpdated: rf.updatedAt,
       };
