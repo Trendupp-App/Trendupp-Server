@@ -102,7 +102,7 @@ export class TiktokAuthService {
       const openId = data.open_id as string;
 
       if (!accessToken || !openId) {
-        this.logger.error(`TikTok token response missing fields: ${JSON.stringify(responseBody)}`);
+        this.logger.error(`TikTok token response missing fields; keys present: ${Object.keys(responseBody).join(", ")}`);
         throw new UnauthorizedException('Invalid token response from TikTok');
       }
 
@@ -154,7 +154,7 @@ export class TiktokAuthService {
 
       if (!openId) {
         this.logger.error(
-          `TikTok profile payload missing open_id: ${JSON.stringify(responseBody)}`,
+          `TikTok profile payload missing open_id; keys present: ${Object.keys(responseBody).join(", ")}`,
         );
         throw new UnauthorizedException('Invalid profile payload from TikTok');
       }
@@ -210,7 +210,7 @@ export class TiktokAuthService {
       const avatarUrl = user.avatar_url as string | undefined;
 
       if (!openId) {
-        this.logger.error(`TikTok stats payload missing open_id: ${JSON.stringify(responseBody)}`);
+        this.logger.error(`TikTok stats payload missing open_id; keys present: ${Object.keys(responseBody).join(", ")}`);
         throw new UnauthorizedException('Invalid stats payload from TikTok');
       }
 

@@ -1,6 +1,19 @@
 import { format, transports } from 'winston';
 import { Logtail } from '@logtail/node';
 import { LogtailTransport } from '@logtail/winston';
+import { redactInPlace } from './redact';
+
+/**
+ * Removes secrets before any transport sees the record.
+ *
+ * Applied at the logger level rather than per transport so it covers the
+ * console and Logtail alike, and so a future transport inherits it. See
+ * ./redact.ts for why this is centralised instead of fixed at each call site.
+ */
+const redactFormat = format((info) => {
+  redactInPlace(info);
+  return info;
+});
 
 const circularReplacer = () => {
   const seen = new WeakSet();
@@ -61,6 +74,9 @@ export const getLoggerConfig = (env: string, logtailSourceToken: string) => {
 
   return {
     level: isProd ? 'info' : 'debug',
+    // Runs before every transport-level format, so nothing reaches the console
+    // or Logtail unredacted.
+    format: redactFormat(),
     transports: logTransports,
   };
 };
